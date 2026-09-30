@@ -1,0 +1,687 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Import Stock</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --teal-50: #f0fdfa;
+      --teal-100: #ccfbf1;
+      --teal-200: #99f6e4;
+      --teal-300: #5eead4;
+      --teal-400: #2dd4bf;
+      --teal-500: #14b8a6;
+      --teal-600: #0d9488;
+      --teal-700: #0f766e;
+      --teal-800: #115e59;
+      --teal-900: #134e4a;
+    }
+
+    body {
+      background: linear-gradient(135deg, var(--teal-50) 0%, #f8fafc 100%);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      min-height: 100vh;
+    }
+
+    .main-container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .header-section {
+      background: linear-gradient(135deg, var(--teal-600) 0%, var(--teal-700) 100%);
+      color: white;
+      padding: 2rem;
+      border-radius: 12px 12px 0 0;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+
+    .header-title {
+      font-size: 1.75rem;
+      font-weight: 600;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .header-subtitle {
+      opacity: 0.9;
+      margin-top: 0.5rem;
+      font-size: 0.95rem;
+    }
+
+    .main-card {
+      background: white;
+      border-radius: 0 0 12px 12px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+      border: none;
+      overflow: hidden;
+    }
+
+    .card-body {
+      padding: 2.5rem;
+    }
+
+    .form-section {
+      margin-bottom: 2rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .form-section:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .section-title {
+      color: var(--teal-700);
+      font-weight: 600;
+      font-size: 1.1rem;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .form-label {
+      font-weight: 500;
+      color: #374151;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .form-control, .form-select {
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      font-size: 0.95rem;
+      transition: all 0.2s ease;
+      background-color: #fafafa;
+    }
+
+    .form-control:focus, .form-select:focus {
+      border-color: var(--teal-400);
+      box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.1);
+      background-color: white;
+      outline: none;
+    }
+
+    .form-text {
+      color: #6b7280;
+      font-size: 0.875rem;
+      margin-top: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--teal-500) 0%, var(--teal-600) 100%);
+      border: none;
+      border-radius: 8px;
+      padding: 0.75rem 2rem;
+      font-weight: 500;
+      font-size: 1rem;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, var(--teal-600) 0%, var(--teal-700) 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 8px -1px rgba(0, 0, 0, 0.15);
+    }
+
+    .btn-outline-secondary {
+      border: 2px solid var(--teal-200);
+      color: var(--teal-700);
+      border-radius: 8px;
+      padding: 0.5rem 1.25rem;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      background: white;
+    }
+
+    .btn-outline-secondary:hover {
+      background: var(--teal-50);
+      border-color: var(--teal-300);
+      color: var(--teal-800);
+    }
+
+    .alert {
+      border: none;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      font-weight: 500;
+      margin-bottom: 1.5rem;
+    }
+
+    .alert-success {
+      background: linear-gradient(135deg, var(--teal-50) 0%, #ecfdf5 100%);
+      color: var(--teal-800);
+      border-left: 4px solid var(--teal-400);
+    }
+
+    .alert-danger {
+      background: linear-gradient(135deg, #fef2f2 0%, #fef7f7 100%);
+      color: #dc2626;
+      border-left: 4px solid #f87171;
+    }
+
+    .alert-warning {
+      background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+      color: #d97706;
+      border-left: 4px solid #fbbf24;
+    }
+
+    .file-upload-area {
+      border: 2px dashed var(--teal-300);
+      border-radius: 12px;
+      padding: 2rem;
+      text-align: center;
+      background: linear-gradient(135deg, var(--teal-50) 0%, white 100%);
+      transition: all 0.2s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .file-upload-area:hover {
+      border-color: var(--teal-400);
+      background: var(--teal-50);
+    }
+
+    .file-upload-icon {
+      font-size: 2.5rem;
+      color: var(--teal-400);
+      margin-bottom: 1rem;
+    }
+
+    .file-upload-text {
+      color: var(--teal-700);
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+    }
+
+    .file-upload-subtext {
+      color: #6b7280;
+      font-size: 0.875rem;
+    }
+
+    .file-input {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .template-badge {
+      display: inline-block;
+      background: var(--teal-100);
+      color: var(--teal-800);
+      padding: 0.25rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      margin-left: 0.5rem;
+    }
+
+    .info-card {
+      background: linear-gradient(135deg, var(--teal-50) 0%, #f0f9ff 100%);
+      border: 1px solid var(--teal-200);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-top: 1rem;
+    }
+
+    .info-card h6 {
+      color: var(--teal-700);
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .info-card ul {
+      margin: 0;
+      padding-left: 1.25rem;
+      color: #374151;
+    }
+
+    .info-card li {
+      margin-bottom: 0.25rem;
+      font-size: 0.875rem;
+    }
+
+    @media (max-width: 768px) {
+      .card-body {
+        padding: 1.5rem;
+      }
+      
+      .header-section {
+        padding: 1.5rem;
+      }
+      
+      .header-title {
+        font-size: 1.5rem;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container py-4">
+    <div class="main-container">
+      <!-- Header Section -->
+      <div class="header-section">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <h1 class="header-title">
+              <i class="fas fa-file-import"></i>
+              Import Stock Data
+            </h1>
+            <p class="header-subtitle mb-0">Upload and process your inventory files with smart template mapping</p>
+          </div>
+          <a href="{{ url_for('pharmacy_dashboard') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Back
+          </a>
+        </div>
+      </div>
+
+      <!-- Flash Messages -->
+      {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      <div style="padding: 0 2.5rem; padding-top: 1.5rem;">
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }}">
+          <i class="fas fa-info-circle me-2"></i>{{ message }}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% endwith %}
+
+      <!-- Main Card -->
+      <div class="main-card">
+        <div class="card-body">
+          <form method="POST" action="{{ url_for('pharmacy_import_upload') }}" enctype="multipart/form-data">
+            
+            <!-- File Configuration Section -->
+            <div class="form-section">
+              <h5 class="section-title">
+                <i class="fas fa-cogs"></i>
+                File Configuration
+              </h5>
+
+              <!-- File Type Selection -->
+              <div class="mb-4">
+                <label class="form-label">
+                  <i class="fas fa-file-alt"></i>
+                  File Type
+                </label>
+                <select name="file_type" class="form-select" id="fileType" required>
+                  <option value="">-- Select File Type --</option>
+                  <option value="CSV">CSV File (.csv)</option>
+                  <option value="XLSX">Excel File (.xlsx)</option>
+                </select>
+                <div class="form-text">
+                  <i class="fas fa-info-circle"></i>
+                  Choose the format of your import file
+                </div>
+              </div>
+
+              <!-- Template Selection -->
+              <div class="mb-4">
+                <label class="form-label">
+                  <i class="fas fa-template"></i>
+                  Import Template
+                </label>
+                <select name="template_id" class="form-select" id="templateSelect">
+                  <option value="">-- No Template (Create New Mapping) --</option>
+                  {% for t in templates %}
+                  <option value="{{ t.id }}" data-file-type="{{ t.file_type }}">
+                    {{ t.template_name }}
+                    <span class="template-badge">{{ t.file_type }}</span>
+                  </option>
+                  {% endfor %}
+                </select>
+                <div class="form-text">
+                  <i class="fas fa-lightbulb"></i>
+                  {% if templates %}
+                  Select an existing template to skip column mapping, or leave empty to create a new template.
+                  {% else %}
+                  No templates exist yet. Your first upload will create a template after column mapping.
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+
+            <!-- Vendor Selection Section -->
+            <div class="form-section">
+              <h5 class="section-title">
+                <i class="fas fa-building"></i>
+                Vendor Information
+              </h5>
+
+              <div class="mb-4">
+                <label class="form-label">
+                  <i class="fas fa-truck"></i>
+                  Vendor (Optional)
+                </label>
+                <select name="vendor_id" class="form-select">
+                  <option value="">-- Select Vendor --</option>
+                  {% for v in vendors %}
+                  <option value="{{ v.id }}">{{ v.vendor_name }}</option>
+                  {% endfor %}
+                </select>
+                <div class="form-text">
+                  <i class="fas fa-tag"></i>
+                  Associate this import with a specific vendor for better organization
+                </div>
+              </div>
+            </div>
+
+            <!-- File Upload Section -->
+            <div class="form-section">
+              <h5 class="section-title">
+                <i class="fas fa-cloud-upload-alt"></i>
+                File Upload
+              </h5>
+
+              <div class="file-upload-area">
+                <div class="file-upload-icon">
+                  <i class="fas fa-cloud-upload-alt"></i>
+                </div>
+                <div class="file-upload-text">Drop your file here or click to browse</div>
+                <div class="file-upload-subtext">Supports CSV and Excel files (XLSX)</div>
+                <input type="file" name="file" class="file-input" id="fileInput" accept=".csv,.xlsx" required>
+              </div>
+
+              <!-- File Info Card -->
+              <div class="info-card">
+                <h6>
+                  <i class="fas fa-question-circle"></i>
+                  File Requirements
+                </h6>
+                <ul>
+                  <li>Supported formats: CSV (.csv) and Excel (.xlsx)</li>
+                  <li>First row should contain column headers</li>
+                  <li>Maximum file size: 10MB</li>
+                                     <li>Ensure data is properly formatted (no merged cells in Excel)</li>
+                  <li>Required columns will be mapped in the next step</li>
+                </ul>
+              </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="d-flex justify-content-between align-items-center pt-3">
+              <div class="text-muted">
+                <i class="fas fa-shield-alt me-2"></i>
+                Your data is processed securely and never shared
+              </div>
+              <button type="submit" class="btn btn-primary">
+                <i class="fas fa-upload me-2"></i>
+                Upload & Process File
+              </button>
+            </div>
+
+          </form>
+        </div>
+      </div>
+
+      <!-- Additional Help Section -->
+      <div class="mt-4">
+        <div class="info-card">
+          <h6>
+            <i class="fas fa-route"></i>
+            Import Process Overview
+          </h6>
+          <div class="row">
+            <div class="col-md-3 mb-2">
+              <div class="d-flex align-items-center">
+                <span class="badge bg-primary me-2">1</span>
+                <small>Upload File</small>
+              </div>
+            </div>
+            <div class="col-md-3 mb-2">
+              <div class="d-flex align-items-center">
+                <span class="badge" style="background-color: var(--teal-500);">2</span>
+                <small class="ms-2">Map Columns</small>
+              </div>
+            </div>
+            <div class="col-md-3 mb-2">
+              <div class="d-flex align-items-center">
+                <span class="badge" style="background-color: var(--teal-600);">3</span>
+                <small class="ms-2">Validate Data</small>
+              </div>
+            </div>
+            <div class="col-md-3 mb-2">
+              <div class="d-flex align-items-center">
+                <span class="badge" style="background-color: var(--teal-700);">4</span>
+                <small class="ms-2">Import Complete</small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Enhanced JavaScript -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const fileTypeSelect = document.getElementById('fileType');
+      const templateSelect = document.getElementById('templateSelect');
+      const fileInput = document.getElementById('fileInput');
+      const fileUploadArea = document.querySelector('.file-upload-area');
+      const fileUploadText = document.querySelector('.file-upload-text');
+      const fileUploadIcon = document.querySelector('.file-upload-icon i');
+
+      // File type change handler
+      fileTypeSelect.addEventListener('change', function() {
+        const selectedType = this.value;
+        const options = templateSelect.querySelectorAll('option[data-file-type]');
+
+        // Hide all template options
+        options.forEach(opt => opt.style.display = 'none');
+
+        // Reset template selection
+        templateSelect.value = '';
+
+        if (selectedType) {
+          // Show matching templates
+          options.forEach(opt => {
+            if (opt.getAttribute('data-file-type') === selectedType) {
+              opt.style.display = 'block';
+            }
+          });
+          templateSelect.querySelector('option[value=""]').textContent = '-- Select Template (Optional) --';
+        } else {
+          templateSelect.querySelector('option[value=""]').textContent = '-- First Select File Type --';
+        }
+
+        // Update file input accept attribute
+        if (selectedType === 'CSV') {
+          fileInput.accept = '.csv';
+        } else if (selectedType === 'XLSX') {
+          fileInput.accept = '.xlsx';
+        } else {
+          fileInput.accept = '.csv,.xlsx';
+        }
+      });
+
+      // File input change handler
+      fileInput.addEventListener('change', function() {
+        const file = this.files[0];
+        if (file) {
+          const fileName = file.name.toLowerCase();
+          
+          // Auto-detect file type
+          if (fileName.endsWith('.csv')) {
+            fileTypeSelect.value = 'CSV';
+          } else if (fileName.endsWith('.xlsx')) {
+            fileTypeSelect.value = 'XLSX';
+          }
+
+          // Trigger the change event to update templates
+          fileTypeSelect.dispatchEvent(new Event('change'));
+
+          // Update upload area appearance
+          fileUploadText.textContent = `Selected: ${file.name}`;
+          fileUploadIcon.className = 'fas fa-file-check';
+          fileUploadArea.style.borderColor = 'var(--teal-400)';
+          fileUploadArea.style.backgroundColor = 'var(--teal-50)';
+
+          // Show file size
+          const fileSize = (file.size / 1024 / 1024).toFixed(2);
+          const subtext = document.querySelector('.file-upload-subtext');
+          subtext.textContent = `File size: ${fileSize} MB`;
+          subtext.style.color = 'var(--teal-600)';
+        }
+      });
+
+      // Drag and drop functionality
+      fileUploadArea.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        this.style.borderColor = 'var(--teal-500)';
+        this.style.backgroundColor = 'var(--teal-100)';
+      });
+
+      fileUploadArea.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        this.style.borderColor = 'var(--teal-300)';
+        this.style.backgroundColor = 'var(--teal-50)';
+      });
+
+      fileUploadArea.addEventListener('drop', function(e) {
+        e.preventDefault();
+        this.style.borderColor = 'var(--teal-300)';
+        this.style.backgroundColor = 'var(--teal-50)';
+        
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+          fileInput.files = files;
+          fileInput.dispatchEvent(new Event('change'));
+        }
+      });
+
+      // Form validation enhancement
+      const form = document.querySelector('form');
+      form.addEventListener('submit', function(e) {
+        const submitBtn = form.querySelector('button[type="submit"]');
+        
+        // Show loading state
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+        submitBtn.disabled = true;
+        
+        // Basic validation
+        if (!fileTypeSelect.value) {
+          e.preventDefault();
+          alert('Please select a file type');
+          submitBtn.innerHTML = '<i class="fas fa-upload me-2"></i>Upload & Process File';
+          submitBtn.disabled = false;
+          return;
+        }
+        
+        if (!fileInput.files[0]) {
+          e.preventDefault();
+          alert('Please select a file to upload');
+          submitBtn.innerHTML = '<i class="fas fa-upload me-2"></i>Upload & Process File';
+          submitBtn.disabled = false;
+          return;
+        }
+
+        // File size validation (10MB limit)
+        const file = fileInput.files[0];
+        const maxSize = 10 * 1024 * 1024; // 10MB in bytes
+        if (file.size > maxSize) {
+          e.preventDefault();
+          alert('File size exceeds 10MB limit. Please choose a smaller file.');
+          submitBtn.innerHTML = '<i class="fas fa-upload me-2"></i>Upload & Process File';
+          submitBtn.disabled = false;
+          return;
+        }
+
+        // File type validation
+        const fileName = file.name.toLowerCase();
+        const selectedType = fileTypeSelect.value;
+        if ((selectedType === 'CSV' && !fileName.endsWith('.csv')) ||
+            (selectedType === 'XLSX' && !fileName.endsWith('.xlsx'))) {
+          e.preventDefault();
+          alert('Selected file type does not match the uploaded file format');
+          submitBtn.innerHTML = '<i class="fas fa-upload me-2"></i>Upload & Process File';
+          submitBtn.disabled = false;
+          return;
+        }
+      });
+
+      // Template selection helper
+      templateSelect.addEventListener('change', function() {
+        if (this.value) {
+          const selectedOption = this.options[this.selectedIndex];
+          const fileType = selectedOption.getAttribute('data-file-type');
+          if (fileType && fileType !== fileTypeSelect.value) {
+            fileTypeSelect.value = fileType;
+            fileTypeSelect.dispatchEvent(new Event('change'));
+          }
+        }
+      });
+
+      // Smooth scroll to form sections
+      document.querySelectorAll('.section-title').forEach(title => {
+        title.addEventListener('click', function() {
+          this.closest('.form-section').scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+          });
+        });
+      });
+
+      // Initialize tooltips if Bootstrap tooltips are needed
+      const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+      const tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+      });
+
+      // Auto-save form state in localStorage
+      const formElements = form.querySelectorAll('select, input');
+      formElements.forEach(element => {
+        // Load saved value
+        const savedValue = localStorage.getItem(`importForm_${element.name}`);
+        if (savedValue && element.type !== 'file') {
+          element.value = savedValue;
+        }
+
+        // Save on change
+        element.addEventListener('change', function() {
+          if (this.type !== 'file') {
+            localStorage.setItem(`importForm_${this.name}`, this.value);
+          }
+        });
+      });
+
+      // Clear saved form state on successful submission
+      form.addEventListener('submit', function() {
+        setTimeout(() => {
+          formElements.forEach(element => {
+            localStorage.removeItem(`importForm_${element.name}`);
+          });
+        }, 1000);
+      });
+    });
+  </script>
+
+</body>
+</html>

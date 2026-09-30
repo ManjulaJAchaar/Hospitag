@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>New Purchase</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--grad:linear-gradient(135deg,#14b8a6 0%,#0d9488 100%);--bg:linear-gradient(135deg,#f0fdfa 0%,#ecfdf5 100%);--tealDark:#0f766e;}
+    body{font-family:Inter,sans-serif;background:var(--bg);}
+    .topbar{background:var(--grad); color:#fff; padding:14px 0;}
+    .cardx{background:#fff;border:1px solid rgba(20,184,166,.15);border-radius:16px;box-shadow:0 8px 20px rgba(0,0,0,.05);}
+    .btn-teal{background:var(--grad); border:0; color:#fff;}
+    .btn-teal:hover{opacity:.95;color:#fff;}
+    .table thead th{background:rgba(20,184,166,.08);}
+    .small-muted{color:#6b7280;font-size:.9rem;}
+    input,select{min-width: 110px;}
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="container d-flex justify-content-between align-items-center">
+    <div class="fw-semibold"><i class="fa-solid fa-cart-shopping me-2"></i>Purchase (GRN)</div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-light btn-sm" href="{{ url_for('pharmacy_dashboard') }}">Dashboard</a>
+      <a class="btn btn-outline-light btn-sm" href="{{ url_for('pharmacy_stock') }}">Stock</a>
+    </div>
+  </div>
+</div>
+
+<div class="container my-4">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <div class="cardx p-3 p-md-4">
+    <h4 class="fw-bold mb-1" style="color:var(--tealDark);">Create Purchase</h4>
+    <div class="small-muted mb-3">Vendor invoice → batch stock update + ledger entry</div>
+
+    <form method="post" action="{{ url_for('pharmacy_purchase_new') }}">
+      <div class="row g-3 mb-3">
+        <div class="col-md-4">
+          <label class="form-label">Vendor</label>
+          <select class="form-select" name="vendor_id" required>
+            <option value="">Select Vendor</option>
+            {% for v in vendors %}
+              <option value="{{ v.id }}">{{ v.vendor_name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label">Invoice No</label>
+          <input class="form-control" name="invoice_no" placeholder="INV-123">
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label">Invoice Date</label>
+          <input type="date" class="form-control" name="invoice_date">
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div class="fw-semibold">Items</div>
+        <button type="button" class="btn btn-teal btn-sm" id="addRowBtn">
+          <i class="fa-solid fa-plus me-1"></i>Add Row
+        </button>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table align-middle" id="itemsTable">
+          <thead>
+            <tr>
+              <th style="min-width:240px;">Product</th>
+              <th>Batch No</th>
+              <th>Expiry</th>
+              <th class="text-end">Qty</th>
+              <th class="text-end">Purchase Rate</th>
+              <th class="text-end">MRP</th>
+              <th class="text-end">Selling</th>
+              <th class="text-end">Tax %</th>
+              <th class="text-end">Remove</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- first row -->
+            <tr>
+              <td>
+                <select class="form-select productSel" name="product_id[]" required>
+                  <option value="">Select</option>
+                  {% for p in products %}
+                    <option value="{{ p.id }}" data-tax="{{ p.tax_percent }}">{{ p.product_name }}</option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td><input class="form-control" name="batch_no[]" required></td>
+              <td><input class="form-control" type="date" name="expiry_date[]"></td>
+              <td><input class="form-control text-end" type="number" min="1" name="qty[]" required></td>
+              <td><input class="form-control text-end" type="number" step="0.01" min="0" name="purchase_rate[]" required></td>
+              <td><input class="form-control text-end" type="number" step="0.01" min="0" name="mrp[]"></td>
+              <td><input class="form-control text-end" type="number" step="0.01" min="0" name="selling_price[]"></td>
+              <td><input class="form-control text-end taxInp" type="number" step="0.01" min="0" name="tax_percent[]" value="0"></td>
+              <td class="text-end">
+                <button type="button" class="btn btn-outline-danger btn-sm rmBtn" disabled>
+                  <i class="fa-solid fa-trash"></i>
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="d-flex justify-content-end gap-2 mt-3">
+        <a class="btn btn-outline-secondary" href="{{ url_for('pharmacy_dashboard') }}">Cancel</a>
+        <button class="btn btn-teal" type="submit">
+          <i class="fa-solid fa-floppy-disk me-1"></i>Save Purchase
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  function bindRow(row){
+    // auto tax set on product select
+    const sel = row.querySelector(".productSel");
+    const taxInp = row.querySelector(".taxInp");
+    if(sel && taxInp){
+      sel.addEventListener("change", () => {
+        const opt = sel.options[sel.selectedIndex];
+        const tx = opt.getAttribute("data-tax") || "0";
+        taxInp.value = tx;
+      });
+    }
+
+    // remove row
+    const rmBtn = row.querySelector(".rmBtn");
+    if(rmBtn){
+      rmBtn.addEventListener("click", () => {
+        row.remove();
+        // ensure first row remove disabled if only one row
+        const rows = document.querySelectorAll("#itemsTable tbody tr");
+        if(rows.length === 1){
+          rows[0].querySelector(".rmBtn").disabled = true;
+        }
+      });
+    }
+  }
+
+  document.querySelectorAll("#itemsTable tbody tr").forEach(bindRow);
+
+  document.getElementById("addRowBtn").addEventListener("click", () => {
+    const tbody = document.querySelector("#itemsTable tbody");
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>
+        <select class="form-select productSel" name="product_id[]" required>
+          <option value="">Select</option>
+          {% for p in products %}
+            <option value="{{ p.id }}" data-tax="{{ p.tax_percent }}">{{ p.product_name }}</option>
+          {% endfor %}
+        </select>
+      </td>
+      <td><input class="form-control" name="batch_no[]" required></td>
+      <td><input class="form-control" type="date" name="expiry_date[]"></td>
+      <td><input class="form-control text-end" type="number" min="1" name="qty[]" required></td>
+      <td><input class="form-control text-end" type="number" step="0.01" min="0" name="purchase_rate[]" required></td>
+      <td><input class="form-control text-end" type="number" step="0.01" min="0" name="mrp[]"></td>
+      <td><input class="form-control text-end" type="number" step="0.01" min="0" name="selling_price[]"></td>
+      <td><input class="form-control text-end taxInp" type="number" step="0.01" min="0" name="tax_percent[]" value="0"></td>
+      <td class="text-end">
+        <button type="button" class="btn btn-outline-danger btn-sm rmBtn">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+
+    // enable remove on all rows if >1
+    const rows = document.querySelectorAll("#itemsTable tbody tr");
+    if(rows.length > 1){
+      rows[0].querySelector(".rmBtn").disabled = false;
+    }
+
+    bindRow(tr);
+  });
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

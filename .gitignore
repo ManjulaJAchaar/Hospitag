@@ -1,0 +1,30 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+env/
+
+# Runtime uploads (keep folders, ignore contents)
+uploads/*
+!uploads/.gitkeep
+temp_uploads/*
+!temp_uploads/.gitkeep
+static/uploads/*
+!static/uploads/.gitkeep
+!static/uploads/staff_photos/
+static/uploads/staff_photos/*
+!static/uploads/staff_photos/.gitkeep
+
+# Logs / DB dumps
+*.log
+*.sqlite3
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

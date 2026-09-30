@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pharmacy Admin Panel</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --teal-primary: #14b8a6;
+      --teal-dark: #0f766e;
+      --teal-light: #5eead4;
+      --teal-lighter: #a7f3d0;
+      --teal-darkest: #134e4a;
+      --gradient-primary: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+      --gradient-card: linear-gradient(135deg, rgba(20, 184, 166, 0.05) 0%, rgba(13, 148, 136, 0.1) 100%);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: linear-gradient(135deg, #f0fdfa 0%, #ecfdf5 100%);
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+      color: #1f2937;
+    }
+
+    /* Header Section */
+    .header-container {
+      background: var(--gradient-primary);
+      box-shadow: 0 4px 20px rgba(20, 184, 166, 0.3);
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+    }
+
+    .header-info {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border: none;
+      padding: 12px 0;
+      color: white;
+    }
+
+    .header-info .container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+
+    .header-info .left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .header-info .right {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .logout-btn {
+      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: white;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: all 0.3s ease;
+      text-decoration: none;
+    }
+
+    .logout-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
+      color: white;
+      transform: translateY(-1px);
+    }
+
+    .main-header {
+      text-align: center;
+      padding: 40px 20px;
+      color: white;
+    }
+
+    .main-header h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .main-header p {
+      font-size: 1.1rem;
+      font-weight: 500;
+      opacity: 0.9;
+    }
+
+    /* Main Content */
+    .main-content {
+      padding: 50px 0;
+    }
+
+    .admin-panel {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+
+    .panel-title {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .panel-title h2 {
+      color: var(--teal-darkest);
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .panel-title p {
+      color: #6b7280;
+      font-size: 1rem;
+    }
+
+    .options-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 25px;
+    }
+
+    .option-card {
+      background: white;
+      border: 1px solid rgba(20, 184, 166, 0.1);
+      border-radius: 16px;
+      padding: 30px 25px;
+      text-decoration: none;
+      color: inherit;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    }
+
+    .option-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: var(--gradient-primary);
+      transform: scaleX(0);
+      transition: transform 0.3s ease;
+    }
+
+    .option-card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 20px 40px rgba(20, 184, 166, 0.15);
+      border-color: var(--teal-primary);
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .option-card:hover::before {
+      transform: scaleX(1);
+    }
+
+    .card-icon {
+      width: 60px;
+      height: 60px;
+      background: var(--gradient-primary);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+      color: white;
+      font-size: 1.5rem;
+    }
+
+    .card-content h3 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--teal-darkest);
+      margin-bottom: 8px;
+    }
+
+    .card-content p {
+      color: #6b7280;
+      font-size: 0.9rem;
+      line-height: 1.5;
+      margin: 0;
+    }
+
+    .card-arrow {
+      position: absolute;
+      top: 25px;
+      right: 25px;
+      color: var(--teal-primary);
+      font-size: 1.1rem;
+      opacity: 0;
+      transform: translateX(-10px);
+      transition: all 0.3s ease;
+    }
+
+    .option-card:hover .card-arrow {
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    /* Special styling for logout card */
+    .logout-card {
+      border-color: rgba(239, 68, 68, 0.2);
+    }
+
+    .logout-card .card-icon {
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    }
+
+    .logout-card:hover {
+      border-color: #ef4444;
+      box-shadow: 0 20px 40px rgba(239, 68, 68, 0.15);
+    }
+
+    .logout-card .card-arrow {
+      color: #ef4444;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+      .main-header h1 {
+        font-size: 2rem;
+      }
+
+      .main-header p {
+        font-size: 1rem;
+      }
+
+      .panel-title h2 {
+        font-size: 1.6rem;
+      }
+
+      .options-grid {
+        grid-template-columns: 1fr;
+        gap: 20px;
+      }
+
+      .option-card {
+        padding: 25px 20px;
+      }
+
+      .main-content {
+        padding: 30px 0;
+      }
+    }
+
+    @media (max-width: 576px) {
+      .header-info .container {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+      }
+
+      .main-header {
+        padding: 30px 15px;
+      }
+
+      .admin-panel {
+        padding: 0 15px;
+      }
+    }
+
+    /* Loading animation */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .option-card {
+      animation: fadeInUp 0.6s ease forwards;
+    }
+
+    .option-card:nth-child(1) { animation-delay: 0.1s; }
+    .option-card:nth-child(2) { animation-delay: 0.2s; }
+    .option-card:nth-child(3) { animation-delay: 0.3s; }
+    .option-card:nth-child(4) { animation-delay: 0.4s; }
+    .option-card:nth-child(5) { animation-delay: 0.5s; }
+    .option-card:nth-child(6) { animation-delay: 0.6s; }
+    .option-card:nth-child(7) { animation-delay: 0.7s; }
+    .option-card:nth-child(8) { animation-delay: 0.8s; }
+  </style>
+</head>
+
+<body>
+  <div class="header-container">
+    <!-- Header info -->
+    <div class="header-info">
+      <div class="container">
+        <div class="left">
+          <i class="fas fa-hospital"></i>
+          <span><strong>Hospital:</strong> {{ hospital_name or "N/A" }}</span>
+        </div>
+        <div class="right">
+          <span><i class="fas fa-user-shield me-2"></i>Welcome, {{ pharmacy_admin_name or "Admin" }}</span>
+          <a class="logout-btn" href="{{ url_for('pharmacy_admin_logout') }}">
+            <i class="fas fa-sign-out-alt me-1"></i>Logout
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main header -->
+    <div class="main-header">
+      <h1><i class="fas fa-pills me-3"></i>Pharmacy Management System</h1>
+      <p>Comprehensive healthcare pharmaceutical administration</p>
+    </div>
+  </div>
+
+  <div class="main-content">
+    <div class="admin-panel">
+      <div class="panel-title">
+        <h2>Admin Dashboard</h2>
+        <p>Select an option to manage your pharmacy operations</p>
+      </div>
+
+      <div class="options-grid">
+
+  <!-- 1) MASTERS -->
+  <a class="option-card" href="{{ url_for('pharmacy_vendors') }}">
+    <div class="card-icon"><i class="fas fa-truck"></i></div>
+    <div class="card-content">
+      <h3>Vendor Master</h3>
+      <p>Add & manage vendors / wholesalers</p>
+      <small class="text-muted">Active: {{ vendors_count }}</small>
+    </div>
+    <i class="fas fa-arrow-right card-arrow"></i>
+  </a>
+
+  <a class="option-card" href="{{ url_for('pharmacy_hsn_tax_list') }}">
+    <div class="card-icon"><i class="fas fa-receipt"></i></div>
+    <div class="card-content">
+      <h3>HSN / Tax Master</h3>
+      <p>GST/Tax setup by HSN</p>
+      <small class="text-muted">Active: {{ hsn_count }}</small>
+    </div>
+    <i class="fas fa-arrow-right card-arrow"></i>
+  </a>
+
+  <a class="option-card" href="{{ url_for('pharmacy_products') }}">
+    <div class="card-icon"><i class="fas fa-capsules"></i></div>
+    <div class="card-content">
+      <h3>Product Master</h3>
+      <p>Medicines, reorder level, HSN mapping</p>
+      <small class="text-muted">Active: {{ products_count }}</small>
+    </div>
+    <i class="fas fa-arrow-right card-arrow"></i>
+  </a>
+
+  <!-- 2) STOCK FOUNDATION -->
+  <a class="option-card" href="{{ url_for('pharmacy_opening_stock') }}">
+    <div class="card-icon"><i class="fas fa-boxes"></i></div>
+    <div class="card-content">
+      <h3>Opening Stock</h3>
+      <p>Batch + expiry + qty entry</p>
+      <small class="text-muted">Total Qty: {{ total_stock_qty }}</small>
+    </div>
+    <i class="fas fa-arrow-right card-arrow"></i>
+  </a>
+
+  <a class="option-card" href="{{ url_for('pharmacy_import') }}">
+    <div class="card-icon"><i class="fas fa-file-upload"></i></div>
+    <div class="card-content">
+      <h3>Import / Upload Stock File</h3>
+      <p>Upload CSV/XLSX vendor formats</p>
+      <small class="text-muted">Templates: {{ templates_count }}</small>
+    </div>
+    <i class="fas fa-arrow-right card-arrow"></i>
+  </a>
+
+  <a class="option-card" href="{{ url_for('pharmacy_stock') }}">
+    <div class="card-icon"><i class="fas fa-warehouse"></i></div>
+    <div class="card-content">
+      <h3>Current Stock</h3>
+      <p>Live inventory with batch details</p>
+      <small class="text-muted">Products tracked: {{ products_count }}</small>
+    </div>
+    <i class="fas fa-arrow-right card-arrow"></i>
+  </a>
+
+  <!-- 3) OPERATIONS -->
+  <a class="option-card" href="{{ url_for('pharmacy_purchase_new') }}">
+    <div class="card-icon"><i class="fas fa-cart-shopping"></i></div>
+    <div class="card-content">
+      <h3>Purchase (GRN)</h3>
+      <p>Vendor invoice → stock update + ledger</p>
+    </div>
+    <i class="fas fa-arrow-right card-arrow"></i>
+  </a>
+
+  <!-- 4) ALERTS -->
+  <a class="option-card" href="{{ url_for('pharmacy_low_stock_alerts') }}">
+    <div class="card-icon"><i class="fas fa-triangle-exclamation"></i></div>
+    <div class="card-content">
+      <h3>Low Stock Alerts</h3>
+      <p>Items below reorder level</p>
+      <small class="text-muted">Count: {{ low_stock_count }}</small>
+    </div>
+    <i class="fas fa-arrow-right card-arrow"></i>
+  </a>
+
+  <a class="option-card" href="{{ url_for('pharmacy_near_expiry_alerts') }}">
+    <div class="card-icon"><i class="fas fa-clock"></i></div>
+    <div class="card-content">
+      <h3>Near Expiry Alerts</h3>
+      <p>Expiring in next 30 days</p>
+      <small class="text-muted">Count: {{ near_expiry_30 }}</small>
+    </div>
+    <i class="fas fa-arrow-right card-arrow"></i>
+  </a>
+
+  <!-- 5) LATER: Billing -->
+<a class="option-card" href="{{ url_for('pharmacy_sale_new') }}">
+  <div class="card-icon"><i class="fas fa-file-invoice-dollar"></i></div>
+  <div class="card-content">
+    <h3>Billing / Sales</h3>
+    <p>Create bills → reduce stock → ledger SALE</p>
+  </div>
+  <i class="fas fa-arrow-right card-arrow"></i>
+</a>
+
+
+  <a class="option-card logout-card" href="{{ url_for('pharmacy_admin_logout') }}">
+    <div class="card-icon"><i class="fas fa-sign-out-alt"></i></div>
+    <div class="card-content">
+      <h3>Logout</h3>
+      <p>Securely exit the admin panel</p>
+    </div>
+    <i class="fas fa-arrow-right card-arrow"></i>
+  </a>
+
+</div>
+
+  

@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>View Pharmacy Admins</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --teal: #20b2aa;
+            --teal-dark: #1a9b96;
+            --teal-soft: #eaf8f7;
+
+            --bg: #f6f8fb;
+            --card: #ffffff;
+            --border: #e6edf2;
+            --text: #1f2937;
+            --muted: #6b7280;
+
+            --radius: 16px;
+            --shadow: 0 10px 24px rgba(31, 41, 55, 0.08);
+        }
+
+        body {
+            background: var(--bg);
+            font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        /* Card */
+        .card-ui {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .card-head {
+            padding: 18px 22px;
+            border-bottom: 1px solid var(--border);
+            background: var(--card);
+        }
+
+        .card-head h4 {
+            margin: 0;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-head h4 i {
+            color: var(--teal);
+        }
+
+        /* Buttons */
+        .btn-pill {
+            border-radius: 999px;
+            padding: 10px 16px;
+            font-weight: 650;
+            font-size: 0.92rem;
+            letter-spacing: 0.01em;
+            transition: all .15s ease;
+        }
+
+        .btn-teal {
+            background: var(--teal);
+            border: 1px solid var(--teal);
+            color: #fff;
+        }
+
+        .btn-teal:hover {
+            background: var(--teal-dark);
+            border-color: var(--teal-dark);
+            color: #fff;
+            transform: translateY(-1px);
+        }
+
+        .btn-outline-teal {
+            background: transparent;
+            border: 1px solid rgba(32, 178, 170, .45);
+            color: var(--teal-dark);
+        }
+
+        .btn-outline-teal:hover {
+            background: var(--teal-soft);
+            border-color: rgba(32, 178, 170, .65);
+            color: var(--teal-dark);
+            transform: translateY(-1px);
+        }
+
+        /* Alerts */
+        .alert {
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            font-weight: 550;
+            background: #f3f7fa;
+            color: var(--text);
+        }
+
+        /* Table */
+        .table thead th {
+            background: #f3f7fa;
+            color: var(--text);
+            font-weight: 750;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+        }
+
+        .table td {
+            vertical-align: middle;
+            color: var(--text);
+            white-space: nowrap;
+        }
+
+        .table-hover tbody tr:hover {
+            background: var(--teal-soft);
+        }
+
+        code {
+            background: #f3f7fa;
+            border-radius: 8px;
+            padding: 4px 8px;
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        /* Badges */
+        .badge-active {
+            background: var(--teal);
+            color: #fff;
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-weight: 650;
+        }
+
+        .badge-inactive {
+            background: var(--teal-soft);
+            color: var(--teal-dark);
+            border: 1px solid rgba(32, 178, 170, .35);
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-weight: 650;
+        }
+
+        .text-muted {
+            color: var(--muted) !important;
+            font-style: italic;
+        }
+
+        /* Empty state */
+        .empty-icon {
+            color: rgba(32, 178, 170, .55);
+        }
+
+        /* Action buttons */
+        .btn-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-icon-teal {
+            border: 1px solid rgba(32, 178, 170, .45);
+            color: var(--teal-dark);
+            background: #fff;
+        }
+
+        .btn-icon-teal:hover {
+            background: var(--teal-soft);
+            border-color: rgba(32, 178, 170, .65);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container my-5">
+
+        <div class="card-ui">
+            <div class="card-head">
+                <h4><i class="fas fa-prescription-bottle-alt"></i> Pharmacy Admins</h4>
+            </div>
+
+            <div class="card-body p-4">
+
+                <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+                    <a href="{{ url_for('hr_dashboard') }}" class="btn btn-pill btn-outline-teal">
+                        <i class="fas fa-arrow-left"></i> Back to Dashboard
+                    </a>
+
+                    <a href="{{ url_for('hr_add_pharmacy_admin') }}" class="btn btn-pill btn-teal">
+                        <i class="fas fa-plus"></i> Add Pharmacy Admin
+                    </a>
+                </div>
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert alert-dismissible fade show">
+                    <i class="fas fa-info-circle me-2" style="color:var(--teal);"></i>
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+                {% endfor %}
+                {% endif %}
+                {% endwith %}
+
+                {% if pharmacy_admins %}
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th class="text-center" style="width:80px;">Sl.No</th>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Phone</th>
+                                <th>Gender</th>
+                                <th>Username</th>
+                                <th>Status</th>
+                                <th>Created</th>
+                                <th>Last Login</th>
+                                <th class="text-center" style="width:140px;">Actions</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            {% for admin in pharmacy_admins %}
+                            <tr>
+                                <td class="text-center fw-semibold">{{ loop.index }}</td>
+
+                                <td><strong>{{ admin.full_name }}</strong></td>
+                                <td>{{ admin.email }}</td>
+                                <td>{{ admin.phone }}</td>
+                                <td>{{ admin.gender }}</td>
+                                <td><code>{{ admin.username }}</code></td>
+
+                                <td>
+                                    {% if admin.is_active %}
+                                    <span class="badge-active">Active</span>
+                                    {% else %}
+                                    <span class="badge-inactive">Inactive</span>
+                                    {% endif %}
+                                </td>
+
+                                <!-- ✅ FIX: your table has created_at, not created_on -->
+                                <td>
+                                    <small>
+                                        {% if admin.created_at %}
+                                            {{ admin.created_at.strftime('%Y-%m-%d') if admin.created_at is not string else admin.created_at }}
+                                        {% else %}
+                                            N/A
+                                        {% endif %}
+                                    </small>
+                                </td>
+
+                                <td>
+                                    {% if admin.last_login %}
+                                    {{ admin.last_login }}
+                                    {% else %}
+                                    <span class="text-muted">Never</span>
+                                    {% endif %}
+                                </td>
+
+                                <!-- ✅ CRUD Actions -->
+                                <td class="text-center">
+                                    <a class="btn btn-icon btn-icon-teal me-1"
+                                       href="{{ url_for('hr_view_pharmacy_admins', id=admin.id) }}"
+                                       title="View">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+
+                                    <a class="btn btn-icon btn-icon-teal me-1"
+                                       href="{{ url_for('hr_edit_pharmacy_admin', id=admin.id) }}"
+                                       title="Edit">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+
+                                    <button type="button"
+                                            class="btn btn-icon btn-danger"
+                                            title="Delete"
+                                            onclick="confirmDelete({{ admin.id }}, '{{ admin.full_name|e }}')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-pills fa-3x empty-icon mb-3"></i>
+                    <h5 class="text-muted" style="font-weight:750;">No Pharmacy Admins Yet</h5>
+                    <p class="text-muted">No pharmacy admins have been created yet.</p>
+                    <a href="{{ url_for('hr_add_pharmacy_admin') }}" class="btn btn-pill btn-teal">
+                        <i class="fas fa-plus"></i> Add First Pharmacy Admin
+                    </a>
+                </div>
+                {% endif %}
+
+            </div>
+        </div>
+
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- ✅ Delete confirm + POST -->
+    <script>
+        function confirmDelete(adminId, adminName) {
+            if (confirm(`Are you sure you want to delete "${adminName}"? This action cannot be undone.`)) {
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = `/hr-delete-pharmacy-admin/${adminId}`;
+                document.body.appendChild(form);
+                form.submit();
+            }
+        }
+    </script>
+</body>
+
+</html>

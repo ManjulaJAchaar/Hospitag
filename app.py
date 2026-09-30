@@ -1,0 +1,12925 @@
+from flask import Flask, render_template, request, redirect, session,flash,url_for
+import mysql.connector, hashlib
+from config import Config
+from utils.email_sender import send_email
+import uuid
+from datetime import timedelta
+import re
+from utils.email_sender import send_admin_email
+from werkzeug.security import check_password_hash,generate_password_hash
+import random, time
+import os
+from werkzeug.utils import secure_filename
+from flask import jsonify
+from flask_mail import Mail, Message
+import serial.tools.list_ports
+import threading
+print([p.device for p in serial.tools.list_ports.comports()])
+from serial_manager import connect_serial, is_connected, read_rfid, close_serial
+from datetime import datetime, timedelta
+import random
+import string
+from flask_mail import Message
+from flask import current_app
+# Flask imports
+from flask import Blueprint, request, render_template, redirect, url_for, session, flash
+from werkzeug.security import generate_password_hash, check_password_hash
+import secrets
+import os
+import json
+import csv
+from datetime import datetime, date
+from flask import request, render_template, redirect, url_for, flash, session
+from werkzeug.utils import secure_filename
+from openpyxl import load_workbook
+from functools import wraps
+
+def send_email(recipient_email, subject, body):
+    try:
+        from app import mail  # Import here to avoid circular imports
+        
+        print(f"Preparing email for: {recipient_email}")
+        
+        msg = Message(
+            subject=subject,
+            recipients=[recipient_email],
+            body=body
+        )
+        
+        print("Sending email...")
+        mail.send(msg)
+        print(f"Email sent successfully to {recipient_email}")
+        return True
+        
+    except Exception as e:
+        print(f"Email send failed: {str(e)}")
+        raise e
+
+# Set session variables
+
+# ✅ ADD THIS: force a new login session marker for WebSerial moda
+
+
+def send_admin_email(recipient_email, subject, body):
+    # If you have this function, make it similar to send_email
+    return send_email(recipient_email, subject, body)
+
+def generate_password(length=8):
+    """Generate a random password with letters and numbers"""
+    characters = string.ascii_letters + string.digits
+    password = ''.join(random.choice(characters) for _ in range(length))
+    return password
+
+def generate_username(name, prefix=""):
+    """Generate a username from name"""
+    clean_name = name.lower().replace(' ', '_').replace('-', '_')
+    # Add random number to make it unique
+    random_num = random.randint(100, 999)
+    return f"{prefix}{clean_name}_{random_num}"
+
+app = Flask(__name__)
+con = mysql.connector.connect(**Config.DB_CONFIG)
+ser = None
+serial_connected = False
+
+
+rfid_store = {"uid": None}
+
+app.secret_key = Config.SECRET_KEY
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = Config.EMAIL_USER
+app.config['MAIL_PASSWORD'] = Config.EMAIL_PASS
+app.config['MAIL_DEFAULT_SENDER'] = Config.EMAIL_USER
+
+mail = Mail(app) 
+
+
+
+
+@app.template_filter('tojsonfilter')
+def to_json_filter(obj):
+    """Convert Python object to JSON string for JavaScript"""
+    return json.dumps(obj, default=str, ensure_ascii=False)
+    
+def serial_reader():
+    global ser, serial_connected
+
+    while serial_connected:
+        try:
+            if ser and ser.in_waiting:
+                line = ser.readline().decode(errors="ignore").strip()
+                if line.startswith("UID:"):
+                    uid = line.replace("UID:", "").strip()
+                    rfid_store["uid"] = uid
+                    print("RFID UID RECEIVED:", uid)
+        except Exception as e:
+            print("Serial read error:", e)
+RFID_SCANNING = False  # global flag (simple)
+
+
+
+staff_bp = Blueprint("staff", __name__)
+
+@app.route("/receptionist-add-patient", methods=["GET", "POST"])
+def receptionist_add_patient():
+    if "staff_id" not in session or session.get("staff_role") != "Receptionist":
+        return redirect("/staff-login")
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+    
+    staff_id = session["staff_id"]
+    
+    # Get staff details and hospital
+    cur.execute("""
+        SELECT sm.name, sm.photo, a.hospital_name, sm.hospital_id
+        FROM staff_members sm 
+        INNER JOIN admins a ON sm.admin_id = a.id 
+        WHERE sm.id = %s
+    """, (staff_id,))
+    
+    staff_info = cur.fetchone()
+    if not staff_info:
+        flash("Staff information not found.", "danger")
+        return redirect("/staff-login")
+    
+    hospital_id = staff_info["hospital_id"]
+    
+    # Get departments for bed assignment
+    cur.execute("""
+        SELECT id, department_name 
+        FROM departments 
+        WHERE hospital_id = %s 
+        ORDER BY department_name
+    """, (hospital_id,))
+    departments = cur.fetchall()
+    
+    # Get available beds by department
+    cur.execute("""
+        SELECT b.id, b.bed_number, b.floor_number, b.room_number, 
+               d.department_name, d.id as department_id
+        FROM beds b
+        INNER JOIN departments d ON b.department_id = d.id
+        WHERE b.hospital_id = %s AND b.is_occupied = 0
+        ORDER BY d.department_name, b.floor_number, b.room_number, b.bed_number
+    """, (hospital_id,))
+    available_beds = cur.fetchall()
+
+    if request.method == "POST":
+        # Get form data
+        full_name = request.form.get("full_name")
+        age = request.form.get("age")
+        gender = request.form.get("gender")
+        phone = request.form.get("phone")
+        email = request.form.get("email")
+        address = request.form.get("address")
+        aadhar_number = request.form.get("aadhar_number")
+        id_proof_type = request.form.get("id_proof_type")
+        id_proof_number = request.form.get("id_proof_number")
+        has_insurance = request.form.get("has_insurance")
+        insurance_provider = request.form.get("insurance_provider")
+        insurance_policy_number = request.form.get("insurance_policy_number")
+        policy_start_date = request.form.get("policy_start_date")
+        policy_expiry_date = request.form.get("policy_expiry_date")
+        emergency_contact_name = request.form.get("emergency_contact_name")
+        emergency_contact_relation = request.form.get("emergency_contact_relation")
+        emergency_contact_phone = request.form.get("emergency_contact_phone")
+        rfid_uid = request.form.get("rfid_uid")
+        
+        # NEW: Bed assignment fields
+        assigned_bed_id = request.form.get("assigned_bed_id")
+        admission_type = request.form.get("admission_type", "outpatient")  # outpatient/inpatient
+        
+        try:
+            # Insert patient
+            cur.execute("""
+                INSERT INTO patients (
+                    full_name, age, gender, phone, email, address, aadhar_number,
+                    id_proof_type, id_proof_number, has_insurance, insurance_provider,
+                    insurance_policy_number, policy_start_date, policy_expiry_date,
+                    emergency_contact_name, emergency_contact_relation, emergency_contact_phone,
+                    rfid_uid, hospital_id, added_by_staff_id, created_on, is_active
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), 1)
+            """, (
+                full_name, age, gender, phone, email, address, aadhar_number,
+                id_proof_type, id_proof_number, has_insurance, insurance_provider,
+                insurance_policy_number, policy_start_date, policy_expiry_date,
+                emergency_contact_name, emergency_contact_relation, emergency_contact_phone,
+                rfid_uid, hospital_id, staff_id
+            ))
+            
+            patient_id = cur.lastrowid
+            
+            # If inpatient and bed assigned, update bed status
+            if admission_type == "inpatient" and assigned_bed_id:
+                cur.execute("""
+                    UPDATE beds 
+                    SET is_occupied = 1, patient_id = %s, updated_at = NOW()
+                    WHERE id = %s AND hospital_id = %s AND is_occupied = 0
+                """, (patient_id, assigned_bed_id, hospital_id))
+                
+                if cur.rowcount == 0:
+                    raise Exception("Selected bed is no longer available")
+            
+            con.commit()
+            flash("Patient added successfully!", "success")
+            return redirect(url_for("receptionist_add_patient"))
+            
+        except Exception as e:
+            con.rollback()
+            flash(f"Error adding patient: {str(e)}", "danger")
+
+    # Get patients added by this receptionist
+    cur.execute("""
+        SELECT p.*, b.bed_number, b.room_number, b.floor_number, d.department_name
+        FROM patients p 
+        LEFT JOIN beds b ON p.id = b.patient_id
+        LEFT JOIN departments d ON b.department_id = d.id
+        WHERE p.added_by_staff_id = %s 
+        ORDER BY p.created_on DESC
+    """, (staff_id,))
+    patients = cur.fetchall()
+
+    con.close()
+
+    return render_template(
+        "receptionist_dashboard.html",
+        staff_name=staff_info["name"],
+        staff_photo=staff_info["photo"],
+        hospital_name=staff_info["hospital_name"],
+        patients=patients,
+        departments=departments,
+        available_beds=available_beds
+    )
+
+# Login Route
+# @staff_bp.route("/receptionist-nurse-login", methods=["GET", "POST"])
+# def receptionist_nurse_login():
+#     staff_found = False
+#     pin_set = False
+#     rfid_uid = None
+
+#     if request.method == "POST":
+#         rfid_uid = request.form.get("rfid_uid")
+#         new_pin = request.form.get("new_pin")
+#         pin = request.form.get("pin")
+#         reset_pin = request.form.get("reset_pin")
+
+#         con = get_db()
+#         cur = con.cursor(dictionary=True)
+#         cur.execute("""
+#             SELECT * FROM staff_members
+#             WHERE rfid_uid = %s AND role = 'Receptionist + Nurse'
+#               AND is_active = 1 AND can_login = 1
+#         """, (rfid_uid,))
+#         staff = cur.fetchone()
+#         con.close()
+
+#         if not staff:
+#             flash("RFID tag not recognized or not assigned to Receptionist + Nurse.", "danger")
+#             return render_template("receptionist_nurse_login.html", staff_found=False)
+
+#         staff_found = True
+
+#         if staff.get("rfid_pin_hash"):
+#             pin_set = True
+
+#             if reset_pin == "yes":
+#                 flash("PIN reset is not implemented yet.", "info")
+#                 return render_template(
+#                     "receptionist_nurse_login.html",
+#                     staff_found=True,
+#                     pin_set=True,
+#                     rfid_uid=rfid_uid
+#                 )
+
+#             if pin:
+#                 if check_password_hash(staff["rfid_pin_hash"], pin):
+#                     session["staff_id"] = staff["id"]
+#                     session["staff_role"] = staff["role"]
+#                     session["staff_name"] = staff["full_name"]
+#                     flash("Login successful.", "success")
+#                     return redirect(url_for("staff.receptionist_nurse_dashboard"))
+#                 else:
+#                     flash("Incorrect PIN. Please try again.", "danger")
+
+#         else:
+#             if new_pin:
+#                 if len(new_pin) == 4 and new_pin.isdigit():
+#                     pin_hash = generate_password_hash(new_pin)
+#                     con = get_db()
+#                     cur = con.cursor()
+#                     cur.execute("""
+#                         UPDATE staff_members
+#                         SET rfid_pin_hash=%s
+#                         WHERE rfid_uid=%s
+#                     """, (pin_hash, rfid_uid))
+#                     con.commit()
+#                     con.close()
+#                     flash("PIN set successfully. You can now log in.", "success")
+#                     pin_set = True
+#                 else:
+#                     flash("PIN must be 4 digits.", "danger")
+
+#         return render_template(
+#             "receptionist_nurse_login.html",
+#             staff_found=staff_found,
+#             pin_set=pin_set,
+#             rfid_uid=rfid_uid
+#         )
+
+#     return render_template("receptionist_nurse_login.html", staff_found=False)
+
+
+# Dashboard Route
+@staff_bp.route("/receptionist-nurse-dashboard")
+def receptionist_nurse_dashboard():
+    if "staff_id" not in session:
+        return redirect(url_for("staff.receptionist_nurse_login"))
+    return render_template("receptionist_nurse_dashboard.html")
+
+app.register_blueprint(staff_bp)
+
+
+# ✅ 2) DASHBOARD ROUTE (YOU MUST HAVE THIS!)
+
+
+
+
+
+
+
+
+@app.route("/test-email")
+def test_email():
+    try:
+        subject = "Test Email"
+        body = "This is a test email to verify configuration."
+        send_email(Config.EMAIL_USER, subject, body)  # Send to yourself first
+        return "Test email sent successfully!"
+    except Exception as e:
+        return f"Email test failed: {str(e)}"
+    
+@app.route("/test-email-external/<email>")
+def test_email_external(email):
+    try:
+        subject = "Test Email"
+        body = "This is a test email to verify external delivery."
+        send_email(email, subject, body)
+        return f"Test email sent to {email} successfully!"
+    except Exception as e:
+        return f"Email test failed: {str(e)}"
+
+
+
+
+
+
+
+
+@app.route("/list-serial-ports")
+def list_serial_ports():
+    ports = [p.device for p in serial.tools.list_ports.comports()]
+    return jsonify({"ports": ports})
+
+@app.route("/check-serial-status")
+def check_serial_status():
+    return jsonify({
+        "connected": is_connected(),
+        "port": session.get("serial_port")  # optional
+    })
+
+@app.route("/connect-serial", methods=["POST"])
+def connect_serial_route():
+    data = request.get_json(force=True)
+    port = data.get("port")
+
+    if not port:
+        return jsonify({"success": False, "error": "No port selected"}), 400
+
+    # ✅ If already connected and same port -> don’t reconnect
+    if is_connected() and session.get("serial_port") == port:
+        return jsonify({"success": True, "already": True, "port": port})
+
+    ok = connect_serial(port)  # your serial_manager.connect_serial
+    if ok:
+        session["serial_port"] = port
+        session["serial_connected"] = True
+        return jsonify({"success": True, "port": port})
+
+    session["serial_connected"] = False
+    return jsonify({"success": False, "error": "Connection failed"}), 500
+
+@app.route("/disconnect-serial", methods=["POST"])
+def disconnect_serial_route():
+    close_serial()
+    session.pop("serial_port", None)
+    session["serial_connected"] = False
+    return jsonify({"success": True})
+
+@app.route("/enable-rfid-scanning", methods=["POST"])
+def enable_rfid_scanning():
+    global RFID_SCANNING
+    RFID_SCANNING = True
+    return jsonify({"success": True})
+
+@app.route("/disable-rfid-scanning", methods=["POST"])
+def disable_rfid_scanning():
+    global RFID_SCANNING
+    RFID_SCANNING = False
+    return jsonify({"success": True})
+
+# @app.route("/rfid-read")
+# def rfid_read():
+#     if not is_connected():
+#         return jsonify({"uid": None, "error": "serial not connected"})
+
+#     if not RFID_SCANNING:
+#         return jsonify({"uid": None})
+
+#     uid = read_rfid()  # your serial_manager.read_rfid()
+#     return jsonify({"uid": uid})
+
+@app.route("/rfid-read", methods=["GET", "POST"])
+def rfid_read():
+    if request.method == "POST":
+        data = request.get_json(force=True)
+        return jsonify({"uid": data.get("uid")})
+
+    return jsonify({"uid": None})
+
+
+@app.route("/rfid-update", methods=["POST"])
+def rfid_update():
+    # Get UID sent from the ESP32
+    uid = request.form.get("uid")
+    if uid and rfid_store["scanning_enabled"]:  # Only accept UID if scanning is enabled
+        print(f"RFID UID updated from ESP32: {uid}")
+        rfid_store["uid"] = uid
+        rfid_store["scanning_enabled"] = False  # Auto-disable after receiving UID
+        return "OK", 200
+    elif uid and not rfid_store["scanning_enabled"]:
+        print(f"RFID UID received but scanning disabled: {uid}")
+        return "Scanning disabled", 200
+    return "No RFID UID found!", 400
+
+@app.route('/rfid-scanning-status')
+def rfid_scanning_status():
+    return jsonify({"enabled": rfid_store["scanning_enabled"]})
+# ----------------------------------------------------------------------------------
+
+@app.route('/save-consultancy', methods=['POST'])
+def save_consultancy():
+    try:
+        data = request.json or {}
+
+        # Only require IDs + datetime
+        required_fields = ['patient_id', 'doctor_id', 'appointment_datetime']
+        missing_fields = [
+                f for f in required_fields
+                if isinstance(data.get(f), str) and not (data.get(f) or '').strip()  # Check if the field is a string and then strip
+                or (data.get(f) is None)  # If the field is None, it's missing
+            ]
+
+        if missing_fields:
+            return jsonify({
+                'success': False,
+                'error': f"Missing: {', '.join(missing_fields)}"
+            }), 400
+
+        # Required fields
+        patient_id = int(data['patient_id'])
+        doctor_id = int(data['doctor_id'])
+
+        # Ensure 'appointment_datetime' is a string before calling .strip()
+        appointment_datetime = str(data.get('appointment_datetime', '')).strip()
+
+        # Optional fields (can be empty → blank letterhead)
+        chief_complaint = (data.get('chief_complaint') or '').strip()
+        diagnosis = (data.get('diagnosis') or '').strip()
+        prescription = (data.get('prescription') or '').strip()
+        additional_notes = (data.get('additional_notes') or '').strip()
+        patient_email = (data.get('patient_email') or '').strip()
+
+
+        # Save to DB
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO consultancy_records
+            (patient_id, doctor_id, chief_complaint, diagnosis, prescription, additional_notes, appointment_datetime)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (
+            patient_id,
+            doctor_id,
+            chief_complaint,
+            diagnosis,
+            prescription,
+            additional_notes,
+            appointment_datetime
+        ))
+
+        consultancy_id = cur.lastrowid
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        # Email to patient (optional)
+        if patient_email:
+            try:
+                subject = "Your Appointment Details - Hospital"
+                mail_body = (
+                    f"Dear Patient,\n\n"
+                    f"You have a new appointment scheduled.\n"
+                    f"Appointment Date & Time: {appointment_datetime}\n"
+                    f"Chief Complaint: {chief_complaint}\n"
+                    f"Diagnosis: {diagnosis}\n"
+                    f"Prescription: {prescription}\n"
+                    f"Additional Notes: {additional_notes}\n\n"
+                    f"Regards,\nHospital Team"
+                )
+                msg = Message(subject, recipients=[patient_email], body=mail_body)
+                mail.send(msg)
+            except Exception as e:
+                print("Email error:", e)
+
+        return jsonify({
+            'success': True,
+            'consultancy_id': consultancy_id
+        })
+
+    except Exception as e:
+        print("UNEXPECTED ERROR:", e)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# ========= STAFF PROFILE PHOTO UPLOAD =========
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOAD_FOLDER = os.path.join(BASE_DIR, "static", "uploads", "staff_photos")
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif"}
+
+def allowed_file(filename):
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# def staff_login_common(expected_role, template_name, dashboard_endpoint):
+#     con = get_db()
+#     cur = con.cursor(dictionary=True)
+
+#     # ✅ 1) GET: show login page
+#     if request.method == "GET":
+#         return render_template(template_name, form={})
+
+#     # ✅ 2) POST: handle login
+#     session.clear()
+
+#     # ----------------------------------------------------------------------
+#     # A) RFID/PIN LOGIN
+#     # ----------------------------------------------------------------------
+#     if "rfid_uid" in request.form:
+#         rfid_uid = request.form.get("rfid_uid", "").strip().upper()
+#         pin = request.form.get("pin", "").strip()
+
+#         if not rfid_uid:
+#             flash("RFID card required.", "danger")
+#             return render_template(template_name, form=request.form)
+
+#         cur.execute("""
+#             SELECT * FROM staff_members
+#             WHERE rfid_uid = %s
+#               AND (role = %s OR role LIKE %s)
+#         """, (rfid_uid, expected_role, f"%{expected_role}%"))
+#         staff = cur.fetchone()
+
+#         if not staff or not staff.get("can_login", 1):
+#             flash("Card not recognized or blocked.", "danger")
+#             return render_template(template_name, form={"rfid_uid": rfid_uid})
+
+#         # If PIN is set, verify it
+#         # If PIN is set, verify it
+#         if staff.get("staff_pin_hash"):
+
+#             # ✅ PIN required but not typed yet → show PIN UI (NO red error)
+#             if not pin:
+#                 con.close()
+#                 return render_template(
+#                     template_name,
+#                     form={"rfid_uid": rfid_uid, "ask_pin": True, "pin_required": True}
+#                 )
+
+#             # ✅ PIN typed but wrong → show red error
+#             if not check_password_hash(staff["staff_pin_hash"], pin):
+#                 flash("Incorrect PIN. Please try again.", "danger")
+#                 con.close()
+#                 return render_template(
+#                     template_name,
+#                     form={"rfid_uid": rfid_uid, "ask_pin": True}
+#                 )
+
+#         else:
+#             # ✅ No PIN set yet → go OTP flow
+#             session["pending_rfid_uid"] = rfid_uid
+#             con.close()
+#             return redirect(url_for("receptionist_send_otp"))
+
+#         # ✅ Fetch hospital info (LEFT JOIN to avoid failing if mapping missing)
+#         cur.execute("""
+#             SELECT h.id AS hospital_id, h.hospital_name
+#             FROM staff_members s
+#             LEFT JOIN admins a ON a.id = s.admin_id
+#             LEFT JOIN hospitals h ON h.id = a.hospital_id
+#             WHERE s.id = %s
+#         """, (staff["id"],))
+#         hinfo = cur.fetchone()
+
+#         # If staff not linked, stop login here
+#         if not hinfo or not hinfo.get("hospital_id"):
+#             flash("Staff is not linked to any hospital/admin. Please assign admin & hospital.", "danger")
+#             return render_template(template_name, form=request.form)
+
+#         # ✅ success session set
+#         session["login_nonce"] = uuid.uuid4().hex
+#         session["staff_id"] = staff["id"]
+#         session["staff_name"] = staff["full_name"]
+#         session["staff_role"] = staff["role"]
+
+#         session["staff_hospital_id"] = hinfo["hospital_id"]
+#         session["staff_hospital_name"] = hinfo["hospital_name"]
+
+#         session["staff_photo"] = staff.get("profile_photo")
+#         session["serial_connected"] = False
+#         session["serial_port"] = None
+
+#         # mark active
+#         cur.execute("""
+#             UPDATE staff_members
+#             SET is_active = 1,
+#                 last_login = NOW()
+#             WHERE id = %s
+#         """, (staff["id"],))
+#         con.commit()
+
+#         return redirect(url_for(dashboard_endpoint))
+
+#     # ----------------------------------------------------------------------
+#     # B) USERNAME/PASSWORD LOGIN
+#     # ----------------------------------------------------------------------
+#     username = request.form.get("username", "").strip().lower()
+#     password = request.form.get("password", "").strip()
+
+#     cur.execute("""
+#         SELECT * FROM staff_members
+#         WHERE LOWER(TRIM(username)) = %s
+#           AND (role = %s OR role LIKE %s)
+#     """, (username, expected_role, f"%{expected_role}%"))
+#     staff = cur.fetchone()
+
+#     if (
+#         not staff
+#         or not staff.get("can_login", 1)
+#         or not check_password_hash(staff["password"], password)
+#     ):
+#         flash("Invalid username/password or account blocked.", "danger")
+#         return render_template(template_name, form=request.form)
+
+#     # ✅ Fetch hospital info (manual login too)
+#     cur.execute("""
+#         SELECT h.id AS hospital_id, h.hospital_name
+#         FROM staff_members s
+#         LEFT JOIN admins a ON a.id = s.admin_id
+#         LEFT JOIN hospitals h ON h.id = a.hospital_id
+#         WHERE s.id = %s
+#     """, (staff["id"],))
+#     hinfo = cur.fetchone()
+
+#     if not hinfo or not hinfo.get("hospital_id"):
+#         flash("Staff is not linked to any hospital/admin. Please assign admin & hospital.", "danger")
+#         return render_template(template_name, form=request.form)
+
+#     # ✅ success session set
+#     session["login_nonce"] = uuid.uuid4().hex
+#     session["staff_id"] = staff["id"]
+#     session["staff_name"] = staff["full_name"]
+#     session["staff_role"] = staff["role"]
+
+#     session["staff_hospital_id"] = hinfo["hospital_id"]
+#     session["staff_hospital_name"] = hinfo["hospital_name"]
+
+#     session["staff_photo"] = staff.get("profile_photo")
+#     session["serial_connected"] = False
+#     session["serial_port"] = None
+
+#     cur.execute("""
+#         UPDATE staff_members
+#         SET is_active = 1,
+#             last_login = NOW()
+#         WHERE id = %s
+#     """, (staff["id"],))
+#     con.commit()
+
+#     return redirect(url_for(dashboard_endpoint))
+# -----------------------------------------------RECEPTIONIST OTP-----------------------------------
+
+# @app.route("/receptionist/send-otp")
+# def receptionist_send_otp():
+#     rfid_uid = session.get("pending_rfid_uid")
+#     if not rfid_uid:
+#         flash("Scan your card first.", "danger")
+#         return redirect(url_for("receptionist_login"))
+
+#     con = get_db()
+#     cur = con.cursor(dictionary=True)
+#     cur.execute("SELECT email FROM staff_members WHERE rfid_uid=%s", (rfid_uid,))
+#     staff = cur.fetchone()
+#     con.close()
+
+#     if not staff or not staff.get("email"):
+#         flash("No email linked to this staff. Please contact admin.", "danger")
+#         return redirect(url_for("receptionist_login"))
+
+#     otp = str(random.randint(100000, 999999))
+#     session["otp_code"] = otp
+#     session["otp_expires"] = (datetime.now() + timedelta(minutes=5)).timestamp()
+#     session["otp_email"] = staff["email"]
+
+#     send_email(staff["email"], "Your OTP for PIN Setup", f"Your OTP is: {otp} (valid for 5 minutes)")
+
+#     flash("OTP sent to your email. Enter it to set PIN.", "info")
+#     return redirect(url_for("receptionist_verify_otp"))
+# # ---------------------------------RECEPTIONIST VERIFY OTP------------
+# @app.route("/receptionist/verify-otp", methods=["GET", "POST"])
+# def receptionist_verify_otp():
+#     rfid_uid = session.get("pending_rfid_uid")
+#     if not rfid_uid:
+#         flash("Scan your card first.", "danger")
+#         return redirect(url_for("receptionist_login"))
+
+#     if request.method == "POST":
+#         otp_input = request.form.get("otp", "").strip()
+
+#         otp = session.get("otp_code")
+#         expires = session.get("otp_expires", 0)
+
+#         if not otp or datetime.now().timestamp() > float(expires):
+#             flash("OTP expired. Please try again.", "danger")
+#             return redirect(url_for("receptionist_send_otp"))
+
+#         if otp_input != otp:
+#             flash("Invalid OTP. Try again.", "danger")
+#             return render_template("verify_otp.html")
+
+#         # OTP OK → allow set-pin
+#         session.pop("otp_code", None)
+#         session.pop("otp_expires", None)
+
+#         return redirect(url_for("receptionist_set_pin"))
+
+#     return render_template("verify_otp.html")
+
+import os
+import json
+import csv
+from datetime import datetime, date
+
+from flask import request, render_template, redirect, url_for, flash, session
+from werkzeug.utils import secure_filename
+from openpyxl import load_workbook
+
+
+
+@app.route("/receptionist-nurse-forgot-password", methods=["GET", "POST"])
+def receptionist_nurse_forgot_password():
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # prefill email if stored in session
+    email_prefill = session.get("receptionist_nurse_fp_email", "")
+
+    if request.method == "POST":
+        action = request.form.get("action")
+
+        # 1) SEND OTP
+        if action == "send_otp":
+            email = request.form.get("email", "").strip().lower()
+
+            if not email:
+                flash("Please enter your email.", "danger")
+                return render_template("receptionist_nurse_forgot_password.html", email=email)
+
+            # find receptionist/nurse by email
+            cur.execute("""
+                SELECT * FROM staff_members
+                WHERE LOWER(email) = %s AND (role = %s OR role LIKE %s)
+            """, (email, "Receptionist", "%Nurse%"))
+            staff = cur.fetchone()
+
+            if not staff:
+                flash("No receptionist or nurse account found with that email.", "danger")
+                return render_template("receptionist_nurse_forgot_password.html", email=email)
+
+            # generate 6-digit OTP
+            otp = str(random.randint(100000, 999999))
+
+            # store otp + email + timestamp in session (10 minutes)
+            session["receptionist_nurse_fp_email"] = email
+            session["receptionist_nurse_fp_otp"] = otp
+            session["receptionist_nurse_fp_time"] = time.time()
+
+            # send OTP email
+            try:
+                subject = "Receptionist & Nurse Password Reset OTP"
+                body = f"""
+Dear {staff['full_name']},
+
+You requested to reset your account password.
+
+Your OTP is: {otp}
+
+This OTP is valid for 10 minutes.
+
+If you did not request this, please ignore this email.
+
+Regards,
+Hospital Management System
+"""
+                send_email(email, subject, body)
+                flash("OTP has been sent to your email.", "success")
+            except Exception as e:
+                print("Error sending OTP email:", e)
+                flash("Failed to send OTP email.", "warning")
+
+            return render_template("receptionist_nurse_forgot_password.html", email=email)
+
+        # 2) RESET PASSWORD USING OTP
+        elif action == "reset_password":
+            email = request.form.get("email", "").strip().lower()
+            otp = request.form.get("otp", "").strip()
+            new_pass = request.form.get("new_password", "").strip()
+            confirm_pass = request.form.get("confirm_password", "").strip()
+
+            if not (email and otp and new_pass and confirm_pass):
+                flash("Please fill in all fields.", "danger")
+                return render_template("receptionist_nurse_forgot_password.html", email=email)
+
+            if new_pass != confirm_pass:
+                flash("New password and confirm password do not match.", "danger")
+                return render_template("receptionist_nurse_forgot_password.html", email=email)
+
+            # check data saved in session
+            sess_email = session.get("receptionist_nurse_fp_email")
+            sess_otp = session.get("receptionist_nurse_fp_otp")
+            sess_time = session.get("receptionist_nurse_fp_time")
+
+            if not (sess_email and sess_otp and sess_time):
+                flash("OTP session expired or not requested. Please request OTP again.", "danger")
+                return render_template("receptionist_nurse_forgot_password.html", email=email)
+
+            if email != sess_email:
+                flash("This email does not match the one used to request OTP.", "danger")
+                return render_template("receptionist_nurse_forgot_password.html", email=email)
+
+            if time.time() - sess_time > 600:
+                flash("OTP has expired. Please request a new one.", "danger")
+                session.pop("receptionist_nurse_fp_email", None)
+                session.pop("receptionist_nurse_fp_otp", None)
+                session.pop("receptionist_nurse_fp_time", None)
+                return render_template("receptionist_nurse_forgot_password.html", email=email)
+
+            if otp != sess_otp:
+                flash("Invalid OTP.", "danger")
+                return render_template("receptionist_nurse_forgot_password.html", email=email)
+
+            # OTP valid -> update password
+            cur.execute("""
+                SELECT * FROM staff_members
+                WHERE LOWER(email) = %s AND (role = %s OR role LIKE %s)
+            """, (email, "Receptionist", "%Nurse%"))
+            staff = cur.fetchone()
+
+            if not staff:
+                flash("Receptionist or Nurse not found for this email.", "danger")
+                return render_template("receptionist_nurse_forgot_password.html", email=email)
+
+            hashed = generate_password_hash(new_pass)
+            cur.execute("""
+                UPDATE staff_members
+                SET password = %s
+                WHERE id = %s
+            """, (hashed, staff["id"]))
+            con.commit()
+
+            # clear session
+            session.pop("receptionist_nurse_fp_email", None)
+            session.pop("receptionist_nurse_fp_otp", None)
+            session.pop("receptionist_nurse_fp_time", None)
+
+            flash("Password reset successful. Please log in with your new password.", "success")
+            return redirect(url_for("receptionist_nurse_login"))
+
+    # GET request
+    return render_template("receptionist_nurse_forgot_password.html", email=email_prefill)
+
+
+def receptionist_nurse_login_common(template_name, dashboard_endpoints):
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # ✅ 1) GET: show login page
+    if request.method == "GET":
+        return render_template(template_name, form={})
+
+    # ✅ 2) POST: handle login
+    session.clear()
+
+    # ----------------------------------------------------------------------
+    # A) RFID/PIN LOGIN
+    # ----------------------------------------------------------------------
+    if "rfid_uid" in request.form:
+        rfid_uid = request.form.get("rfid_uid", "").strip().upper()
+        pin = request.form.get("pin", "").strip()
+
+        if not rfid_uid:
+            flash("RFID card required.", "danger")
+            return render_template(template_name, form=request.form)
+
+        cur.execute("""
+            SELECT * FROM staff_members
+            WHERE rfid_uid = %s
+              AND role IN ('Receptionist', 'Nurse')
+        """, (rfid_uid,))
+        staff = cur.fetchone()
+
+        if not staff or not staff.get("can_login", 1):
+            flash("Card not recognized or blocked.", "danger")
+            return render_template(template_name, form={"rfid_uid": rfid_uid})
+
+        # If PIN is set, verify it
+        if staff.get("staff_pin_hash"):
+            # ✅ PIN required but not typed yet → show PIN UI (NO red error)
+            if not pin:
+                con.close()
+                return render_template(
+                    template_name,
+                    form={"rfid_uid": rfid_uid, "ask_pin": True, "pin_required": True}
+                )
+
+            # ✅ PIN typed but wrong → show red error
+            if not check_password_hash(staff["staff_pin_hash"], pin):
+                flash("Incorrect PIN. Please try again.", "danger")
+                con.close()
+                return render_template(
+                    template_name,
+                    form={"rfid_uid": rfid_uid, "ask_pin": True}
+                )
+
+        else:
+            # ✅ No PIN set yet → go OTP flow
+            session["pending_rfid_uid"] = rfid_uid
+            con.close()
+            return redirect(url_for("receptionist_nurse_send_otp"))
+
+        # ✅ Fetch hospital info (LEFT JOIN to avoid failing if mapping missing)
+        cur.execute("""
+            SELECT h.id AS hospital_id, h.hospital_name
+            FROM staff_members s
+            LEFT JOIN admins a ON a.id = s.admin_id
+            LEFT JOIN hospitals h ON h.id = a.hospital_id
+            WHERE s.id = %s
+        """, (staff["id"],))
+        hinfo = cur.fetchone()
+
+        # If staff not linked, stop login here
+        if not hinfo or not hinfo.get("hospital_id"):
+            flash("Staff is not linked to any hospital/admin. Please assign admin & hospital.", "danger")
+            return render_template(template_name, form=request.form)
+
+        # ✅ success session set
+        session["login_nonce"] = uuid.uuid4().hex
+        session["staff_id"] = staff["id"]
+        session["staff_name"] = staff["full_name"]
+        session["staff_role"] = staff["role"]
+
+        session["staff_hospital_id"] = hinfo["hospital_id"]
+        session["staff_hospital_name"] = hinfo["hospital_name"]
+
+        session["staff_photo"] = staff.get("profile_photo")
+        session["serial_connected"] = False
+        session["serial_port"] = None
+
+        # mark active
+        cur.execute("""
+            UPDATE staff_members
+            SET is_active = 1,
+                last_login = NOW()
+            WHERE id = %s
+        """, (staff["id"],))
+        con.commit()
+
+        # Redirect based on role
+        dashboard_endpoint = dashboard_endpoints.get(staff["role"])
+        if dashboard_endpoint:
+            return redirect(url_for(dashboard_endpoint))
+        else:
+            flash("Role not configured for dashboard access.", "danger")
+            return render_template(template_name, form=request.form)
+
+    # ----------------------------------------------------------------------
+    # B) USERNAME/PASSWORD LOGIN
+    # ----------------------------------------------------------------------
+    username = request.form.get("username", "").strip().lower()
+    password = request.form.get("password", "").strip()
+
+    cur.execute("""
+        SELECT * FROM staff_members
+        WHERE LOWER(TRIM(username)) = %s
+          AND role IN ('Receptionist', 'Nurse')
+    """, (username,))
+    staff = cur.fetchone()
+
+    if (
+        not staff
+        or not staff.get("can_login", 1)
+        or not check_password_hash(staff["password"], password)
+    ):
+        flash("Invalid username/password or account blocked.", "danger")
+        return render_template(template_name, form=request.form)
+
+    # ✅ Fetch hospital info (manual login too)
+    cur.execute("""
+        SELECT h.id AS hospital_id, h.hospital_name
+        FROM staff_members s
+        LEFT JOIN admins a ON a.id = s.admin_id
+        LEFT JOIN hospitals h ON h.id = a.hospital_id
+        WHERE s.id = %s
+    """, (staff["id"],))
+    hinfo = cur.fetchone()
+
+    if not hinfo or not hinfo.get("hospital_id"):
+        flash("Staff is not linked to any hospital/admin. Please assign admin & hospital.", "danger")
+        return render_template(template_name, form=request.form)
+
+    # ✅ success session set
+    session["login_nonce"] = uuid.uuid4().hex
+    session["staff_id"] = staff["id"]
+    session["staff_name"] = staff["full_name"]
+    session["staff_role"] = staff["role"]
+
+    session["staff_hospital_id"] = hinfo["hospital_id"]
+    session["staff_hospital_name"] = hinfo["hospital_name"]
+
+    session["staff_photo"] = staff.get("profile_photo")
+    session["serial_connected"] = False
+    session["serial_port"] = None
+
+    cur.execute("""
+        UPDATE staff_members
+        SET is_active = 1,
+            last_login = NOW()
+        WHERE id = %s
+    """, (staff["id"],))
+    con.commit()
+
+    # Redirect based on role
+    dashboard_endpoint = dashboard_endpoints.get(staff["role"])
+    if dashboard_endpoint:
+        return redirect(url_for(dashboard_endpoint))
+    else:
+        flash("Role not configured for dashboard access.", "danger")
+        return render_template(template_name, form=request.form)
+
+
+@app.route("/receptionist-nurse-login", methods=["GET", "POST"])
+def receptionist_nurse_login():
+    return staff_login_common("Receptionist", "receptionist_nurse_login.html", "receptionist_nurse_dashboard")
+
+
+@app.route("/receptionist-nurse-dashboard")
+def receptionist_nurse_dashboard():
+    return render_template("receptionist_nurse_dashboard.html")
+
+# def staff_login_common(expected_role, template_name, dashboard_endpoint):
+#     con = get_db()
+#     cur = con.cursor(dictionary=True)
+
+#     # ✅ 1) GET: show login page
+#     if request.method == "GET":
+#         return render_template(template_name, form={})
+
+#     # ✅ 2) POST: handle login
+
+#     # ----------------------------------------------------------------------
+#     # A) RFID/PIN LOGIN
+#     # ----------------------------------------------------------------------
+#     if "rfid_uid" in request.form:
+#         rfid_uid = request.form.get("rfid_uid", "").strip().upper()
+#         pin = request.form.get("pin", "").strip()
+
+#         if not rfid_uid:
+#             flash("RFID card required.", "danger")
+#             return render_template(template_name, form=request.form)
+
+#         cur.execute("""
+#             SELECT * FROM staff_members
+#             WHERE rfid_uid = %s
+#               AND (role = %s OR role LIKE %s)
+#         """, (rfid_uid, expected_role, f"%{expected_role}%"))
+#         staff = cur.fetchone()
+
+#         if not staff or not staff.get("can_login", 1):
+#             flash("Card not recognized or blocked.", "danger")
+#             return render_template(template_name, form={"rfid_uid": rfid_uid})
+
+#         # If PIN is set, verify it
+#         if staff.get("staff_pin_hash"):
+#             # PIN required but not typed yet → show PIN UI
+#             if not pin:
+#                 con.close()
+#                 return render_template(
+#                     template_name,
+#                     form={"rfid_uid": rfid_uid, "ask_pin": True, "pin_required": True}
+#                 )
+
+#             # PIN typed but wrong → show red error
+#             if not check_password_hash(staff["staff_pin_hash"], pin):
+#                 flash("Incorrect PIN. Please try again.", "danger")
+#                 con.close()
+#                 return render_template(
+#                     template_name,
+#                     form={"rfid_uid": rfid_uid, "ask_pin": True}
+#                 )
+#         else:
+#             # No PIN set yet → go OTP flow
+#             session["pending_rfid_uid"] = rfid_uid
+#             con.close()
+#             return redirect(url_for("receptionist_send_otp"))
+
+#         # Fetch hospital info (LEFT JOIN to avoid failing if mapping missing)
+#         cur.execute("""
+#             SELECT h.id AS hospital_id, h.hospital_name
+#             FROM staff_members s
+#             LEFT JOIN admins a ON a.id = s.admin_id
+#             LEFT JOIN hospitals h ON h.id = a.hospital_id
+#             WHERE s.id = %s
+#         """, (staff["id"],))
+#         hinfo = cur.fetchone()
+
+#         if not hinfo or not hinfo.get("hospital_id"):
+#             flash("Staff is not linked to any hospital/admin. Please assign admin & hospital.", "danger")
+#             return render_template(template_name, form=request.form)
+
+#         # Success: Set session variables
+#         session["login_nonce"] = uuid.uuid4().hex
+#         session["staff_id"] = staff["id"]
+#         session["staff_name"] = staff["full_name"]
+#         session["staff_role"] = staff["role"]
+#         session["staff_hospital_id"] = hinfo["hospital_id"]
+#         session["staff_hospital_name"] = hinfo["hospital_name"]
+#         session["staff_photo"] = staff.get("profile_photo")
+#         session["serial_connected"] = False
+#         session["serial_port"] = None
+
+#         # Mark active and update last login
+#         cur.execute("""
+#             UPDATE staff_members
+#             SET is_active = 1,
+#                 last_login = NOW()
+#             WHERE id = %s
+#         """, (staff["id"],))
+#         con.commit()
+
+#         return redirect(url_for(dashboard_endpoint))
+
+#     # ----------------------------------------------------------------------
+#     # B) USERNAME/PASSWORD LOGIN
+#     # ----------------------------------------------------------------------
+#     username = request.form.get("username", "").strip().lower()
+#     password = request.form.get("password", "").strip()
+
+#     cur.execute("""
+#         SELECT * FROM staff_members
+#         WHERE LOWER(TRIM(username)) = %s
+#           AND (role = %s OR role LIKE %s)
+#     """, (username, expected_role, f"%{expected_role}%"))
+#     staff = cur.fetchone()
+
+#     if not staff:
+#         flash("Invalid username/password or account blocked.", "danger")
+#         return render_template(template_name, form=request.form)
+
+#     # Check if account can log in and if password matches
+#     if not staff.get("can_login", 1) or not check_password_hash(staff["password"], password):
+#         flash("Invalid username/password or account blocked.", "danger")
+#         return render_template(template_name, form=request.form)
+
+#     # Fetch hospital info (manual login too)
+#     cur.execute("""
+#         SELECT h.id AS hospital_id, h.hospital_name
+#         FROM staff_members s
+#         LEFT JOIN admins a ON a.id = s.admin_id
+#         LEFT JOIN hospitals h ON h.id = a.hospital_id
+#         WHERE s.id = %s
+#     """, (staff["id"],))
+#     hinfo = cur.fetchone()
+
+#     if not hinfo or not hinfo.get("hospital_id"):
+#         flash("Staff is not linked to any hospital/admin. Please assign admin & hospital.", "danger")
+#         return render_template(template_name, form=request.form)
+
+#     # Success: Set session variables
+#     session["login_nonce"] = uuid.uuid4().hex
+#     session["staff_id"] = staff["id"]
+#     session["staff_name"] = staff["full_name"]
+#     session["staff_role"] = staff["role"]
+#     session["staff_hospital_id"] = hinfo["hospital_id"]
+#     session["staff_hospital_name"] = hinfo["hospital_name"]
+#     session["staff_photo"] = staff.get("profile_photo")
+#     session["serial_connected"] = False
+#     session["serial_port"] = None
+
+#     # Mark active and update last login
+#     cur.execute("""
+#         UPDATE staff_members
+#         SET is_active = 1,
+#             last_login = NOW()
+#         WHERE id = %s
+#     """, (staff["id"],))
+#     con.commit()
+
+#     return redirect(url_for(dashboard_endpoint))
+
+import uuid
+from datetime import datetime, timedelta
+
+def update_user_status(user_id, user_type, status='online', session_token=None):
+    """Update user login status and session tracking"""
+    con = get_db()
+    cur = con.cursor()
+    
+    try:
+        # Update user status in respective table
+        table_map = {
+            'hr': 'hr_managers',
+            'admin': 'admins', 
+            'staff': 'staff_members',
+            'pharmacy_admin': 'pharmacy_admins'
+        }
+        
+        table = table_map.get(user_type)
+        if not table:
+            return False
+            
+        if status == 'online':
+            cur.execute(f"""
+                UPDATE {table} 
+                SET login_status = %s, last_login = NOW(), is_active = 1
+                WHERE id = %s
+            """, (status, user_id))
+        else:
+            cur.execute(f"""
+                UPDATE {table} 
+                SET login_status = %s, last_logout = NOW(), is_active = 0
+                WHERE id = %s
+            """, (status, user_id))
+        
+        # Handle session tracking
+        if status == 'online' and session_token:
+            # Create new session
+            cur.execute("""
+                INSERT INTO user_sessions 
+                (user_id, user_type, session_token, ip_address, user_agent)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (user_id, user_type, session_token, 
+                  request.environ.get('REMOTE_ADDR'), 
+                  request.environ.get('HTTP_USER_AGENT')))
+        elif status == 'offline' and session_token:
+            # Close session
+            cur.execute("""
+                UPDATE user_sessions 
+                SET logout_time = NOW(), is_active = FALSE
+                WHERE session_token = %s
+            """, (session_token,))
+        
+        con.commit()
+        return True
+        
+    except Exception as e:
+        print(f"Status update error: {e}")
+        con.rollback()
+        return False
+    finally:
+        con.close()
+
+# Updated HR Login
+@app.route("/hr-login", methods=["GET", "POST"])
+def hr_login():
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "").strip()
+
+        con = get_db()
+        cur = con.cursor(dictionary=True)
+
+        cur.execute("""
+            SELECT hr.*, h.hospital_name 
+            FROM hr_managers hr
+            JOIN hospitals h ON hr.hospital_id = h.id
+            WHERE hr.hr_username = %s
+        """, (username,))
+        
+        hr_user = cur.fetchone()
+        con.close()
+
+        if hr_user and check_password_hash(hr_user["hr_password"], password):
+            session_token = str(uuid.uuid4())
+            session["hr_id"] = hr_user["id"]
+            session["session_token"] = session_token
+            
+            # Update status to online
+            update_user_status(hr_user["id"], 'hr', 'online', session_token)
+            
+            flash("Login successful!", "success")
+            return redirect("/hr-dashboard")
+        else:
+            flash("Invalid username or password!", "error")
+
+    return render_template("hr_login.html")
+
+@app.route("/hr-logout")
+def hr_logout():
+    hr_id = session.get("hr_id")
+    session_token = session.get("session_token")
+    
+    if hr_id:
+        update_user_status(hr_id, 'hr', 'offline', session_token)
+    
+    session.clear()
+    flash("Logged out successfully!", "success")
+    return redirect("/hr-login")
+
+# Updated Admin Login
+@app.route("/admin-login", methods=["GET", "POST"])
+def admin_login():
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    if request.method == "POST":
+        username = request.form.get("username", "").strip().lower()
+        password = request.form.get("password", "").strip()
+        remember = True if request.form.get("remember") == "on" else False
+
+        cur.execute("""
+            SELECT a.*, h.hospital_name, d.department_name, 'admin' as user_type
+            FROM admins a
+            JOIN hospitals h ON a.hospital_id = h.id
+            LEFT JOIN departments d ON a.department_id = d.id
+            WHERE LOWER(a.admin_username) = %s
+        """, (username,))
+        user = cur.fetchone()
+
+        if not user:
+            flash("Invalid username or password.", "danger")
+            con.close()
+            return render_template("admin_login.html", form=request.form)
+
+        if not check_password_hash(user["admin_password"], password):
+            flash("Invalid username or password.", "danger")
+            con.close()
+            return render_template("admin_login.html", form=request.form)
+
+        session_token = str(uuid.uuid4())
+        session["login_nonce"] = secrets.token_hex(16) 
+        session["admin_id"] = user["id"]
+        session["admin_name"] = user["admin_name"]
+        session["admin_hospital_name"] = user["hospital_name"]
+        session["admin_department"] = user["department_name"] if user["department_name"] else "General"
+        session["user_type"] = "admin"
+        session["hospital_id"] = user["hospital_id"]
+        session["session_token"] = session_token
+        
+        # Update status to online
+        update_user_status(user["id"], 'admin', 'online', session_token)
+        
+        session.permanent = remember
+        if remember:
+            app.permanent_session_lifetime = timedelta(days=7)
+
+        con.close()
+        return redirect("/admin-dashboard")
+
+    con.close()
+    return render_template("admin_login.html", form={})
+
+@app.route("/admin-logout")
+def admin_logout():
+    admin_id = session.get("admin_id")
+    session_token = session.get("session_token")
+    
+    if admin_id:
+        update_user_status(admin_id, 'admin', 'offline', session_token)
+    
+    session.clear()
+    flash("Logged out successfully!", "success")
+    return redirect("/admin-login")
+
+# Updated Staff Logout Routes
+@app.route("/doctor-logout")
+def doctor_logout():
+    try:
+        close_serial()
+    except:
+        pass
+
+    staff_id = session.get("staff_id")
+    session_token = session.get("session_token")
+    
+    if staff_id:
+        update_user_status(staff_id, 'staff', 'offline', session_token)
+
+    session.clear()
+    return redirect(url_for("doctor_login"))
+
+@app.route("/nurse-logout")
+def nurse_logout():
+    try:
+        close_serial()
+    except:
+        pass
+
+    staff_id = session.get("staff_id")
+    session_token = session.get("session_token")
+    
+    if staff_id:
+        update_user_status(staff_id, 'staff', 'offline', session_token)
+
+    session["rfid_scanning"] = False
+    session.clear()
+    return redirect(url_for("nurse_login"))
+
+@app.route("/receptionist-logout")
+def receptionist_logout():
+    try:
+        close_serial()
+    except:
+        pass
+
+    staff_id = session.get("staff_id")
+    session_token = session.get("session_token")
+    
+    if staff_id:
+        update_user_status(staff_id, 'staff', 'offline', session_token)
+
+    session.clear()
+    return redirect(url_for("receptionist_login"))
+
+# Updated Staff Login Common Function
+def staff_login_common(expected_role, template_name, dashboard_endpoint):
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    if request.method == "GET":
+        return render_template(template_name, form={})
+
+    # RFID/PIN LOGIN
+    if "rfid_uid" in request.form:
+        rfid_uid = request.form.get("rfid_uid", "").strip().upper()
+        pin = request.form.get("pin", "").strip()
+
+        if not rfid_uid:
+            flash("RFID card required.", "danger")
+            return render_template(template_name, form=request.form)
+
+        cur.execute("""
+            SELECT * FROM staff_members
+            WHERE rfid_uid = %s
+              AND (role = %s OR role LIKE %s)
+        """, (rfid_uid, expected_role, f"%{expected_role}%"))
+        staff = cur.fetchone()
+
+        if not staff or not staff.get("can_login", 1):
+            flash("Card not recognized or blocked.", "danger")
+            return render_template(template_name, form={"rfid_uid": rfid_uid})
+
+        # PIN verification logic (keeping your existing logic)
+        if staff.get("staff_pin_hash"):
+            if not pin:
+                con.close()
+                return render_template(
+                    template_name,
+                    form={"rfid_uid": rfid_uid, "ask_pin": True, "pin_required": True}
+                )
+
+            if not check_password_hash(staff["staff_pin_hash"], pin):
+                flash("Incorrect PIN. Please try again.", "danger")
+                con.close()
+                return render_template(
+                    template_name,
+                    form={"rfid_uid": rfid_uid, "ask_pin": True}
+                )
+        else:
+            session["pending_rfid_uid"] = rfid_uid
+            con.close()
+            return redirect(url_for("receptionist_send_otp"))
+
+        # Hospital info fetch
+        cur.execute("""
+            SELECT h.id AS hospital_id, h.hospital_name
+            FROM staff_members s
+            LEFT JOIN admins a ON a.id = s.admin_id
+            LEFT JOIN hospitals h ON h.id = a.hospital_id
+            WHERE s.id = %s
+        """, (staff["id"],))
+        hinfo = cur.fetchone()
+
+        if not hinfo or not hinfo.get("hospital_id"):
+            flash("Staff is not linked to any hospital/admin. Please assign admin & hospital.", "danger")
+            return render_template(template_name, form=request.form)
+
+        # Success: Set session and update status
+        session_token = str(uuid.uuid4())
+        session["login_nonce"] = uuid.uuid4().hex
+        session["staff_id"] = staff["id"]
+        session["staff_name"] = staff["full_name"]
+        session["staff_role"] = staff["role"]
+        session["staff_hospital_id"] = hinfo["hospital_id"]
+        session["staff_hospital_name"] = hinfo["hospital_name"]
+        session["staff_photo"] = staff.get("profile_photo")
+        session["serial_connected"] = False
+        session["serial_port"] = None
+        session["session_token"] = session_token
+
+        # Update status to online
+        update_user_status(staff["id"], 'staff', 'online', session_token)
+
+        return redirect(url_for(dashboard_endpoint))
+
+    # USERNAME/PASSWORD LOGIN
+    username = request.form.get("username", "").strip().lower()
+    password = request.form.get("password", "").strip()
+
+    cur.execute("""
+        SELECT * FROM staff_members
+        WHERE LOWER(TRIM(username)) = %s
+          AND (role = %s OR role LIKE %s)
+    """, (username, expected_role, f"%{expected_role}%"))
+    staff = cur.fetchone()
+
+    if not staff:
+        flash("Invalid username/password or account blocked.", "danger")
+        return render_template(template_name, form=request.form)
+
+    if not staff.get("can_login", 1) or not check_password_hash(staff["password"], password):
+        flash("Invalid username/password or account blocked.", "danger")
+        return render_template(template_name, form=request.form)
+
+    # Hospital info fetch
+    cur.execute("""
+        SELECT h.id AS hospital_id, h.hospital_name
+        FROM staff_members s
+        LEFT JOIN admins a ON a.id = s.admin_id
+        LEFT JOIN hospitals h ON h.id = a.hospital_id
+        WHERE s.id = %s
+    """, (staff["id"],))
+    hinfo = cur.fetchone()
+
+    if not hinfo or not hinfo.get("hospital_id"):
+        flash("Staff is not linked to any hospital/admin. Please assign admin & hospital.", "danger")
+        return render_template(template_name, form=request.form)
+
+    # Success: Set session and update status
+    session_token = str(uuid.uuid4())
+    session["login_nonce"] = uuid.uuid4().hex
+    session["staff_id"] = staff["id"]
+    session["staff_name"] = staff["full_name"]
+    session["staff_role"] = staff["role"]
+    session["staff_hospital_id"] = hinfo["hospital_id"]
+    session["staff_hospital_name"] = hinfo["hospital_name"]
+    session["staff_photo"] = staff.get("profile_photo")
+    session["serial_connected"] = False
+    session["serial_port"] = None
+    session["session_token"] = session_token
+
+    # Update status to online
+    update_user_status(staff["id"], 'staff', 'online', session_token)
+
+    return redirect(url_for(dashboard_endpoint))
+
+
+
+@app.route("/receptionist-nurse/set-pin", methods=["GET", "POST"])
+def receptionist_nurse_set_pin():
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    if request.method == "POST":
+        rfid_uid = request.form.get("rfid_uid", "").strip().upper()
+        new_pin = request.form.get("new_pin", "").strip()
+
+        if not re.match(r"^\d{4}$", new_pin):
+            flash("Enter a valid 4-digit PIN", "danger")
+            con.close()
+            return render_template("receptionist_nurse_set_pin.html", rfid_uid=rfid_uid)
+
+        cur.execute("SELECT id FROM staff_members WHERE rfid_uid=%s", (rfid_uid,))
+        staff = cur.fetchone()
+
+        if not staff:
+            flash("Card not found.", "danger")
+            con.close()
+            return redirect(url_for("receptionist_nurse_login"))
+
+        hashed_pin = generate_password_hash(new_pin)
+        cur.execute(
+            "UPDATE staff_members SET staff_pin_hash=%s WHERE rfid_uid=%s",
+            (hashed_pin, rfid_uid)
+        )
+        con.commit()
+        con.close()
+
+        flash("PIN set! Please login with your card and PIN.", "success")
+        return redirect(url_for("receptionist_nurse_login"))
+
+    rfid_uid = session.pop("pending_rfid_uid", None) or request.args.get("rfid_uid")
+    con.close()
+
+    if not rfid_uid:
+        flash("Scan your card first.", "danger")
+        return redirect(url_for("receptionist_nurse_login"))
+
+    return render_template("receptionist_nurse_set_pin.html", rfid_uid=rfid_uid)
+
+
+# -----------------------------------------------RECEPTIONIST-NURSE OTP-----------------------------------
+@app.route("/receptionist-nurse/send-otp")
+def receptionist_nurse_send_otp():
+    rfid_uid = session.get("pending_rfid_uid")
+    if not rfid_uid:
+        flash("Scan your card first.", "danger")
+        return redirect(url_for("receptionist_nurse_login"))
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+    cur.execute("SELECT email FROM staff_members WHERE rfid_uid=%s", (rfid_uid,))
+    staff = cur.fetchone()
+    con.close()
+
+    if not staff or not staff.get("email"):
+        flash("No email linked to this staff. Please contact admin.", "danger")
+        return redirect(url_for("receptionist_nurse_login"))
+
+    otp = str(random.randint(100000, 999999))
+    session["otp_code"] = otp
+    session["otp_expires"] = (datetime.now() + timedelta(minutes=5)).timestamp()
+    session["otp_email"] = staff["email"]
+
+    send_email(staff["email"], "Your OTP for PIN Setup", f"Your OTP is: {otp} (valid for 5 minutes)")
+
+    flash("OTP sent to your email. Enter it to set PIN.", "info")
+    return redirect(url_for("receptionist_nurse_verify_otp"))
+
+
+# ---------------------------------RECEPTIONIST-NURSE VERIFY OTP------------
+@app.route("/receptionist-nurse/verify-otp", methods=["GET", "POST"])
+def receptionist_nurse_verify_otp():
+    rfid_uid = session.get("pending_rfid_uid")
+    if not rfid_uid:
+        flash("Scan your card first.", "danger")
+        return redirect(url_for("receptionist_nurse_login"))
+
+    if request.method == "POST":
+        otp_input = request.form.get("otp", "").strip()
+
+        otp = session.get("otp_code")
+        expires = session.get("otp_expires", 0)
+
+        if not otp or datetime.now().timestamp() > float(expires):
+            flash("OTP expired. Please try again.", "danger")
+            return redirect(url_for("receptionist_nurse_send_otp"))
+
+        if otp_input != otp:
+            flash("Invalid OTP. Try again.", "danger")
+            return render_template("receptionist_nurse_verify_otp.html")
+
+        # OTP OK → allow set-pin
+        session.pop("otp_code", None)
+        session.pop("otp_expires", None)
+
+        return redirect(url_for("receptionist_nurse_set_pin"))
+
+    return render_template("receptionist_nurse_verify_otp.html")
+
+
+
+# @app.route("/receptionist-nurse-login", methods=["GET", "POST"])
+# def receptionist_nurse_login():
+#     form = request.form if request.method == "POST" else {}
+    
+#     if request.method == "POST":
+#         con = get_db()
+#         cur = con.cursor(dictionary=True)
+        
+#         # Check if it's RFID login
+#         rfid_uid = request.form.get("rfid_uid", "").strip().upper()
+#         pin = request.form.get("pin", "").strip()
+        
+#         # Check if it's manual login
+#         username = request.form.get("username", "").strip()
+#         password = request.form.get("password", "").strip()
+        
+#         if rfid_uid:
+#             # RFID Login Logic
+#             print(f"RFID Login attempt - UID: {rfid_uid}, PIN: {pin}")
+            
+#             # Find staff by RFID
+#             cur.execute("""
+#                 SELECT id, full_name, role, staff_pin_hash, is_active, email 
+#                 FROM staff_members 
+#                 WHERE rfid_uid = %s AND role IN ('Receptionist', 'Nurse')
+#             """, (rfid_uid,))
+#             staff = cur.fetchone()
+            
+#             if not staff:
+#                 flash("RFID card not registered or not authorized for this role.", "danger")
+#                 con.close()
+#                 return render_template("receptionist_nurse_login.html", staff_found=False, form=form)
+            
+#             if not staff['is_active']:
+#                 flash("Your account is inactive. Contact administrator.", "danger")
+#                 con.close()
+#                 return render_template("receptionist_nurse_login.html", staff_found=False, form=form)
+            
+#             # Check if PIN is set
+#             if not staff['staff_pin_hash']:
+#                 print("No PIN set, redirecting to set PIN")
+#                 session['pending_rfid_uid'] = rfid_uid
+#                 con.close()
+#                 return render_template("receptionist_nurse_login.html", 
+#                                      staff_found=False, 
+#                                      form={'rfid_uid': rfid_uid, 'show_set_pin': True})
+            
+#             # If PIN is provided, verify it
+#             if pin:
+#                 if check_password_hash(staff['staff_pin_hash'], pin):
+#                     # Successful login
+#                     session['staff_id'] = staff['id']
+#                     session['staff_name'] = staff['full_name']
+#                     session['staff_role'] = staff['role']
+#                     session['logged_in'] = True
+                    
+#                     con.close()
+#                     flash(f"Welcome, {staff['full_name']}!", "success")
+                    
+#                     # Redirect based on role
+#                     if staff['role'] == 'Receptionist':
+#                         return redirect(url_for('receptionist_dashboard'))
+#                     elif staff['role'] == 'Nurse':
+#                         return redirect(url_for('nurse_dashboard'))
+#                 else:
+#                     flash("Invalid PIN. Please try again.", "danger")
+#                     con.close()
+#                     return render_template("receptionist_nurse_login.html", 
+#                                          staff_found=False, 
+#                                          form={'rfid_uid': rfid_uid, 'ask_pin': True})
+#             else:
+#                 # PIN required but not provided
+#                 con.close()
+#                 return render_template("receptionist_nurse_login.html", 
+#                                      staff_found=False, 
+#                                      form={'rfid_uid': rfid_uid, 'ask_pin': True})
+        
+#         elif username and password:
+#             # Manual Login Logic
+#             print(f"Manual login attempt - Username: {username}")
+            
+#             cur.execute("""
+#                 SELECT id, full_name, role, password_hash, is_active 
+#                 FROM staff_members 
+#                 WHERE username = %s AND role IN ('Receptionist', 'Nurse')
+#             """, (username,))
+#             staff = cur.fetchone()
+            
+#             if not staff:
+#                 flash("Invalid username or not authorized for this role.", "danger")
+#                 con.close()
+#                 return render_template("receptionist_nurse_login.html", staff_found=False, form=form)
+            
+#             if not staff['is_active']:
+#                 flash("Your account is inactive. Contact administrator.", "danger")
+#                 con.close()
+#                 return render_template("receptionist_nurse_login.html", staff_found=False, form=form)
+            
+#             if check_password_hash(staff['password_hash'], password):
+#                 # Successful login
+#                 session['staff_id'] = staff['id']
+#                 session['staff_name'] = staff['full_name']
+#                 session['staff_role'] = staff['role']
+#                 session['logged_in'] = True
+                
+#                 con.close()
+#                 flash(f"Welcome, {staff['full_name']}!", "success")
+                
+#                 # Redirect based on role
+#                 if staff['role'] == 'Receptionist':
+#                     return redirect(url_for('receptionist_dashboard'))
+#                 elif staff['role'] == 'Nurse':
+#                     return redirect(url_for('nurse_dashboard'))
+#             else:
+#                 flash("Invalid password.", "danger")
+#                 con.close()
+#                 return render_template("receptionist_nurse_login.html", staff_found=False, form=form)
+#         else:
+#             flash("Please provide login credentials.", "danger")
+#             con.close()
+#             return render_template("receptionist_nurse_login.html", staff_found=False, form=form)
+        
+#         con.close()
+    
+#     # GET request - show login form
+#     return render_template("receptionist_nurse_login.html", staff_found=False, form=form)
+
+
+
+# @app.route("/receptionist-nurse/set-pin", methods=["GET", "POST"])
+# def receptionist_nurse_set_pin():
+#     con = get_db()
+#     cur = con.cursor(dictionary=True)
+
+#     if request.method == "POST":
+#         rfid_uid = request.form.get("rfid_uid", "").strip().upper()
+#         new_pin = request.form.get("new_pin", "").strip()
+
+#         if not re.match(r"^\d{4}$", new_pin):
+#             flash("Enter a valid 4-digit PIN", "danger")
+#             con.close()
+#             return render_template("set_pin.html", rfid_uid=rfid_uid)
+
+#         cur.execute("SELECT id FROM staff_members WHERE rfid_uid=%s", (rfid_uid,))
+#         staff = cur.fetchone()
+
+#         if not staff:
+#             flash("Card not found.", "danger")
+#             con.close()
+#             return redirect(url_for("receptionist_nurse_login"))
+
+#         hashed_pin = generate_password_hash(new_pin)
+#         cur.execute(
+#             "UPDATE staff_members SET staff_pin_hash=%s WHERE rfid_uid=%s",
+#             (hashed_pin, rfid_uid)
+#         )
+#         con.commit()
+#         con.close()
+
+#         flash("PIN set! Please login with your card and PIN.", "success")
+#         return redirect(url_for("receptionist_nurse_login"))
+
+#     rfid_uid = session.pop("pending_rfid_uid", None) or request.args.get("rfid_uid")
+#     con.close()
+
+#     if not rfid_uid:
+#         flash("Scan your card first.", "danger")
+#         return redirect(url_for("receptionist_nurse_login"))
+
+#     return render_template("set_pin.html", rfid_uid=rfid_uid)
+
+# @app.route("/receptionist-nurse/send-otp")
+# def receptionist_nurse_send_otp():
+#     rfid_uid = session.get("pending_rfid_uid")
+#     if not rfid_uid:
+#         flash("Scan your card first.", "danger")
+#         return redirect(url_for("receptionist_nurse_login"))
+
+#     con = get_db()
+#     cur = con.cursor(dictionary=True)
+#     cur.execute("SELECT email FROM staff_members WHERE rfid_uid=%s", (rfid_uid,))
+#     staff = cur.fetchone()
+#     con.close()
+
+#     if not staff or not staff.get("email"):
+#         flash("No email linked to this staff. Please contact admin.", "danger")
+#         return redirect(url_for("receptionist_nurse_login"))
+
+#     otp = str(random.randint(100000, 999999))
+#     session["otp_code"] = otp
+#     session["otp_expires"] = (datetime.now() + timedelta(minutes=5)).timestamp()
+#     session["otp_email"] = staff["email"]
+
+#     send_email(staff["email"], "Your OTP for PIN Setup", f"Your OTP is: {otp} (valid for 5 minutes)")
+
+#     flash("OTP sent to your email. Enter it to set PIN.", "info")
+#     return redirect(url_for("receptionist_nurse_verify_otp"))
+
+# @app.route("/receptionist-nurse/verify-otp", methods=["GET", "POST"])
+# def receptionist_nurse_verify_otp():
+#     rfid_uid = session.get("pending_rfid_uid")
+#     if not rfid_uid:
+#         flash("Scan your card first.", "danger")
+#         return redirect(url_for("receptionist_nurse_login"))
+
+#     if request.method == "POST":
+#         otp_input = request.form.get("otp", "").strip()
+
+#         otp = session.get("otp_code")
+#         expires = session.get("otp_expires", 0)
+
+#         if not otp or datetime.now().timestamp() > float(expires):
+#             flash("OTP expired. Please try again.", "danger")
+#             return redirect(url_for("receptionist_nurse_send_otp"))
+
+#         if otp_input != otp:
+#             flash("Invalid OTP. Try again.", "danger")
+#             return render_template("verify_otp.html")
+
+#         # OTP OK → allow set-pin
+#         session.pop("otp_code", None)
+#         session.pop("otp_expires", None)
+
+#         return redirect(url_for("receptionist_nurse_set_pin"))
+
+#     return render_template("verify_otp.html")
+
+# -----------------------------
+# IMPORT: Select + Upload
+# -----------------------------
+@app.route("/pharmacy/import", methods=["GET"])
+def pharmacy_import():
+    if not require_pharmacy_login():
+        return redirect("/pharmacy-admin-login")
+
+    hospital_id = session["hospital_id"]
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    cur.execute("""
+        SELECT id, vendor_name
+        FROM pharmacy_vendors
+        WHERE hospital_id=%s AND is_active=1
+        ORDER BY vendor_name
+    """, (hospital_id,))
+    vendors = cur.fetchall()
+
+    cur.execute("""
+        SELECT id, template_name, file_type, vendor_id
+        FROM pharmacy_import_templates
+        WHERE hospital_id=%s AND is_active=1
+        ORDER BY template_name
+    """, (hospital_id,))
+    templates = cur.fetchall()
+
+    con.close()
+    return render_template("pharmacy_import.html", vendors=vendors, templates=templates)
+
+
+# @app.route("/pharmacy/import/upload", methods=["POST"])
+# def pharmacy_import_upload():
+#     if not require_pharmacy_login():
+#         return redirect("/pharmacy-admin-login")
+
+#     hospital_id = session["hospital_id"]
+#     pharmacy_admin_id = session["pharmacy_admin_id"]
+
+#     file = request.files.get("file")
+#     template_id = request.form.get("template_id")
+
+#     if not file or file.filename == "":
+#         flash("Please select a file.", "danger")
+#         return redirect(url_for("pharmacy_import"))
+
+#     if not template_id:
+#         flash("Please select an import template.", "danger")
+#         return redirect(url_for("pharmacy_import"))
+
+#     filename = secure_filename(file.filename)
+#     ext = os.path.splitext(filename)[1].lower()
+#     if ext not in [".xlsx", ".csv"]:
+#         flash("Only XLSX or CSV allowed.", "danger")
+#         return redirect(url_for("pharmacy_import"))
+
+#     upload_folder = os.path.join(app.root_path, "uploads")
+#     os.makedirs(upload_folder, exist_ok=True)
+#     path = os.path.join(upload_folder, f"{hospital_id}_{int(datetime.now().timestamp())}_{filename}")
+#     file.save(path)
+
+#     # create run
+#     con = get_db()
+#     cur = con.cursor()
+#     cur.execute("""
+#         INSERT INTO pharmacy_import_runs
+#           (hospital_id, template_id, file_name, total_rows, success_rows, failed_rows, created_by_pharmacy_admin_id)
+#         VALUES (%s,%s,%s,0,0,0,%s)
+#     """, (hospital_id, int(template_id), os.path.basename(path), pharmacy_admin_id))
+#     run_id = cur.lastrowid
+#     con.commit()
+#     con.close()
+
+#     # store path in session (simple + works for local dev)
+#     session["import_file_path"] = path
+
+#     flash("File uploaded. Now map columns.", "success")
+#     return redirect(url_for("pharmacy_import_map", run_id=run_id))
+
+
+# -----------------------------
+# Helpers
+# -----------------------------
+def _read_headers_from_file(path: str):
+    ext = os.path.splitext(path)[1].lower()
+    if ext == ".xlsx":
+        wb = load_workbook(path, data_only=True)
+        ws = wb.active
+        headers = []
+        for cell in ws[1]:
+            if cell.value is None:
+                headers.append("")
+            else:
+                headers.append(str(cell.value).strip())
+        return headers
+
+    if ext == ".csv":
+        with open(path, "r", encoding="utf-8-sig", newline="") as f:
+            reader = csv.reader(f)
+            headers = next(reader, [])
+        return [h.strip() for h in headers]
+
+    raise ValueError("Unsupported file type")
+
+
+def _parse_date(val):
+    """Accepts excel date, 'YYYY-MM-DD', 'DD-MM-YYYY', 'DD/MM/YYYY' etc."""
+    if val is None or val == "":
+        return None
+
+    if isinstance(val, (datetime, date)):
+        return val.date() if isinstance(val, datetime) else val
+
+    s = str(val).strip()
+    for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%d.%m.%Y"):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except Exception:
+            pass
+    return None
+
+
+def _to_int(val, default=0):
+    try:
+        if val is None or str(val).strip() == "":
+            return default
+        return int(float(str(val).strip()))
+    except Exception:
+        return default
+
+
+def _to_float(val, default=0.0):
+    try:
+        if val is None or str(val).strip() == "":
+            return default
+        return float(str(val).strip())
+    except Exception:
+        return default
+
+
+def _read_rows_as_dicts(path: str, headers: list[str]):
+    """Returns list of dicts: {header: cell_value}"""
+    ext = os.path.splitext(path)[1].lower()
+
+    if ext == ".xlsx":
+        wb = load_workbook(path, data_only=True)
+        ws = wb.active
+        rows = []
+        for r in ws.iter_rows(min_row=2, values_only=True):
+            row = {}
+            for i, h in enumerate(headers):
+                if not h:
+                    continue
+                row[h] = r[i] if i < len(r) else None
+            rows.append(row)
+        return rows
+
+    if ext == ".csv":
+        with open(path, "r", encoding="utf-8-sig", newline="") as f:
+            reader = csv.DictReader(f)
+            return list(reader)
+
+    raise ValueError("Unsupported file type")
+
+
+# -----------------------------
+# IMPORT: Mapping screen
+# -----------------------------
+@app.route("/pharmacy/import/map/<int:run_id>", methods=["GET", "POST"])
+def pharmacy_import_map(run_id):
+    if not require_pharmacy_login():
+        return redirect("/pharmacy-admin-login")
+
+    hospital_id = session["hospital_id"]
+    path = session.get("import_file_path")
+
+    if not path or not os.path.exists(path):
+        flash("Upload file again. Import file not found.", "danger")
+        return redirect(url_for("pharmacy_import"))
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # verify run belongs to hospital
+    cur.execute("""
+        SELECT id, template_id
+        FROM pharmacy_import_runs
+        WHERE id=%s AND hospital_id=%s
+    """, (run_id, hospital_id))
+    run = cur.fetchone()
+    if not run:
+        con.close()
+        flash("Import run not found.", "danger")
+        return redirect(url_for("pharmacy_import"))
+
+    template_id = run["template_id"]
+
+    headers = _read_headers_from_file(path)
+
+    canonical_fields = [
+        ("product_name", True),
+        ("batch_no", True),
+        ("expiry_date", False),
+        ("qty", True),
+        ("purchase_rate", False),
+        ("mrp", False),
+        ("selling_price", False),
+    ]
+
+    if request.method == "POST":
+        # wipe old mappings for this template (so user can re-map)
+        cur2 = con.cursor()
+        cur2.execute("DELETE FROM pharmacy_import_mappings WHERE template_id=%s", (template_id,))
+
+        for cf, required in canonical_fields:
+            vendor_col = (request.form.get(cf) or "").strip()
+            if vendor_col:
+                cur2.execute("""
+                    INSERT INTO pharmacy_import_mappings
+                      (template_id, canonical_field, vendor_column_name, transform_rule, is_required)
+                    VALUES (%s,%s,%s,NULL,%s)
+                """, (template_id, cf, vendor_col, 1 if required else 0))
+
+        con.commit()
+        con.close()
+
+        flash("Mapping saved. Importing now...", "success")
+        return redirect(url_for("pharmacy_import_process", run_id=run_id))
+
+    # load existing mappings to pre-fill dropdowns
+    cur.execute("""
+        SELECT canonical_field, vendor_column_name
+        FROM pharmacy_import_mappings
+        WHERE template_id=%s
+    """, (template_id,))
+    existing = {r["canonical_field"]: r["vendor_column_name"] for r in cur.fetchall()}
+    con.close()
+
+    return render_template(
+        "pharmacy_import_map.html",
+        run_id=run_id,
+        headers=headers,
+        canonical_fields=canonical_fields,
+        existing=existing
+    )
+
+
+# -----------------------------
+# IMPORT: Process (OPENING stock)
+# -----------------------------
+@app.route("/pharmacy/import/process/<int:run_id>")
+def pharmacy_import_process(run_id):
+    if not require_pharmacy_login():
+        return redirect("/pharmacy-admin-login")
+
+    hospital_id = session["hospital_id"]
+    pharmacy_admin_id = session["pharmacy_admin_id"]
+    path = session.get("import_file_path")
+
+    if not path or not os.path.exists(path):
+        flash("Upload file again. Import file not found.", "danger")
+        return redirect(url_for("pharmacy_import"))
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+    cur2 = con.cursor()
+
+    # run + template
+    cur.execute("""
+        SELECT r.id, r.template_id
+        FROM pharmacy_import_runs r
+        WHERE r.id=%s AND r.hospital_id=%s
+    """, (run_id, hospital_id))
+    run = cur.fetchone()
+    if not run:
+        con.close()
+        flash("Import run not found.", "danger")
+        return redirect(url_for("pharmacy_import"))
+
+    template_id = run["template_id"]
+
+    # mappings
+    cur.execute("""
+        SELECT canonical_field, vendor_column_name, is_required
+        FROM pharmacy_import_mappings
+        WHERE template_id=%s
+    """, (template_id,))
+    maps = cur.fetchall()
+    mapping = {m["canonical_field"]: m["vendor_column_name"] for m in maps}
+    required_fields = [m["canonical_field"] for m in maps if m["is_required"] == 1]
+
+    # we require at least these
+    for must in ["product_name", "batch_no", "qty"]:
+        if must not in mapping:
+            con.close()
+            flash(f"Mapping missing: {must}. Please map columns first.", "danger")
+            return redirect(url_for("pharmacy_import_map", run_id=run_id))
+
+    headers = _read_headers_from_file(path)
+    rows = _read_rows_as_dicts(path, headers)
+
+    total_rows = len(rows)
+    success = 0
+    failed = 0
+
+    # clear previous errors for this run
+    cur2.execute("""
+        DELETE FROM pharmacy_import_errors
+        WHERE run_id=%s
+    """, (run_id,))
+
+    def err(row_no, msg, raw):
+        nonlocal failed
+        failed += 1
+        cur2.execute("""
+            INSERT INTO pharmacy_import_errors (run_id, row_no, error_message, raw_json)
+            VALUES (%s,%s,%s,%s)
+        """, (run_id, row_no, msg, json.dumps(raw, default=str)))
+
+    try:
+        for idx, raw in enumerate(rows, start=2):  # row no in excel (header=1)
+            # extract mapped values
+            product_name = (raw.get(mapping["product_name"]) or "").strip()
+            batch_no = (raw.get(mapping["batch_no"]) or "").strip()
+            qty = _to_int(raw.get(mapping["qty"]), 0)
+
+            expiry_date = _parse_date(raw.get(mapping.get("expiry_date", ""), None))
+            purchase_rate = _to_float(raw.get(mapping.get("purchase_rate", ""), None), 0.0)
+            mrp = _to_float(raw.get(mapping.get("mrp", ""), None), 0.0)
+            selling_price = _to_float(raw.get(mapping.get("selling_price", ""), None), 0.0)
+
+            # validate required
+            if not product_name:
+                err(idx, "Missing product_name", raw); continue
+            if not batch_no:
+                err(idx, "Missing batch_no", raw); continue
+            if qty <= 0:
+                err(idx, "Invalid qty (must be > 0)", raw); continue
+
+            # 1) upsert product (hospital_id + product_name is unique)
+            cur.execute("""
+                SELECT id
+                FROM pharmacy_products
+                WHERE hospital_id=%s AND product_name=%s
+                LIMIT 1
+            """, (hospital_id, product_name))
+            pr = cur.fetchone()
+
+            if pr:
+                product_id = pr["id"]
+            else:
+                cur2.execute("""
+                    INSERT INTO pharmacy_products (hospital_id, product_name, reorder_level, is_active)
+                    VALUES (%s,%s,0,1)
+                """, (hospital_id, product_name))
+                product_id = cur2.lastrowid
+
+            # 2) upsert batch
+            cur.execute("""
+                SELECT id
+                FROM pharmacy_stock_batches
+                WHERE hospital_id=%s AND product_id=%s AND batch_no=%s
+                LIMIT 1
+            """, (hospital_id, product_id, batch_no))
+            b = cur.fetchone()
+
+            if b:
+                batch_id = b["id"]
+                cur2.execute("""
+                    UPDATE pharmacy_stock_batches
+                    SET qty_on_hand = qty_on_hand + %s,
+                        expiry_date = COALESCE(%s, expiry_date),
+                        purchase_rate = CASE WHEN %s>0 THEN %s ELSE purchase_rate END,
+                        mrp = CASE WHEN %s>0 THEN %s ELSE mrp END,
+                        selling_price = CASE WHEN %s>0 THEN %s ELSE selling_price END
+                    WHERE id=%s AND hospital_id=%s
+                """, (qty, expiry_date,
+                      purchase_rate, purchase_rate,
+                      mrp, mrp,
+                      selling_price, selling_price,
+                      batch_id, hospital_id))
+            else:
+                cur2.execute("""
+                    INSERT INTO pharmacy_stock_batches
+                      (hospital_id, product_id, batch_no, expiry_date, qty_on_hand, purchase_rate, mrp, selling_price)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                """, (hospital_id, product_id, batch_no, expiry_date, qty, purchase_rate, mrp, selling_price))
+                batch_id = cur2.lastrowid
+
+            # 3) ledger entry as OPENING (import)
+            cur2.execute("""
+                INSERT INTO pharmacy_stock_ledger
+                  (hospital_id, product_id, batch_id, txn_type, ref_table, ref_id, qty_in, qty_out, note)
+                VALUES (%s,%s,%s,'OPENING','pharmacy_import_runs',%s,%s,0,%s)
+            """, (hospital_id, product_id, batch_id, run_id, qty, f"Opening import run #{run_id}"))
+
+            success += 1
+
+        # update run counts
+        cur2.execute("""
+            UPDATE pharmacy_import_runs
+            SET total_rows=%s, success_rows=%s, failed_rows=%s
+            WHERE id=%s AND hospital_id=%s
+        """, (total_rows, success, failed, run_id, hospital_id))
+
+        con.commit()
+        con.close()
+
+        flash(f"Import completed. Success: {success}, Failed: {failed}", "success")
+        return redirect(url_for("pharmacy_import_errors_view", run_id=run_id))
+
+    except Exception as e:
+        con.rollback()
+        con.close()
+        flash(f"Import failed: {e}", "danger")
+        return redirect(url_for("pharmacy_import_map", run_id=run_id))
+
+
+# -----------------------------
+# IMPORT: View errors
+# -----------------------------
+@app.route("/pharmacy/import/errors/<int:run_id>")
+def pharmacy_import_errors_view(run_id):
+    if not require_pharmacy_login():
+        return redirect("/pharmacy-admin-login")
+
+    hospital_id = session["hospital_id"]
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    cur.execute("""
+        SELECT *
+        FROM pharmacy_import_errors
+        WHERE run_id=%s
+        ORDER BY row_no ASC
+    """, (run_id,))
+    errors = cur.fetchall()
+
+    cur.execute("""
+        SELECT total_rows, success_rows, failed_rows, file_name
+        FROM pharmacy_import_runs
+        WHERE id=%s AND hospital_id=%s
+    """, (run_id, hospital_id))
+    run = cur.fetchone()
+
+    con.close()
+    return render_template("pharmacy_import_errors.html", errors=errors, run=run)
+import os
+from werkzeug.utils import secure_filename
+
+@app.route("/pharmacy/import/upload", methods=["POST"])
+def pharmacy_import_upload():
+    if not require_pharmacy_login():
+        return redirect("/pharmacy-admin-login")
+
+    hospital_id = session["hospital_id"]
+    template_id = request.form.get('template_id')
+    file_type = request.form.get('file_type')
+    vendor_id = request.form.get('vendor_id') or None
+    
+    if 'file' not in request.files:
+        flash('No file selected', 'danger')
+        return redirect(url_for('pharmacy_import'))
+    
+    file = request.files['file']
+    if file.filename == '':
+        flash('No file selected', 'danger')
+        return redirect(url_for('pharmacy_import'))
+
+    if not file_type:
+        flash('Please select file type', 'danger')
+        return redirect(url_for('pharmacy_import'))
+
+    # Create temp directory
+    temp_dir = 'temp_uploads'
+    if not os.path.exists(temp_dir):
+        os.makedirs(temp_dir)
+
+    # Save file temporarily
+    filename = secure_filename(file.filename)
+    temp_path = os.path.join(temp_dir, filename)
+    file.save(temp_path)
+    
+    # Store in session
+    session['upload_info'] = {
+        'filename': filename,
+        'temp_path': temp_path,
+        'file_type': file_type,
+        'vendor_id': vendor_id,
+        'hospital_id': hospital_id
+    }
+
+    if template_id:
+        # Use existing template
+        flash('Using existing template (preview coming soon)', 'info')
+        return redirect(url_for('pharmacy_import'))
+    else:
+        # No template - go to mapping
+        return redirect(url_for('pharmacy_import_mapping'))
+
+@app.route("/pharmacy/import/preview/<int:template_id>")
+def pharmacy_import_preview(template_id):
+    # This route will show preview of parsed data using the template
+    flash('Preview functionality coming soon!', 'info')
+    return redirect(url_for('pharmacy_import'))
+
+@app.route("/pharmacy/import/mapping", methods=["GET", "POST"])
+def pharmacy_import_mapping():
+    if not require_pharmacy_login():
+        return redirect("/pharmacy-admin-login")
+    
+    upload_info = session.get('upload_info')
+    if not upload_info:
+        flash('No upload session found', 'danger')
+        return redirect(url_for('pharmacy_import'))
+    
+    if request.method == 'GET':
+        try:
+            # Read file to get headers and sample data
+            file_path = upload_info['temp_path']
+            file_type = upload_info['file_type']
+            
+            if file_type == 'CSV':
+                import pandas as pd
+                df = pd.read_csv(file_path, nrows=5)  # Read first 5 rows
+            else:  # XLSX
+                import pandas as pd
+                df = pd.read_excel(file_path, nrows=5)
+            
+            headers = df.columns.tolist()
+            sample_data = df.to_dict('records')
+            
+            # System fields to map to
+            system_fields = [
+                {'field': 'product_name', 'label': 'Product Name', 'required': True},
+                {'field': 'batch_no', 'label': 'Batch Number', 'required': True},
+                {'field': 'expiry_date', 'label': 'Expiry Date', 'required': False},
+                {'field': 'qty', 'label': 'Quantity', 'required': True},
+                {'field': 'mrp', 'label': 'MRP/Selling Price', 'required': True},
+                {'field': 'purchase_rate', 'label': 'Purchase Price', 'required': True},
+                {'field': 'hsn_code', 'label': 'HSN Code', 'required': False},
+                {'field': 'manufacturer', 'label': 'Manufacturer', 'required': False},
+            ]
+            
+            return render_template('pharmacy_import_mapping.html', 
+                                 headers=headers, 
+                                 sample_data=sample_data, 
+                                 system_fields=system_fields,
+                                 upload_info=upload_info)
+        
+        except Exception as e:
+            flash(f'Error reading file: {str(e)}', 'danger')
+            return redirect(url_for('pharmacy_import'))
+    
+      # POST - Save the mapping
+        
+    else:  # POST - Save mapping AND process data
+        template_name = request.form.get('template_name')
+        if not template_name:
+            flash('Template name is required', 'danger')
+            return redirect(url_for('pharmacy_import_mapping'))
+        
+        # Collect field mappings
+        field_mappings = {}
+        for key in request.form:
+            if key.startswith('field_'):
+                system_field = key[6:]
+                vendor_column = request.form[key]
+                if vendor_column and vendor_column != '':
+                    field_mappings[system_field] = vendor_column
+        
+        if not field_mappings:
+            flash('Please map at least one field', 'danger')
+            return redirect(url_for('pharmacy_import_mapping'))
+        
+        try:
+            # Save template to database
+            con = get_db()
+            cur = con.cursor()
+            
+            cur.execute("""
+                INSERT INTO pharmacy_import_templates 
+                (hospital_id, vendor_id, template_name, file_type, header_row, is_active)
+                VALUES (%s, %s, %s, %s, 1, 1)
+            """, (upload_info['hospital_id'], upload_info['vendor_id'], 
+                  template_name, upload_info['file_type']))
+            
+            template_id = cur.lastrowid
+            
+            # Save field mappings
+            for system_field, vendor_column in field_mappings.items():
+                cur.execute("""
+                    INSERT INTO pharmacy_import_mappings 
+                    (template_id, canonical_field, vendor_column_name, is_required)
+                    VALUES (%s, %s, %s, 1)
+                """, (template_id, system_field, vendor_column))
+            
+            con.commit()
+            
+            # *** NEW: Process the actual data ***
+            success_count, error_count, errors = process_import_data(
+                upload_info['temp_path'], 
+                upload_info['file_type'], 
+                template_id, 
+                upload_info['hospital_id'],
+                upload_info['vendor_id']
+            )
+            
+            con.close()
+            
+            flash(f'Template "{template_name}" created successfully!', 'success')
+            flash(f'Processed: {success_count} items added, {error_count} errors', 'info')
+            
+            if errors:
+                for error in errors[:5]:  # Show first 5 errors
+                    flash(f'Error: {error}', 'warning')
+            
+            # Clean up temp file
+            if os.path.exists(upload_info['temp_path']):
+                os.remove(upload_info['temp_path'])
+            
+            # Clear session
+            session.pop('upload_info', None)
+            
+            return redirect(url_for('pharmacy_stock'))  # Redirect to stock to see results
+            
+        except Exception as e:
+            flash(f'Error saving template: {str(e)}', 'danger')
+            return redirect(url_for('pharmacy_import_mapping'))
+
+def process_import_data(file_path, file_type, template_id, hospital_id, vendor_id):
+    """Process uploaded file data using the mapping template"""
+    
+    success_count = 0
+    error_count = 0
+    errors = []
+    
+    try:
+        # Get template mappings
+        con = get_db()
+        cur = con.cursor(dictionary=True)
+        
+        cur.execute("""
+            SELECT canonical_field, vendor_column_name 
+            FROM pharmacy_import_mappings 
+            WHERE template_id = %s
+        """, (template_id,))
+        
+        mappings = {row['canonical_field']: row['vendor_column_name'] for row in cur.fetchall()}
+        
+        # Read the file
+        if file_type == 'CSV':
+            import pandas as pd
+            df = pd.read_csv(file_path)
+        else:  # XLSX
+            import pandas as pd
+            df = pd.read_excel(file_path)
+        
+        # Process each row
+        for index, row in df.iterrows():
+            try:
+                # Extract mapped values
+                product_name = row.get(mappings.get('product_name', ''), '').strip()
+                batch_no = str(row.get(mappings.get('batch_no', ''), '')).strip()
+                qty = int(float(row.get(mappings.get('qty', ''), 0) or 0))
+                
+                # Optional fields
+                expiry_date = row.get(mappings.get('expiry_date'), None)
+                if expiry_date and expiry_date != '' and pd.notna(expiry_date):
+                    if isinstance(expiry_date, str):
+                        # Try to parse date string
+                        from datetime import datetime
+                        try:
+                            expiry_date = datetime.strptime(expiry_date, '%Y-%m-%d').date()
+                        except:
+                            try:
+                                expiry_date = datetime.strptime(expiry_date, '%d/%m/%Y').date()
+                            except:
+                                expiry_date = None
+                else:
+                    expiry_date = None
+                
+                mrp = float(row.get(mappings.get('mrp', ''), 0) or 0)
+                purchase_rate = float(row.get(mappings.get('purchase_rate', ''), 0) or 0)
+                
+                # Validate required fields
+                if not product_name or not batch_no or qty <= 0:
+                    errors.append(f'Row {index + 2}: Missing required fields (product_name, batch_no, qty)')
+                    error_count += 1
+                    continue
+                
+                # Find or create product
+                cur.execute("""
+                    SELECT id FROM pharmacy_products 
+                    WHERE hospital_id = %s AND product_name = %s
+                    LIMIT 1
+                """, (hospital_id, product_name))
+                
+                product = cur.fetchone()
+                if not product:
+                    # Create new product
+                    cur.execute("""
+                        INSERT INTO pharmacy_products 
+                        (hospital_id, product_name, generic_name, brand_name, unit, is_active)
+                        VALUES (%s, %s, '', '', 'PCS', 1)
+                    """, (hospital_id, product_name))
+                    product_id = cur.lastrowid
+                else:
+                    product_id = product['id']
+                
+                # Check if batch exists
+                cur.execute("""
+                    SELECT id, qty_on_hand FROM pharmacy_stock_batches
+                    WHERE hospital_id = %s AND product_id = %s AND batch_no = %s
+                """, (hospital_id, product_id, batch_no))
+                
+                existing_batch = cur.fetchone()
+                
+                if existing_batch:
+                    # Update existing batch
+                    batch_id = existing_batch['id']
+                    cur.execute("""
+                        UPDATE pharmacy_stock_batches 
+                        SET qty_on_hand = qty_on_hand + %s,
+                            expiry_date = COALESCE(%s, expiry_date),
+                            mrp = COALESCE(NULLIF(%s, 0), mrp),
+                            purchase_rate = COALESCE(NULLIF(%s, 0), purchase_rate)
+                        WHERE id = %s
+                    """, (qty, expiry_date, mrp, purchase_rate, batch_id))
+                else:
+                    # Create new batch
+                    cur.execute("""
+                        INSERT INTO pharmacy_stock_batches 
+                        (hospital_id, product_id, batch_no, expiry_date, qty_on_hand, 
+                         purchase_rate, mrp, selling_price)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (hospital_id, product_id, batch_no, expiry_date, qty,
+                          purchase_rate, mrp, mrp))
+                    batch_id = cur.lastrowid
+
+                # Ledger entry (ALWAYS run – new or existing batch)
+                cur.execute("""
+                    INSERT INTO pharmacy_stock_ledger 
+                    (hospital_id, product_id, batch_id, txn_type, ref_table, ref_id,
+                     qty_in, qty_out, note)
+                    VALUES (%s,%s,%s,'OPENING_STOCK','pharmacy_import_templates',%s,%s,0,%s)
+                """, (
+                    hospital_id,
+                    product_id,
+                    batch_id,
+                    template_id,
+                    qty,
+                    f'Imported opening stock: {os.path.basename(file_path)}'
+                ))
+
+                success_count += 1
+
+            except Exception as e:
+                errors.append(f'Row {index + 2}: {str(e)}')
+                error_count += 1
+                continue
+        
+        con.commit()
+        con.close()
+        
+    except Exception as e:
+        errors.append(f'File processing error: {str(e)}')
+        error_count += 1
+    
+    return success_count, error_count, errors
+
+def get_db_connection():
+    return mysql.connector.connect(**Config.DB_CONFIG)
+
+def get_db():
+    return get_db_connection()
+
+@app.route("/test-admin")
+def test_admin():
+    return "ADMIN ROUTE LOADED"
+
+def get_db():
+    return mysql.connector.connect(**Config.DB_CONFIG)
+
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+@app.route("/home")
+def home():
+    return render_template("home.html")
+
+#1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111
+#superadmin login
+@app.route("/", methods=["GET", "POST"])
+def superadmin_login():
+
+    # ---------- Remember Me ----------
+    if "superadmin" not in session and request.cookies.get("remember_token"):
+        token = request.cookies.get("remember_token")
+
+        con = get_db()
+        cur = con.cursor(dictionary=True)
+        cur.execute("SELECT * FROM superadmin WHERE remember_token=%s", (token,))
+        user = cur.fetchone()
+
+        if user:
+            session["superadmin"] = user["id"]
+            return redirect("/dashboard")
+
+    # ---------- Login ----------
+    if request.method == "POST":
+        username = request.form["username"]
+        password = request.form["password"]
+        remember = request.form.get("remember")
+
+        con = get_db()
+        cur = con.cursor(dictionary=True)
+
+        cur.execute("SELECT * FROM superadmin WHERE username=%s", (username,))
+        user = cur.fetchone()
+
+        if user and check_password_hash(user["password"], password):
+            session["superadmin"] = user["id"]
+
+            if remember:
+                token = str(uuid.uuid4())
+                cur.execute(
+                    "UPDATE superadmin SET remember_token=%s WHERE id=%s",
+                    (token, user["id"])
+                )
+                con.commit()
+
+                resp = redirect("/dashboard")
+                resp.set_cookie("remember_token", token, max_age=60*60*24*30)
+                return resp
+
+            return redirect("/dashboard")
+
+        return render_template("login.html", error="Invalid credentials")
+
+    return render_template("login.html")
+
+
+@app.route("/superadmin-forgot-password", methods=["GET", "POST"])
+def superadmin_forgot_password():
+
+    if request.method == "POST":
+        email = request.form["email"]
+
+        con = get_db()
+        cur = con.cursor(dictionary=True)
+
+        cur.execute("SELECT * FROM superadmin WHERE email=%s", (email,))
+        user = cur.fetchone()
+
+        if not user:
+            return render_template(
+                "superadmin_forgot_password.html",
+                error="Superadmin email not found"
+            )
+
+        otp = str(random.randint(100000, 999999))
+        otp_hash = generate_password_hash(otp)
+        expires_at = datetime.now() + timedelta(minutes=10)
+
+        cur.execute("""
+            INSERT INTO password_resets (user_type, user_email, otp_hash, expires_at)
+            VALUES (%s, %s, %s, %s)
+        """, ("superadmin", email, otp_hash, expires_at))
+        con.commit()
+
+        send_email(
+            email,
+            "Superadmin Password Reset OTP",
+            f"Your Superadmin OTP is: {otp}\nValid for 10 minutes."
+        )
+
+        return redirect("/superadmin-reset-password?email=" + email)
+
+    return render_template("superadmin_forgot_password.html")
+
+
+@app.route("/superadmin-reset-password", methods=["GET", "POST"])
+def superadmin_reset_password():
+
+    email = request.args.get("email")
+
+    if request.method == "POST":
+        email = request.form["email"]
+        otp = request.form["otp"]
+        new_password = request.form["new_password"]
+
+        con = get_db()
+        cur = con.cursor(dictionary=True)
+
+        cur.execute("""
+            SELECT * FROM password_resets
+            WHERE user_email=%s
+              AND user_type='superadmin'
+              AND is_used=0
+              AND expires_at > NOW()
+            ORDER BY id DESC LIMIT 1
+        """, (email,))
+        reset = cur.fetchone()
+
+        if not reset or not check_password_hash(reset["otp_hash"], otp):
+            return render_template(
+                "superadmin_reset_password.html",
+                error="Invalid or expired OTP",
+                email=email
+            )
+
+        cur.execute("SELECT password FROM superadmin WHERE email=%s", (email,))
+        user = cur.fetchone()
+
+        if check_password_hash(user["password"], new_password):
+            return render_template(
+                "superadmin_reset_password.html",
+                error="New password must be different from old password",
+                email=email
+            )
+
+        new_hash = generate_password_hash(new_password)
+
+        cur.execute(
+            "UPDATE superadmin SET password=%s WHERE email=%s",
+            (new_hash, email)
+        )
+        cur.execute(
+            "UPDATE password_resets SET is_used=1 WHERE id=%s",
+            (reset["id"],)
+        )
+        con.commit()
+
+        return redirect("/")
+
+    return render_template("superadmin_reset_password.html", email=email)
+
+#dashboard
+@app.route("/dashboard")
+def dashboard():
+    if "superadmin" not in session:
+        return redirect("/")
+    return render_template("dashboard.html")
+#view admins
+@app.route("/view-admins")
+def view_admins():
+    if "superadmin" not in session:
+        return redirect("/")
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    cur.execute("""
+    SELECT 
+        hr.*,
+        h.hospital_name,
+        h.hospital_address
+    FROM hospital_representatives hr
+    JOIN hospitals h ON hr.hospital_id = h.id
+    ORDER BY hr.id DESC
+    """)
+
+    admins = cur.fetchall()
+
+    return render_template("view_admins.html", admins=admins)
+
+#111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111
+#forgot password                                                
+@app.route("/forgot", methods=["GET", "POST"])
+def forgot():
+    if request.method == "POST":
+        email = request.form["email"]
+
+        con = get_db()
+        cur = con.cursor(dictionary=True)
+        cur.execute("SELECT * FROM superadmin WHERE email=%s", (email,))
+        user = cur.fetchone()
+
+        if user:
+            new_pass = "admin123"
+            hashed = hash_password(new_pass)
+
+            cur.execute("UPDATE superadmin SET password=%s WHERE email=%s", (hashed, email))
+            con.commit()
+
+            send_email(email, "Password Reset", f"Your new password is: {new_pass}")
+            return render_template("forgot_password.html", msg="New password sent to email")
+
+        return render_template("forgot_password.html", error="Email not found")
+
+    return render_template("forgot_password.html")
+#11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111
+#add hospital adn admin
+@app.route("/add-hospital-admin", methods=["GET", "POST"])
+def add_hospital_admin():
+    if "superadmin" not in session:
+        return redirect("/")
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # Fetch existing hospitals
+    cur.execute("SELECT id, hospital_name, hospital_address FROM hospitals")
+    hospitals = cur.fetchall()
+
+    # Fetch all reps for right-side table (if you still use it)
+    cur.execute("SELECT * FROM hospital_representatives ORDER BY id DESC")
+    admin_rows = cur.fetchall()
+
+    if request.method == "POST":
+        # Move hospital_mode processing here
+        hospital_mode = request.form.get("hospital_mode", "STANDARD").strip().upper()
+        hospital_option = request.form.get("hospital_option")
+
+        if hospital_option == "existing":
+            hospital_id = int(request.form.get("hospital_id"))
+
+            cur.execute(
+                "UPDATE hospitals SET hospital_mode = %s WHERE id = %s",
+                (hospital_mode, hospital_id)
+            )
+            cur.execute(
+                "SELECT hospital_name, hospital_address FROM hospitals WHERE id = %s",
+                (hospital_id,)
+            )
+            hospital = cur.fetchone()
+            hospital_name = hospital["hospital_name"]
+            hospital_address = hospital["hospital_address"]
+            
+            con.commit()
+        else:
+            hospital_name = request.form.get("new_hospital_name", "").strip()
+            hospital_address = request.form.get("new_hospital_address", "").strip()
+            
+            # Use the hospital_mode from the form here
+            cur.execute(
+                "INSERT INTO hospitals (hospital_name, hospital_address, hospital_mode) VALUES (%s, %s, %s)",
+                (hospital_name, hospital_address, hospital_mode)
+            )
+            con.commit()
+            hospital_id = cur.lastrowid
+
+        # Rest of your POST processing...
+        rep_name = request.form.get("name", "").strip()
+        rep_gender = request.form.get("gender")
+        rep_email = request.form.get("email", "").strip()
+        rep_phone = request.form.get("phone", "").strip()
+        rep_username = request.form.get("username", "").strip()
+        password_raw = request.form.get("password", "").strip()
+
+        rep_password_hashed = generate_password_hash(password_raw)
+        created_by_superadmin_id = session.get("superadmin")
+
+        cur.execute("""
+            INSERT INTO hospital_representatives
+            (hospital_id, rep_name, rep_gender, rep_email, rep_phone,
+            rep_username, rep_password, created_by_superadmin_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            hospital_id,
+            rep_name,
+            rep_gender,
+            rep_email,
+            rep_phone,
+            rep_username,
+            rep_password_hashed,
+            created_by_superadmin_id
+        ))
+        con.commit()
+
+        # Send email and redirect...
+        try:
+            login_url = url_for("rep_login", _external=True)
+            subject = "Your Representative Login Credentials"
+            body = f"""
+Dear {rep_name},
+
+Your hospital representative account has been created.
+
+Hospital : {hospital_name}
+Login URL: {login_url}
+Username : {rep_username}
+Password : {password_raw}
+
+For security, please log in and change your password after first login.
+
+Regards,
+Hospital Management System
+"""
+            send_email(rep_email, subject, body)
+            flash("Representative added and login details sent to email.", "success")
+        except Exception as e:
+            print("Error sending representative email:", e)
+            flash("Representative added, but failed to send email.", "warning")
+
+        return redirect("/view-admins")
+
+    return render_template("add_hospital_admin.html", hospitals=hospitals, admin_rows=admin_rows)
+
+@app.route("/hospital-admins")
+def hospital_admins():
+    if "superadmin" not in session:
+        return redirect("/")
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    cur.execute("""
+        SELECT id,
+               hospital_name,
+               hospital_address AS address,
+               rep_name,
+               rep_email AS email,
+               rep_phone AS phone,
+               rep_username AS username
+        FROM hospital_representatives
+        ORDER BY id DESC
+    """)
+    data = cur.fetchall()
+
+    return render_template("hospital_admin_table.html", data=data)
+
+#delete hopital and admin
+@app.route("/delete-hospital-admin/<int:id>")
+def delete_hospital_admin(id):
+    if "superadmin" not in session:
+        return redirect("/")
+
+    con = get_db()
+    cur = con.cursor()
+    cur.execute("DELETE FROM hospital_representatives WHERE id=%s", (id,))
+    con.commit()
+    flash("Record deleted successfully!", "success")
+    return redirect("/hospital-admins")
+
+
+#SETPIN
+@app.route("/receptionist/set-pin", methods=["GET", "POST"])
+def receptionist_set_pin():
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    if request.method == "POST":
+        rfid_uid = request.form.get("rfid_uid", "").strip().upper()
+        new_pin = request.form.get("new_pin", "").strip()
+
+        if not re.match(r"^\d{4}$", new_pin):
+            flash("Enter a valid 4-digit PIN", "danger")
+            con.close()
+            return render_template("set_pin.html", rfid_uid=rfid_uid)
+
+        cur.execute("SELECT id FROM staff_members WHERE rfid_uid=%s", (rfid_uid,))
+        staff = cur.fetchone()
+
+        if not staff:
+            flash("Card not found.", "danger")
+            con.close()
+            return redirect(url_for("receptionist_login"))
+
+        hashed_pin = generate_password_hash(new_pin)
+        cur.execute(
+            "UPDATE staff_members SET staff_pin_hash=%s WHERE rfid_uid=%s",
+            (hashed_pin, rfid_uid)
+        )
+        con.commit()
+        con.close()
+
+        flash("PIN set! Please login with your card and PIN.", "success")
+        return redirect(url_for("receptionist_login"))
+
+    rfid_uid = session.pop("pending_rfid_uid", None) or request.args.get("rfid_uid")
+    con.close()
+
+    if not rfid_uid:
+        flash("Scan your card first.", "danger")
+        return redirect(url_for("receptionist_login"))
+
+    return render_template("set_pin.html", rfid_uid=rfid_uid)
+# -----------------------------------------------RECEPTIONIST OTP-----------------------------------
+@app.route("/receptionist/send-otp")
+def receptionist_send_otp():
+    rfid_uid = session.get("pending_rfid_uid")
+    if not rfid_uid:
+        flash("Scan your card first.", "danger")
+        return redirect(url_for("receptionist_login"))
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+    cur.execute("SELECT email FROM staff_members WHERE rfid_uid=%s", (rfid_uid,))
+    staff = cur.fetchone()
+    con.close()
+
+    if not staff or not staff.get("email"):
+        flash("No email linked to this staff. Please contact admin.", "danger")
+        return redirect(url_for("receptionist_login"))
+
+    otp = str(random.randint(100000, 999999))
+    session["otp_code"] = otp
+    session["otp_expires"] = (datetime.now() + timedelta(minutes=5)).timestamp()
+    session["otp_email"] = staff["email"]
+
+    send_email(staff["email"], "Your OTP for PIN Setup", f"Your OTP is: {otp} (valid for 5 minutes)")
+
+    flash("OTP sent to your email. Enter it to set PIN.", "info")
+    return redirect(url_for("receptionist_verify_otp"))
+# ---------------------------------RECEPTIONIST VERIFY OTP------------
+@app.route("/receptionist/verify-otp", methods=["GET", "POST"])
+def receptionist_verify_otp():
+    rfid_uid = session.get("pending_rfid_uid")
+    if not rfid_uid:
+        flash("Scan your card first.", "danger")
+        return redirect(url_for("receptionist_login"))
+
+    if request.method == "POST":
+        otp_input = request.form.get("otp", "").strip()
+
+        otp = session.get("otp_code")
+        expires = session.get("otp_expires", 0)
+
+        if not otp or datetime.now().timestamp() > float(expires):
+            flash("OTP expired. Please try again.", "danger")
+            return redirect(url_for("receptionist_send_otp"))
+
+        if otp_input != otp:
+            flash("Invalid OTP. Try again.", "danger")
+            return render_template("verify_otp.html")
+
+        # OTP OK → allow set-pin
+        session.pop("otp_code", None)
+        session.pop("otp_expires", None)
+
+        return redirect(url_for("receptionist_set_pin"))
+
+    return render_template("verify_otp.html")
+
+
+
+
+@app.route("/pharmacy/sales/new", methods=["GET", "POST"])
+def pharmacy_sale_new():
+    if not require_pharmacy_login():
+        return redirect("/pharmacy-admin-login")
+
+    hospital_id = session["hospital_id"]
+    pharmacy_admin_id = session.get("pharmacy_admin_id")
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # Patients dropdown (optional)
+    cur.execute("""
+        SELECT id, full_name, phone
+        FROM patients
+        WHERE hospital_id=%s AND is_active=1
+        ORDER BY full_name
+        LIMIT 500
+    """, (hospital_id,))
+    patients = cur.fetchall()
+
+    # Products dropdown
+    cur.execute("""
+        SELECT id, product_name
+        FROM pharmacy_products
+        WHERE hospital_id=%s AND is_active=1
+        ORDER BY product_name
+    """, (hospital_id,))
+    products = cur.fetchall()
+
+    if request.method == "POST":
+        patient_id = request.form.get("patient_id") or None
+        bill_no = (request.form.get("bill_no") or "").strip()
+
+        product_ids = request.form.getlist("product_id[]")
+        batch_ids   = request.form.getlist("batch_id[]")
+        qtys        = request.form.getlist("qty[]")
+        prices      = request.form.getlist("selling_price[]")
+        tax_percents= request.form.getlist("tax_percent[]")
+
+        if not product_ids:
+            con.close()
+            flash("Add at least 1 item.", "danger")
+            return redirect(url_for("pharmacy_sale_new"))
+
+        try:
+            cur2 = con.cursor()
+
+            # Create bill header (totals update later)
+            cur2.execute("""
+                INSERT INTO pharmacy_sales
+                  (hospital_id, patient_id, bill_no, subtotal, tax_total, grand_total, created_by_pharmacy_admin_id)
+                VALUES (%s,%s,%s,0,0,0,%s)
+            """, (hospital_id, patient_id, bill_no or None, pharmacy_admin_id))
+            sale_id = cur2.lastrowid
+
+            subtotal = 0.0
+            tax_total = 0.0
+
+            for i in range(len(product_ids)):
+                pid = int(product_ids[i] or 0)
+                bid = int(batch_ids[i] or 0)
+                qty = int(float(qtys[i] or 0))
+                sp  = float(prices[i] or 0)
+                tp  = float(tax_percents[i] or 0)
+
+                if pid <= 0 or bid <= 0 or qty <= 0 or sp <= 0:
+                    continue
+
+                # Lock the batch row to prevent oversell (important in real projects)
+                cur.execute("""
+                    SELECT id, qty_on_hand
+                    FROM pharmacy_stock_batches
+                    WHERE id=%s AND hospital_id=%s AND product_id=%s
+                    FOR UPDATE
+                """, (bid, hospital_id, pid))
+                b = cur.fetchone()
+                if not b:
+                    raise Exception(f"Batch not found (batch_id={bid}).")
+
+                if int(b["qty_on_hand"]) < qty:
+                    raise Exception(f"Not enough stock in batch_id={bid}. Available={b['qty_on_hand']}")
+
+                # Reduce stock
+                cur2.execute("""
+                    UPDATE pharmacy_stock_batches
+                    SET qty_on_hand = qty_on_hand - %s
+                    WHERE id=%s AND hospital_id=%s
+                """, (qty, bid, hospital_id))
+
+                line_base = qty * sp
+                line_tax  = (line_base * tp) / 100.0
+                line_total = line_base + line_tax
+
+                subtotal += line_base
+                tax_total += line_tax
+
+                # Sale item
+                cur2.execute("""
+                    INSERT INTO pharmacy_sale_items
+                      (sale_id, product_id, batch_id, qty, selling_price, tax_percent, line_total)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s)
+                """, (sale_id, pid, bid, qty, sp, tp, line_total))
+
+                # Ledger
+                cur2.execute("""
+                    INSERT INTO pharmacy_stock_ledger
+                      (hospital_id, product_id, batch_id, txn_type, ref_table, ref_id, qty_in, qty_out, note)
+                    VALUES (%s,%s,%s,'SALE','pharmacy_sales',%s,0,%s,%s)
+                """, (hospital_id, pid, bid, sale_id, qty, f"Sale bill {bill_no}".strip()))
+
+            grand_total = subtotal + tax_total
+
+            cur2.execute("""
+                UPDATE pharmacy_sales
+                SET subtotal=%s, tax_total=%s, grand_total=%s
+                WHERE id=%s AND hospital_id=%s
+            """, (subtotal, tax_total, grand_total, sale_id, hospital_id))
+
+            con.commit()
+            con.close()
+
+            flash("Bill created successfully.", "success")
+            return redirect(url_for("pharmacy_sale_view", sale_id=sale_id))
+
+        except Exception as e:
+            con.rollback()
+            con.close()
+            flash(f"Billing failed: {e}", "danger")
+            return redirect(url_for("pharmacy_sale_new"))
+
+    con.close()
+    return render_template("pharmacy_sale_new.html", patients=patients, products=products)
+
+
+@app.route("/pharmacy/api/product/<int:product_id>/batches")
+def pharmacy_api_product_batches(product_id):
+    if not require_pharmacy_login():
+        return {"ok": False, "error": "unauthorized"}, 401
+
+    hospital_id = session["hospital_id"]
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    cur.execute("""
+        SELECT id, batch_no, expiry_date, qty_on_hand, selling_price
+        FROM pharmacy_stock_batches
+        WHERE hospital_id=%s AND product_id=%s AND qty_on_hand > 0
+        ORDER BY (expiry_date IS NULL), expiry_date ASC, created_at DESC
+    """, (hospital_id, product_id))
+
+    rows = cur.fetchall()
+    con.close()
+    return {"ok": True, "batches": rows}
+
+
+@app.route("/pharmacy/sales/<int:sale_id>")
+def pharmacy_sale_view(sale_id):
+    if not require_pharmacy_login():
+        return redirect("/pharmacy-admin-login")
+
+    hospital_id = session["hospital_id"]
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    cur.execute("""
+        SELECT s.*, p.full_name AS patient_name
+        FROM pharmacy_sales s
+        LEFT JOIN patients p ON p.id=s.patient_id
+        WHERE s.id=%s AND s.hospital_id=%s
+    """, (sale_id, hospital_id))
+    head = cur.fetchone()
+    if not head:
+        con.close()
+        flash("Bill not found.", "danger")
+        return redirect(url_for("pharmacy_dashboard"))
+
+    cur.execute("""
+        SELECT i.*, pr.product_name, b.batch_no
+        FROM pharmacy_sale_items i
+        JOIN pharmacy_products pr ON pr.id=i.product_id
+        LEFT JOIN pharmacy_stock_batches b ON b.id=i.batch_id
+        WHERE i.sale_id=%s
+        ORDER BY pr.product_name
+    """, (sale_id,))
+    items = cur.fetchall()
+
+    con.close()
+    return render_template("pharmacy_sale_view.html", head=head, items=items)
+
+
+
+# @app.route("/edit-hospital-admin/<int:id>", methods=["GET", "POST"])
+@app.route("/edit-hospital-admin/<int:id>", methods=["GET", "POST"])
+def edit_hospital_admin(id):
+    if "superadmin" not in session:
+        return redirect("/")
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # Get existing representative record
+    cur.execute("SELECT * FROM hospital_representatives WHERE id=%s", (id,))
+    record = cur.fetchone()
+
+    if not record:
+        flash("Representative not found.", "danger")
+        return redirect("/hospital-admins")
+
+    if request.method == "POST":
+        hospital_name = request.form.get("new_hospital_name", "").strip()
+        hospital_address = request.form.get("new_hospital_address", "").strip()
+        rep_name = request.form.get("name", "").strip()
+        rep_gender = request.form.get("gender")
+        rep_email = request.form.get("email", "").strip()
+        rep_phone = request.form.get("phone", "").strip()
+        rep_username = request.form.get("username", "").strip()
+        password_raw = request.form.get("password", "").strip()
+
+        # If hospital name/address left blank, keep old values
+        if not hospital_name:
+            hospital_name = record["hospital_name"]
+        if not hospital_address:
+            hospital_address = record["hospital_address"]
+
+        if password_raw:
+            rep_password_hashed = generate_password_hash(password_raw)
+            cur.execute("""
+                UPDATE hospital_representatives
+                SET hospital_name=%s, hospital_address=%s,
+                    rep_name=%s, rep_gender=%s,
+                    rep_email=%s, rep_phone=%s,
+                    rep_username=%s, rep_password=%s
+                WHERE id=%s
+            """, (
+                hospital_name, hospital_address,
+                rep_name, rep_gender,
+                rep_email, rep_phone,
+                rep_username, rep_password_hashed,
+                id
+            ))
+        else:
+            cur.execute("""
+                UPDATE hospital_representatives
+                SET hospital_name=%s, hospital_address=%s,
+                    rep_name=%s, rep_gender=%s,
+                    rep_email=%s, rep_phone=%s,
+                    rep_username=%s
+                WHERE id=%s
+            """, (
+                hospital_name, hospital_address,
+                rep_name, rep_gender,
+                rep_email, rep_phone,
+                rep_username,
+                id
+            ))
+
+        con.commit()
+        flash("Record updated successfully!", "success")
+        return redirect("/hospital-admins")
+
+    # GET request → show form with existing data
+    return render_template("edit_hospital_admin.html", data=record)
+#===========================================hr dep======================================================
+# HR-related routes
+@app.route("/rep-add-hr", methods=["GET", "POST"])
+def rep_add_hr():
+    if "rep_id" not in session:
+        return redirect("/rep-login")
+
+    rep_id = session["rep_id"]
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # Get representative's hospital info
+    cur.execute("""
+        SELECT hr.hospital_id, h.hospital_name, h.hospital_mode
+        FROM hospital_representatives hr
+        JOIN hospitals h ON hr.hospital_id = h.id
+        WHERE hr.id = %s
+    """, (rep_id,))
+    
+    rep_data = cur.fetchone()
+    
+    if not rep_data or rep_data.get('hospital_mode') != 'ENTERPRISE':
+        flash("HR management is only available for Enterprise mode hospitals.", "error")
+        return redirect("/rep-dashboard")
+
+    if request.method == "POST":
+        hr_name = request.form.get("hr_name", "").strip()
+        hr_gender = request.form.get("hr_gender")
+        hr_email = request.form.get("hr_email", "").strip()
+        hr_phone = request.form.get("hr_phone", "").strip()
+        hr_username = request.form.get("hr_username", "").strip()
+        hr_password = request.form.get("hr_password", "").strip()
+
+        # Hash password
+        hashed_password = generate_password_hash(hr_password)
+
+        # Insert HR Manager
+        cur.execute("""
+            INSERT INTO hr_managers 
+            (hospital_id, hr_name, hr_gender, hr_email, hr_phone, hr_username, hr_password, created_by_rep_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            rep_data['hospital_id'],
+            hr_name,
+            hr_gender, 
+            hr_email,
+            hr_phone,
+            hr_username,
+            hashed_password,
+            rep_id
+        ))
+        
+        con.commit()
+
+        # Send email to HR Manager
+        try:
+            login_url = url_for("hr_login", _external=True)
+            subject = "HR Manager Login Credentials"
+            body = f"""
+Dear {hr_name},
+
+You have been assigned as HR Manager for {rep_data['hospital_name']}.
+
+Login URL: {login_url}
+Username: {hr_username}
+Password: {hr_password}
+
+Please login and change your password after first login.
+
+Regards,
+Hospital Management System
+"""
+            send_email(hr_email, subject, body)
+            flash("HR Manager added successfully and credentials sent to email!", "success")
+        except Exception as e:
+            print("Error sending HR email:", e)
+            flash("HR Manager added, but failed to send email.", "warning")
+
+        con.close()
+        return redirect("/rep-dashboard")
+
+    con.close()
+    return render_template("rep_add_hr.html", hospital_name=rep_data['hospital_name'])
+
+@app.route("/rep-view-hr")
+def rep_view_hr():
+    if "rep_id" not in session:
+        return redirect("/rep-login")
+
+    rep_id = session["rep_id"]
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # Get representative's hospital info
+    cur.execute("""
+        SELECT hr.hospital_id, h.hospital_name, h.hospital_mode
+        FROM hospital_representatives hr
+        JOIN hospitals h ON hr.hospital_id = h.id
+        WHERE hr.id = %s
+    """, (rep_id,))
+    rep_data = cur.fetchone()
+
+    if not rep_data or rep_data.get("hospital_mode") != "ENTERPRISE":
+        con.close()
+        flash("HR management is only available for Enterprise mode hospitals.", "error")
+        return redirect("/rep-dashboard")
+
+    # ✅ Get only HR managers created by THIS representative
+    cur.execute("""
+        SELECT hr.*, h.hospital_name
+        FROM hr_managers hr
+        JOIN hospitals h ON hr.hospital_id = h.id
+        WHERE hr.hospital_id = %s
+          AND hr.created_by_rep_id = %s
+        ORDER BY hr.created_on DESC
+    """, (rep_data["hospital_id"], rep_id))
+
+    hr_managers = cur.fetchall()
+    con.close()
+
+    return render_template(
+        "rep_view_hr.html",
+        hr_managers=hr_managers,
+        hospital_name=rep_data["hospital_name"]
+    )
+
+
+
+
+# Edit HR Manager Route
+@app.route('/rep-edit-hr/<int:hr_id>', methods=['GET', 'POST'])
+def rep_edit_hr(hr_id):
+    if "rep_id" not in session:
+        return redirect("/rep-login")
+
+    rep_id = session["rep_id"]
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    try:
+        # Verify HR belongs to this representative
+        cur.execute("""
+            SELECT hr.*, h.hospital_name, h.hospital_mode
+            FROM hr_managers hr
+            JOIN hospitals h ON hr.hospital_id = h.id
+            WHERE hr.id = %s AND hr.created_by_rep_id = %s
+        """, (hr_id, rep_id))
+        
+        hr_data = cur.fetchone()
+        
+        if not hr_data:
+            con.close()
+            flash("HR Manager not found or access denied.", "error")
+            return redirect("/rep-view-hr")
+        
+        if hr_data.get("hospital_mode") != "ENTERPRISE":
+            con.close()
+            flash("HR management is only available for Enterprise mode hospitals.", "error")
+            return redirect("/rep-dashboard")
+
+        if request.method == 'POST':
+            # Get form data
+            hr_name = request.form.get('hr_name', '').strip()
+            hr_gender = request.form.get('hr_gender', '')
+            hr_email = request.form.get('hr_email', '').strip().lower()
+            hr_phone = request.form.get('hr_phone', '').strip()
+            hr_username = request.form.get('hr_username', '').strip()
+            new_password = request.form.get('new_password', '').strip()
+            can_login = 1 if request.form.get('can_login') else 0
+
+            # Validation
+            if not all([hr_name, hr_gender, hr_email, hr_phone, hr_username]):
+                flash("All fields are required.", "error")
+                return render_template("rep_edit_hr.html", hr=hr_data)
+
+            if hr_gender not in ['Male', 'Female', 'Other']:
+                flash("Invalid gender selection.", "error")
+                return render_template("rep_edit_hr.html", hr=hr_data)
+
+            # Check for duplicate email (excluding current HR)
+            cur.execute("""
+                SELECT id FROM hr_managers 
+                WHERE hr_email = %s AND id != %s
+            """, (hr_email, hr_id))
+            
+            if cur.fetchone():
+                flash("Email already exists for another HR manager.", "error")
+                return render_template("rep_edit_hr.html", hr=hr_data)
+
+            # Check for duplicate username (excluding current HR)
+            cur.execute("""
+                SELECT id FROM hr_managers 
+                WHERE hr_username = %s AND id != %s
+            """, (hr_username, hr_id))
+            
+            if cur.fetchone():
+                flash("Username already exists for another HR manager.", "error")
+                return render_template("rep_edit_hr.html", hr=hr_data)
+
+            # Prepare update query
+            if new_password:
+                # Hash new password if provided
+                hashed_password = generate_password_hash(new_password)
+                update_query = """
+                    UPDATE hr_managers 
+                    SET hr_name = %s, hr_gender = %s, hr_email = %s, 
+                        hr_phone = %s, hr_username = %s, hr_password = %s, 
+                        can_login = %s
+                    WHERE id = %s
+                """
+                cur.execute(update_query, (hr_name, hr_gender, hr_email, hr_phone, 
+                                         hr_username, hashed_password, can_login, hr_id))
+            else:
+                # Update without changing password
+                update_query = """
+                    UPDATE hr_managers 
+                    SET hr_name = %s, hr_gender = %s, hr_email = %s, 
+                        hr_phone = %s, hr_username = %s, can_login = %s
+                    WHERE id = %s
+                """
+                cur.execute(update_query, (hr_name, hr_gender, hr_email, hr_phone, 
+                                         hr_username, can_login, hr_id))
+
+            con.commit()
+            con.close()
+            
+            flash("HR Manager updated successfully!", "success")
+            return redirect("/rep-view-hr")
+
+        con.close()
+        return render_template("rep_edit_hr.html", hr=hr_data)
+        
+    except Exception as e:
+        con.rollback()
+        con.close()
+        print(f"Edit HR error: {e}")
+        flash(f"Error updating HR Manager: {str(e)}", "error")
+        return redirect("/rep-view-hr")
+
+
+# Toggle HR Status Route
+@app.route('/rep-toggle-hr-status/<int:hr_id>/<action>')
+def rep_toggle_hr_status(hr_id, action):
+    if "rep_id" not in session:
+        return redirect("/rep-login")
+
+    rep_id = session["rep_id"]
+    con = get_db()
+    cur = con.cursor()
+
+    try:
+        # Verify HR belongs to this representative
+        cur.execute("""
+            SELECT id FROM hr_managers 
+            WHERE id = %s AND created_by_rep_id = %s
+        """, (hr_id, rep_id))
+        
+        if not cur.fetchone():
+            con.close()
+            flash("HR Manager not found or access denied.", "error")
+            return redirect("/rep-view-hr")
+
+        # Toggle status
+        if action == 'enable':
+            cur.execute("UPDATE hr_managers SET is_active = 1 WHERE id = %s", (hr_id,))
+            flash("HR Manager enabled successfully!", "success")
+        elif action == 'disable':
+            cur.execute("UPDATE hr_managers SET is_active = 0 WHERE id = %s", (hr_id,))
+            flash("HR Manager disabled successfully!", "success")
+        else:
+            flash("Invalid action.", "error")
+            return redirect("/rep-view-hr")
+
+        con.commit()
+        con.close()
+        return redirect("/rep-view-hr")
+        
+    except Exception as e:
+        con.rollback()
+        con.close()
+        print(f"Toggle HR status error: {e}")
+        flash(f"Error updating HR status: {str(e)}", "error")
+        return redirect("/rep-view-hr")
+
+
+# Delete HR Manager Route
+@app.route('/rep-delete-hr/<int:hr_id>')
+def rep_delete_hr(hr_id):
+    if "rep_id" not in session:
+        return redirect("/rep-login")
+
+    rep_id = session["rep_id"]
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    try:
+        # Verify HR belongs to this representative
+        cur.execute("""
+            SELECT hr_name FROM hr_managers 
+            WHERE id = %s AND created_by_rep_id = %s
+        """, (hr_id, rep_id))
+        
+        hr_data = cur.fetchone()
+        if not hr_data:
+            con.close()
+            flash("HR Manager not found or access denied.", "error")
+            return redirect("/rep-view-hr")
+
+        # Check if HR has created any departments
+        cur.execute("SELECT COUNT(*) as dept_count FROM departments WHERE created_by_hr_id = %s", (hr_id,))
+        dept_count = cur.fetchone()['dept_count']
+
+        if dept_count > 0:
+            con.close()
+            flash(f"Cannot delete HR Manager '{hr_data['hr_name']}' because they have created {dept_count} department(s). Please reassign or delete those departments first.", "error")
+            return redirect("/rep-view-hr")
+
+        # Check if HR has created any pharmacy admins
+        cur.execute("SELECT COUNT(*) as pa_count FROM pharmacy_admins WHERE created_by_hr_id = %s", (hr_id,))
+        pa_count = cur.fetchone()['pa_count']
+
+        if pa_count > 0:
+            con.close()
+            flash(f"Cannot delete HR Manager '{hr_data['hr_name']}' because they have created {pa_count} pharmacy admin(s). Please reassign or delete those admins first.", "error")
+            return redirect("/rep-view-hr")
+
+        # Safe to delete - no dependencies
+        cur.execute("DELETE FROM hr_managers WHERE id = %s", (hr_id,))
+        con.commit()
+        con.close()
+        
+        flash(f"HR Manager '{hr_data['hr_name']}' deleted successfully!", "success")
+        return redirect("/rep-view-hr")
+        
+    except Exception as e:
+        con.rollback()
+        con.close()
+        print(f"Delete HR error: {e}")
+        flash(f"Error deleting HR Manager: {str(e)}", "error")
+        return redirect("/rep-view-hr")
+
+
+# # Updated View HR Route with Login Status
+# @app.route("/rep-view-hr")
+# def rep_view_hr():
+#     if "rep_id" not in session:
+#         return redirect("/rep-login")
+
+#     rep_id = session["rep_id"]
+#     con = get_db()
+#     cur = con.cursor(dictionary=True)
+
+#     try:
+#         # Get representative's hospital info
+#         cur.execute("""
+#             SELECT hr.hospital_id, h.hospital_name, h.hospital_mode
+#             FROM hospital_representatives hr
+#             JOIN hospitals h ON hr.hospital_id = h.id
+#             WHERE hr.id = %s
+#         """, (rep_id,))
+#         rep_data = cur.fetchone()
+
+#         if not rep_data or rep_data.get("hospital_mode") != "ENTERPRISE":
+#             con.close()
+#             flash("HR management is only available for Enterprise mode hospitals.", "error")
+#             return redirect("/rep-dashboard")
+
+#         # Get HR managers with login status (if columns exist)
+#         cur.execute("""
+#             SELECT hr.*, h.hospital_name
+#             FROM hr_managers hr
+#             JOIN hospitals h ON hr.hospital_id = h.id
+#             WHERE hr.hospital_id = %s
+#               AND hr.created_by_rep_id = %s
+#             ORDER BY hr.created_on DESC
+#         """, (rep_data["hospital_id"], rep_id))
+
+#         hr_managers = cur.fetchall()
+        
+#         # Set default values for missing status columns
+#         for hr in hr_managers:
+#             if 'login_status' not in hr or hr['login_status'] is None:
+#                 hr['login_status'] = 'offline'
+#             if 'last_login' not in hr:
+#                 hr['last_login'] = None
+#             if 'last_logout' not in hr:
+#                 hr['last_logout'] = None
+        
+#         con.close()
+
+#         return render_template(
+#             "rep_view_hr.html",
+#             hr_managers=hr_managers,
+#             hospital_name=rep_data["hospital_name"]
+#         )
+        
+#     except Exception as e:
+#         con.close()
+#         print(f"View HR error: {e}")
+#         flash(f"Error loading HR managers: {str(e)}", "error")
+#         return redirect("/rep-dashboard")
+
+@app.route('/rep-staff-tracking')
+def rep_staff_tracking():
+    if "rep_id" not in session:
+        return redirect("/rep-login")
+
+    rep_id = session["rep_id"]
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    try:
+        # Get representative's hospital info
+        cur.execute("""
+            SELECT hr.hospital_id, h.hospital_name, h.hospital_mode
+            FROM hospital_representatives hr
+            JOIN hospitals h ON hr.hospital_id = h.id
+            WHERE hr.id = %s
+        """, (rep_id,))
+        rep_data = cur.fetchone()
+
+        if not rep_data or rep_data.get("hospital_mode") != "ENTERPRISE":
+            con.close()
+            flash("Staff tracking is only available for Enterprise mode hospitals.", "error")
+            return redirect("/rep-dashboard")
+
+        hospital_id = rep_data["hospital_id"]
+
+        # Get all staff members
+        cur.execute("""
+            SELECT 
+                s.id AS staff_id,
+                s.full_name AS staff_name,
+                s.email AS staff_email,
+                s.phone AS staff_phone,
+                s.gender AS staff_gender,
+                s.role AS staff_role,
+                s.is_active AS staff_is_active,
+                s.login_status AS staff_login_status,
+                s.last_login AS staff_last_login,
+                s.last_logout AS staff_last_logout,
+                s.created_at AS staff_created_at,
+                'staff' as user_type,
+                
+                -- Department info
+                d.department_name,
+                
+                -- Admin who created this staff
+                a.admin_name AS created_by_admin,
+                a.admin_email AS admin_email,
+                a.is_active AS admin_is_active,
+                
+                -- HR who created the department
+                hr.hr_name AS created_by_hr,
+                hr.hr_email AS hr_email,
+                hr.is_active AS hr_is_active,
+                
+                -- Representative info
+                rep.rep_name AS created_by_rep,
+                
+                -- Session info
+                (SELECT COUNT(*) FROM user_sessions us 
+                 WHERE us.user_id = s.id AND us.user_type = 'staff' AND us.is_active = TRUE) as active_sessions
+                
+            FROM staff_members s
+            LEFT JOIN departments d ON s.department_id = d.id
+            LEFT JOIN admins a ON s.admin_id = a.id
+            LEFT JOIN hr_managers hr ON d.created_by_hr_id = hr.id
+            LEFT JOIN hospital_representatives rep ON hr.created_by_rep_id = rep.id
+            
+            WHERE d.hospital_id = %s
+              AND hr.created_by_rep_id = %s
+            
+            UNION ALL
+            
+            -- Get all pharmacy admins
+            SELECT 
+                pa.id AS staff_id,
+                pa.full_name AS staff_name,
+                pa.email AS staff_email,
+                pa.phone AS staff_phone,
+                pa.gender AS staff_gender,
+                'Pharmacy Admin' AS staff_role,
+                pa.is_active AS staff_is_active,
+                pa.login_status AS staff_login_status,
+                pa.last_login AS staff_last_login,
+                pa.last_logout AS staff_last_logout,
+                pa.created_at AS staff_created_at,
+                'pharmacy_admin' as user_type,
+                
+                -- Department info
+                'Pharmacy' as department_name,
+                
+                -- Admin who created this staff (HR in this case)
+                hr2.hr_name AS created_by_admin,
+                hr2.hr_email AS admin_email,
+                hr2.is_active AS admin_is_active,
+                
+                -- HR who created the pharmacy admin
+                hr2.hr_name AS created_by_hr,
+                hr2.hr_email AS hr_email,
+                hr2.is_active AS hr_is_active,
+                
+                -- Representative info
+                rep2.rep_name AS created_by_rep,
+                
+                -- Session info
+                (SELECT COUNT(*) FROM user_sessions us 
+                 WHERE us.user_id = pa.id AND us.user_type = 'pharmacy_admin' AND us.is_active = TRUE) as active_sessions
+                
+            FROM pharmacy_admins pa
+            LEFT JOIN hr_managers hr2 ON pa.created_by_hr_id = hr2.id
+            LEFT JOIN hospital_representatives rep2 ON hr2.created_by_rep_id = rep2.id
+            
+            WHERE pa.hospital_id = %s
+              AND hr2.created_by_rep_id = %s
+            
+            ORDER BY staff_created_at DESC
+        """, (hospital_id, rep_id, hospital_id, rep_id))
+        
+        staff_data = cur.fetchall()
+        
+        # Process status information
+        for staff in staff_data:
+            # Calculate online/offline status based on last activity
+            if staff['staff_login_status'] == 'online' and staff['active_sessions'] > 0:
+                staff['current_status'] = 'online'
+                staff['status_class'] = 'success'
+                staff['status_icon'] = 'fas fa-circle'
+            elif staff['staff_last_login'] and staff['staff_last_logout']:
+                if staff['staff_last_login'] > staff['staff_last_logout']:
+                    # Logged in but no active session (away)
+                    staff['current_status'] = 'away'
+                    staff['status_class'] = 'warning'
+                    staff['status_icon'] = 'fas fa-clock'
+                else:
+                    staff['current_status'] = 'offline'
+                    staff['status_class'] = 'danger'
+                    staff['status_icon'] = 'fas fa-circle'
+            else:
+                staff['current_status'] = 'never_logged_in'
+                staff['status_class'] = 'secondary'
+                staff['status_icon'] = 'fas fa-minus-circle'
+        
+        con.close()
+        
+        return render_template("rep_staff_tracking.html", 
+                             staff_data=staff_data,
+                             hospital_name=rep_data["hospital_name"])
+        
+    except Exception as e:
+        con.close()
+        print(f"Rep staff tracking error: {e}")
+        flash(f"Error loading staff tracking: {str(e)}", "error")
+        return redirect("/rep-dashboard")
+
+
+
+
+
+
+@app.before_request
+def update_user_activity():
+    """Update user activity timestamp for active sessions"""
+    if request.endpoint and not request.endpoint.startswith('static'):
+        session_token = session.get('session_token')
+        if session_token:
+            try:
+                con = get_db()
+                cur = con.cursor()
+                cur.execute("""
+                    UPDATE user_sessions 
+                    SET last_activity = NOW() 
+                    WHERE session_token = %s AND is_active = TRUE
+                """, (session_token,))
+                con.commit()
+                con.close()
+            except:
+                pass
+
+# Function to clean up old sessions
+def cleanup_old_sessions():
+    """Mark sessions as inactive if no activity for 30 minutes"""
+    try:
+        con = get_db()
+        cur = con.cursor()
+        
+        # Mark sessions as inactive after 30 minutes of inactivity
+        cur.execute("""
+            UPDATE user_sessions 
+            SET is_active = FALSE, logout_time = NOW()
+            WHERE is_active = TRUE 
+            AND last_activity < DATE_SUB(NOW(), INTERVAL 30 MINUTE)
+        """)
+        
+        # Update user status to offline for inactive sessions
+        cur.execute("""
+            UPDATE hr_managers 
+            SET login_status = 'offline', is_active = 0
+            WHERE id NOT IN (
+                SELECT user_id FROM user_sessions 
+                WHERE user_type = 'hr' AND is_active = TRUE
+            )
+        """)
+        
+        cur.execute("""
+            UPDATE admins 
+            SET login_status = 'offline', is_active = 0
+            WHERE id NOT IN (
+                SELECT user_id FROM user_sessions 
+                WHERE user_type = 'admin' AND is_active = TRUE
+            )
+        """)
+        
+        cur.execute("""
+            UPDATE staff_members 
+            SET login_status = 'offline', is_active = 0
+            WHERE id NOT IN (
+                SELECT user_id FROM user_sessions 
+                WHERE user_type = 'staff' AND is_active = TRUE
+            )
+        """)
+        
+        cur.execute("""
+            UPDATE pharmacy_admins 
+            SET login_status = 'offline', is_active = 0
+            WHERE id NOT IN (
+                SELECT user_id FROM user_sessions 
+                WHERE user_type = 'pharmacy_admin' AND is_active = TRUE
+            )
+        """)
+        
+        con.commit()
+        con.close()
+        
+    except Exception as e:
+        print(f"Session cleanup error: {e}")
+
+# Run cleanup every 5 minutes using threading
+import threading
+import time
+
+def background_cleanup():
+    while True:
+        time.sleep(300)  # 5 minutes
+        cleanup_old_sessions()
+
+# Start background cleanup thread
+cleanup_thread = threading.Thread(target=background_cleanup, daemon=True)
+cleanup_thread.start()
+
+@app.route('/api/staff-status/<int:rep_id>')
+def get_staff_status(rep_id):
+    """API endpoint to get real-time staff status"""
+    if "rep_id" not in session or session["rep_id"] != rep_id:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    try:
+        con = get_db()
+        cur = con.cursor(dictionary=True)
+        
+        # Get hospital_id for the rep
+        cur.execute("""
+            SELECT hospital_id FROM hospital_representatives hr
+            WHERE hr.id = %s
+        """, (rep_id,))
+        rep_data = cur.fetchone()
+        
+        if not rep_data:
+            return jsonify({"error": "Representative not found"}), 404
+        
+        hospital_id = rep_data["hospital_id"]
+        
+        # Get status counts
+        cur.execute("""
+            SELECT 
+                SUM(CASE WHEN login_status = 'online' AND is_active = 1 THEN 1 ELSE 0 END) as online_count,
+                SUM(CASE WHEN login_status = 'away' THEN 1 ELSE 0 END) as away_count,
+                SUM(CASE WHEN login_status = 'offline' OR login_status IS NULL THEN 1 ELSE 0 END) as offline_count,
+                COUNT(*) as total_count
+            FROM (
+                SELECT s.login_status, s.is_active
+                FROM staff_members s
+                LEFT JOIN departments d ON s.department_id = d.id
+                LEFT JOIN hr_managers hr ON d.created_by_hr_id = hr.id
+                WHERE d.hospital_id = %s AND hr.created_by_rep_id = %s
+                
+                UNION ALL
+                
+                SELECT pa.login_status, pa.is_active
+                FROM pharmacy_admins pa
+                LEFT JOIN hr_managers hr2 ON pa.created_by_hr_id = hr2.id
+                WHERE pa.hospital_id = %s AND hr2.created_by_rep_id = %s
+            ) combined_staff
+        """, (hospital_id, rep_id, hospital_id, rep_id))
+        
+        status_data = cur.fetchone()
+        con.close()
+        
+        return jsonify({
+            "online": status_data["online_count"] or 0,
+            "away": status_data["away_count"] or 0,
+            "offline": status_data["offline_count"] or 0,
+            "total": status_data["total_count"] or 0,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/rep-patient-tracking')
+def rep_patient_tracking():
+    if "rep_id" not in session:
+        return redirect("/rep-login")
+
+    rep_id = session["rep_id"]
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    try:
+        # Get representative's hospital info
+        cur.execute("""
+            SELECT hr.hospital_id, h.hospital_name, h.hospital_mode
+            FROM hospital_representatives hr
+            JOIN hospitals h ON hr.hospital_id = h.id
+            WHERE hr.id = %s
+        """, (rep_id,))
+        rep_data = cur.fetchone()
+
+        if not rep_data or rep_data.get("hospital_mode") != "ENTERPRISE":
+            con.close()
+            flash("Patient tracking is only available for Enterprise mode hospitals.", "error")
+            return redirect("/rep-dashboard")
+
+        hospital_id = rep_data["hospital_id"]
+
+        # Get all patients with complete hierarchy: Rep → HR → Department → Admin → Staff → Patient
+        cur.execute("""
+            SELECT 
+                p.id AS patient_id,
+                p.full_name AS patient_name,
+                p.age,
+                p.gender,
+                p.phone,
+                p.email,
+                p.rfid_uid,
+                p.created_at AS patient_created_at,
+                
+                -- Staff who added the patient
+                s.full_name AS added_by_staff,
+                s.role AS added_by_role,
+                s.email AS staff_email,
+                s.is_active AS staff_is_active,
+                
+                -- Department info
+                d.department_name AS staff_department,
+                
+                -- Admin who manages the staff
+                a.admin_name AS managed_by_admin,
+                a.admin_email AS admin_email,
+                a.is_active AS admin_is_active,
+                
+                -- HR who created the department
+                hr.hr_name AS created_by_hr,
+                hr.hr_email AS hr_email,
+                hr.is_active AS hr_is_active,
+                
+                -- Representative info
+                rep.rep_name AS created_by_rep,
+                
+                -- Count vitals and consultations
+                (SELECT COUNT(*) FROM patient_vitals pv WHERE pv.patient_id = p.id) as vitals_count,
+                (SELECT COUNT(*) FROM consultancy_records cr WHERE cr.patient_id = p.id) as consultation_count,
+                
+                -- Latest vitals info
+                (SELECT s2.full_name FROM patient_vitals pv2 
+                    LEFT JOIN staff_members s2 ON pv2.recorded_by_staff_id = s2.id 
+                    WHERE pv2.patient_id = p.id 
+                    ORDER BY pv2.created_at DESC LIMIT 1) as last_vitals_by,
+                    
+                (SELECT pv2.created_at FROM patient_vitals pv2 
+                    WHERE pv2.patient_id = p.id 
+                    ORDER BY pv2.created_at DESC LIMIT 1) as last_vitals_date,
+                
+                -- Latest consultation info
+                (SELECT s3.full_name FROM consultancy_records cr2 
+                    LEFT JOIN staff_members s3 ON cr2.doctor_id = s3.id 
+                    WHERE cr2.patient_id = p.id 
+                    ORDER BY cr2.created_at DESC LIMIT 1) as last_consultation_by,
+                    
+                (SELECT cr2.created_at FROM consultancy_records cr2 
+                    WHERE cr2.patient_id = p.id 
+                    ORDER BY cr2.created_at DESC LIMIT 1) as last_consultation_date
+                
+            FROM patients p
+            LEFT JOIN staff_members s ON p.created_by_staff_id = s.id
+            LEFT JOIN departments d ON s.department_id = d.id
+            LEFT JOIN admins a ON s.admin_id = a.id
+            LEFT JOIN hr_managers hr ON d.created_by_hr_id = hr.id
+            LEFT JOIN hospital_representatives rep ON hr.created_by_rep_id = rep.id
+            
+            WHERE p.hospital_id = %s
+              AND hr.created_by_rep_id = %s
+            ORDER BY p.created_at DESC
+        """, (hospital_id, rep_id))
+        
+        patients_data = cur.fetchall()
+        
+        # Process counts to ensure they're integers
+        for patient in patients_data:
+            patient['vitals_count'] = int(patient.get('vitals_count', 0) or 0)
+            patient['consultation_count'] = int(patient.get('consultation_count', 0) or 0)
+        
+        con.close()
+        
+        return render_template("rep_patient_tracking.html", 
+                             patients_data=patients_data,
+                             hospital_name=rep_data["hospital_name"])
+        
+    except Exception as e:
+        con.close()
+        print(f"Rep patient tracking error: {e}")
+        flash(f"Error loading patient tracking: {str(e)}", "error")
+        return redirect("/rep-dashboard")
+
+#=========================================================================================================================
+#HR LOGIN
+#===================================================================================================================
+# @app.route("/hr-login", methods=["GET", "POST"])
+# def hr_login():
+#     if request.method == "POST":
+#         username = request.form.get("username", "").strip()
+#         password = request.form.get("password", "").strip()
+
+#         con = get_db()
+#         cur = con.cursor(dictionary=True)
+
+#         cur.execute("""
+#             SELECT hr.*, h.hospital_name 
+#             FROM hr_managers hr
+#             JOIN hospitals h ON hr.hospital_id = h.id
+#             WHERE hr.hr_username = %s
+#         """, (username,))
+        
+#         hr_user = cur.fetchone()
+#         con.close()
+
+#         if hr_user and check_password_hash(hr_user["hr_password"], password):
+#             session["hr_id"] = hr_user["id"]
+#             flash("Login successful!", "success")
+#             return redirect("/hr-dashboard")
+#         else:
+#             flash("Invalid username or password!", "error")
+
+#     return render_template("hr_login.html")
+
+# @app.route("/hr-logout")
+# def hr_logout():
+#     session.pop("hr_id", None)
+#     flash("Logged out successfully!", "success")
+#     return redirect("/hr-login")  # ✅ Fixed redirect
+
+@app.route("/hr-dashboard")
+def hr_dashboard():
+    if "hr_id" not in session:
+        return redirect("/hr-login")  # ✅ Fixed redirect
+
+    hr_id = session["hr_id"]
+    
+    # Get pagination parameters
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 5, type=int)
+    
+    # Ensure per_page is within reasonable limits
+    per_page = min(max(per_page, 5), 100)
+    
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    try:
+        # Get HR manager data with hospital info
+        cur.execute("""
+            SELECT hr.*, h.hospital_name, h.hospital_address, h.hospital_mode
+            FROM hr_managers hr
+            JOIN hospitals h ON hr.hospital_id = h.id
+            WHERE hr.id = %s
+        """, (hr_id,))
+        
+        hr_data = cur.fetchone()
+        if not hr_data:
+            flash("HR data not found.", "error")
+            return redirect("/hr-login")
+
+        hospital_id = hr_data['hospital_id']
+
+        # Get statistics using existing tables
+        # Total departments
+        cur.execute("SELECT COUNT(*) as count FROM departments WHERE hospital_id = %s", (hospital_id,))
+        total_departments = cur.fetchone()['count']
+
+        # Total admins (using existing admins table)
+        cur.execute("""
+            SELECT COUNT(*) as count
+            FROM admins a
+            WHERE a.hospital_id = %s
+            AND a.department_id IS NOT NULL
+        """, (hospital_id,))
+        total_admins = cur.fetchone()['count']
+
+
+        # Total staff (using existing staff_members table)
+        cur.execute("""
+            SELECT COUNT(*) as count 
+            FROM staff_members s 
+            JOIN admins a ON s.admin_id = a.id
+            WHERE a.hospital_id = %s
+        """, (hospital_id,))
+        total_staff = cur.fetchone()['count']
+
+        # Pharmacy admins (set to 0 for now, add later if needed)
+        # ✅ Total pharmacy admins
+        cur.execute("""
+            SELECT COUNT(*) AS count
+            FROM pharmacy_admins
+            WHERE hospital_id = %s
+        """, (hospital_id,))
+        total_pharmacy_admins = cur.fetchone()['count']
+
+
+        stats = {
+            'total_departments': total_departments,
+            'total_admins': total_admins,
+            'total_staff': total_staff,
+            'total_pharmacy_admins': total_pharmacy_admins
+        }
+
+        # Calculate pagination for departments
+        offset = (page - 1) * per_page
+        total_pages = (total_departments + per_page - 1) // per_page
+        
+        # Get departments with admin count (using existing admins table)
+        cur.execute("""
+            SELECT d.*, 
+                   COUNT(a.id) as admin_count
+            FROM departments d
+            LEFT JOIN admins a ON d.id = a.department_id
+            WHERE d.hospital_id = %s
+            GROUP BY d.id
+            ORDER BY d.created_on DESC
+            LIMIT %s OFFSET %s
+        """, (hospital_id, per_page, offset))
+        
+        departments = cur.fetchall()
+
+        # Create pagination info
+        def get_page_range(current_page, total_pages, max_pages=5):
+            """Generate page range with ellipsis for large page counts"""
+            if total_pages <= max_pages:
+                return list(range(1, total_pages + 1))
+            
+            if current_page <= 3:
+                return list(range(1, 4)) + ['...', total_pages]
+            elif current_page >= total_pages - 2:
+                return [1, '...'] + list(range(total_pages - 2, total_pages + 1))
+            else:
+                return [1, '...', current_page - 1, current_page, current_page + 1, '...', total_pages]
+
+        pagination_info = {
+            'current_page': page,
+            'per_page': per_page,
+            'total_pages': total_pages,
+            'total_records': total_departments,
+            'start_record': offset + 1 if total_departments > 0 else 0,
+            'end_record': min(offset + per_page, total_departments),
+            'page_range': get_page_range(page, total_pages) if total_pages > 1 else []
+        }
+
+        # Get recent activities (using existing admins table)
+        cur.execute("""
+            SELECT 'Admin Created' as activity_type, a.admin_name as name, a.created_at as created_on
+            FROM admins a
+            WHERE a.hospital_id = %s
+            ORDER BY a.created_at DESC
+            LIMIT 5
+        """, (hospital_id,))
+        
+        recent_activities = cur.fetchall()
+
+        con.close()
+
+        return render_template("hr_dashboard.html", 
+                             hr_data=hr_data,
+                             stats=stats,
+                             departments=departments,
+                             recent_activities=recent_activities,
+                             pagination_info=pagination_info)
+                             
+    except Exception as e:
+        con.close()
+        print(f"HR Dashboard error: {e}")
+        flash(f"Dashboard error: {str(e)}", "error")
+        return redirect("/hr-login")
+    
+@app.route("/hr-add-pharmacy-admin", methods=["GET", "POST"])
+def hr_add_pharmacy_admin():
+    if "hr_id" not in session:
+        return redirect("/hr-login")  # ✅ fix (your current redirect is wrong)
+
+    if request.method == "POST":
+        hr_id = session["hr_id"]
+
+        pharmacy_admin_name = request.form.get("pharmacy_admin_name", "").strip()
+        pharmacy_admin_gender = request.form.get("pharmacy_admin_gender", "").strip()
+        pharmacy_admin_email = request.form.get("pharmacy_admin_email", "").strip().lower()
+        pharmacy_admin_phone = request.form.get("pharmacy_admin_phone", "").strip()
+
+        if not all([pharmacy_admin_name, pharmacy_admin_gender, pharmacy_admin_email, pharmacy_admin_phone]):
+            flash("All fields are required.", "danger")
+            return render_template("hr_add_pharmacy_admin.html")
+
+        # Generate username/password
+        pharmacy_admin_username = generate_username(pharmacy_admin_name, "pharm_").lower()
+        pharmacy_admin_password = generate_password(10)
+        pharmacy_admin_password_hash = generate_password_hash(pharmacy_admin_password)
+
+        con = get_db()
+        cur = con.cursor(dictionary=True)
+
+        try:
+            # Get HR hospital_id
+            cur.execute("SELECT hospital_id FROM hr_managers WHERE id=%s", (hr_id,))
+            hr_data = cur.fetchone()
+            if not hr_data:
+                con.close()
+                flash("HR data not found.", "danger")
+                return redirect("/hr-login")
+
+            hospital_id = hr_data["hospital_id"]
+
+            # ✅ Check email exists (normalized column name = email)
+            cur.execute("""
+                SELECT id FROM pharmacy_admins
+                WHERE hospital_id=%s AND email=%s
+            """, (hospital_id, pharmacy_admin_email))
+            if cur.fetchone():
+                con.close()
+                flash("Email already exists. Please use a different email.", "danger")
+                return render_template("hr_add_pharmacy_admin.html")
+
+            # ✅ Ensure username unique per hospital
+            cur.execute("""
+                SELECT id FROM pharmacy_admins
+                WHERE hospital_id=%s AND username=%s
+            """, (hospital_id, pharmacy_admin_username))
+            while cur.fetchone():
+                pharmacy_admin_username = generate_username(pharmacy_admin_name, "pharm_").lower()
+                cur.execute("""
+                    SELECT id FROM pharmacy_admins
+                    WHERE hospital_id=%s AND username=%s
+                """, (hospital_id, pharmacy_admin_username))
+
+            # ✅ Insert pharmacy admin (normalized column names)
+            cur.execute("""
+                INSERT INTO pharmacy_admins
+                (hospital_id, full_name, gender, email, phone, username, password, created_by_hr_id)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (
+                hospital_id,
+                pharmacy_admin_name,
+                pharmacy_admin_gender,
+                pharmacy_admin_email,
+                pharmacy_admin_phone,
+                pharmacy_admin_username,
+                pharmacy_admin_password_hash,
+                hr_id
+            ))
+            con.commit()
+
+            # Email credentials
+            try:
+                cur.execute("SELECT hospital_name FROM hospitals WHERE id=%s", (hospital_id,))
+                hospital_info = cur.fetchone()
+
+                email_body = f"""
+                <html><body style="font-family: Arial, sans-serif;">
+                    <h2 style="color:#20b2aa;">Pharmacy Admin Account Created</h2>
+                    <p>Dear <strong>{pharmacy_admin_name}</strong>,</p>
+                    <p>Your pharmacy admin account has been created for <strong>{hospital_info['hospital_name']}</strong>.</p>
+
+                    <div style="background:#f8f9fa;padding:15px;border-left:4px solid #20b2aa;margin:20px 0;">
+                        <h3 style="margin-top:0;">Login Credentials:</h3>
+                        <p><strong>Username:</strong> <code>{pharmacy_admin_username}</code></p>
+                        <p><strong>Password:</strong> <code>{pharmacy_admin_password}</code></p>
+                        <p><strong>Login URL:</strong> <a href="http://127.0.0.2:5000/pharmacy-admin-login">Pharmacy Login</a></p>
+                    </div>
+
+                    <p><em>Please change your password after first login.</em></p>
+                </body></html>
+                """
+
+                msg = Message(
+                    subject=f"Pharmacy Admin Account - {hospital_info['hospital_name']}",
+                    recipients=[pharmacy_admin_email],
+                    html=email_body
+                )
+                mail.send(msg)
+                flash(f"Pharmacy admin added! Credentials sent to {pharmacy_admin_email}.", "success")
+            except Exception as e:
+                print("Email error:", e)
+                flash(f"Pharmacy admin added, but email failed. Username: {pharmacy_admin_username}, Password: {pharmacy_admin_password}", "warning")
+
+            con.close()
+            return redirect("/hr-dashboard")
+
+        except Exception as e:
+            con.rollback()
+            con.close()
+            print("Add pharmacy admin error:", e)
+            flash(f"Error adding pharmacy admin: {str(e)}", "danger")
+            return render_template("hr_add_pharmacy_admin.html")
+
+    return render_template("hr_add_pharmacy_admin.html")
+
+@app.route("/hr-view-pharmacy-admins")
+def hr_view_pharmacy_admins():
+    if "hr_id" not in session:
+        return redirect("/department_admins")
+    
+    hr_id = session["hr_id"]
+    
+    try:
+        con = get_db()
+        cur = con.cursor(dictionary=True)
+        
+        # Get HR's hospital
+        cur.execute("SELECT hospital_id FROM hr_managers WHERE id = %s", (hr_id,))
+        hr_data = cur.fetchone()
+        
+        if not hr_data:
+            flash("HR data not found.", "error")
+            return redirect("/department_admins")
+        
+        hospital_id = hr_data['hospital_id']
+        
+        # Get all pharmacy admins for this hospital
+        cur.execute("""
+            SELECT 
+                id, full_name, gender, email, phone, username,
+                is_active, can_login,
+                created_at,
+                last_login
+            FROM pharmacy_admins
+            WHERE hospital_id = %s
+            ORDER BY created_at DESC
+        """, (hospital_id,))
+
+
+                
+        pharmacy_admins = cur.fetchall()
+        con.close()
+        
+        return render_template("hr_view_pharmacy_admins.html", pharmacy_admins=pharmacy_admins)
+        
+    except Exception as e:
+        print(f"View pharmacy admins error: {e}")
+        flash("Error loading pharmacy admins.", "error")
+        return redirect("/hr-dashboard")
+
+
+@app.route("/hr-add-department", methods=["GET", "POST"])
+def hr_add_department():
+    if "hr_id" not in session:
+        return redirect("/department_admins")
+
+    if request.method == "POST":
+        dept_name = request.form.get("department_name")
+        dept_description = request.form.get("department_description", "")
+        
+        hr_id = session["hr_id"]
+        con = get_db()
+        cur = con.cursor(dictionary=True)
+        
+        # Get hospital_id from HR
+        cur.execute("SELECT hospital_id FROM hr_managers WHERE id = %s", (hr_id,))
+        hr_data = cur.fetchone()
+        
+        cur.execute("""
+            INSERT INTO departments (hospital_id, department_name, description, created_by_hr_id)
+            VALUES (%s, %s, %s, %s)
+        """, (hr_data['hospital_id'], dept_name, dept_description, hr_id))
+        
+        con.commit()
+        con.close()
+        
+        flash("Department added successfully!", "success")
+        return redirect("/hr-dashboard")
+    
+    return render_template("hr_add_department.html")
+
+
+@app.route("/hr-add-dept-admin", methods=["GET", "POST"])  
+def hr_add_dept_admin():
+    if "hr_id" not in session:
+        return redirect("/hr-login")  # ✅ Fixed redirect
+
+    hr_id = session["hr_id"]
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+    
+    try:
+        # Get HR's hospital ID
+        cur.execute("SELECT hospital_id FROM hr_managers WHERE id = %s", (hr_id,))
+        hr_data = cur.fetchone()
+        
+        if not hr_data:
+            flash("HR data not found.", "error")
+            return redirect("/hr-login")
+            
+        hospital_id = hr_data['hospital_id']
+        
+        # Get departments for this HR's hospital
+        cur.execute("""
+            SELECT d.id, d.department_name 
+            FROM departments d
+            WHERE d.hospital_id = %s
+        """, (hospital_id,))
+        departments = cur.fetchall()
+
+        if request.method == "POST":
+            # Process department admin creation
+            dept_id = request.form.get("department_id")
+            admin_name = request.form.get("admin_name")
+            admin_gender = request.form.get("admin_gender")
+            admin_email = request.form.get("admin_email")
+            admin_phone = request.form.get("admin_phone")
+            admin_username = request.form.get("admin_username")
+            admin_password = request.form.get("admin_password")
+            admin_address = request.form.get("admin_address", "")
+            
+            print(f"=== DEBUG INFO ===")
+            print(f"Admin Email: {admin_email}")
+            print(f"Admin Name: {admin_name}")
+            print(f"Admin Username: {admin_username}")
+            
+            hashed_password = generate_password_hash(admin_password)
+            
+            # ✅ Insert into existing admins table
+            cur.execute("""
+                INSERT INTO admins 
+                (hospital_id, department_id, admin_name, admin_gender, admin_address, 
+                 admin_phone, admin_email, admin_username, admin_password, is_active)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1)
+            """, (hospital_id, dept_id, admin_name, admin_gender, admin_address,
+                  admin_phone, admin_email, admin_username, hashed_password))
+            
+            con.commit()
+            print("Database insert completed")
+            
+            # Send email to department admin
+            try:
+                login_url = url_for("admin_login", _external=True)
+                subject = "Department Admin Login Credentials"
+                body = f"""Dear {admin_name},
+
+You have been assigned as Department Administrator.
+
+Login URL: {login_url}
+Username: {admin_username}  
+Password: {admin_password}
+
+Please login and change your password.
+
+Regards,
+HR Team
+"""
+                print(f"Attempting to send email to: {admin_email}")
+                print(f"Login URL: {login_url}")
+                
+                send_email(admin_email, subject, body)
+                print("✅ Email sent successfully!")
+                flash("Department Admin added successfully and credentials sent!", "success")
+                
+            except Exception as e:
+                print(f"❌ Email sending failed: {str(e)}")
+                flash(f"Admin added but email failed: {str(e)}", "warning")
+            
+            con.close()
+            return redirect("/hr-dashboard")
+        
+        con.close()
+        return render_template("hr_add_dept_admin.html", departments=departments)
+        
+    except Exception as e:
+        con.close()
+        print(f"Add dept admin error: {e}")
+        flash(f"Error: {str(e)}", "error")
+        return redirect("/hr-dashboard")
+        
+@app.route("/hr-view-departments")
+def hr_view_departments():
+    if "hr_id" not in session:
+        return redirect("/hr-login")  # ✅ Fixed redirect
+
+    hr_id = session["hr_id"]
+    
+    # Get pagination parameters
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+    
+    # Ensure per_page is within reasonable limits
+    per_page = min(max(per_page, 5), 100)
+    
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+    
+    try:
+        # Get total count first
+        cur.execute("""
+            SELECT COUNT(DISTINCT d.id) as total_count
+            FROM departments d
+            JOIN hr_managers hr ON d.hospital_id = hr.hospital_id
+            WHERE hr.id = %s
+        """, (hr_id,))
+        
+        total_departments = cur.fetchone()['total_count']
+        
+        # Calculate pagination
+        total_pages = (total_departments + per_page - 1) // per_page
+        offset = (page - 1) * per_page
+        
+        # ✅ Updated query using existing tables only
+        cur.execute("""
+            SELECT 
+                d.*, 
+                COUNT(DISTINCT a.id) as admin_count,
+                COUNT(DISTINCT s.id) as staff_count
+            FROM departments d
+            LEFT JOIN admins a ON d.id = a.department_id  
+            LEFT JOIN staff_members s ON a.id = s.admin_id
+            JOIN hr_managers hr ON d.hospital_id = hr.hospital_id
+            WHERE hr.id = %s
+            GROUP BY d.id
+            ORDER BY d.created_on DESC
+            LIMIT %s OFFSET %s
+        """, (hr_id, per_page, offset))
+        
+        departments = cur.fetchall()
+        
+        # Create pagination info
+        def get_page_range(current_page, total_pages, max_pages=5):
+            if total_pages <= max_pages:
+                return list(range(1, total_pages + 1))
+            
+            if current_page <= 3:
+                return list(range(1, 4)) + ['...', total_pages]
+            elif current_page >= total_pages - 2:
+                return [1, '...'] + list(range(total_pages - 2, total_pages + 1))
+            else:
+                return [1, '...', current_page - 1, current_page, current_page + 1, '...', total_pages]
+
+        pagination_info = {
+            'current_page': page,
+            'per_page': per_page,
+            'total_pages': total_pages,
+            'total_records': total_departments,
+            'start_record': offset + 1 if total_departments > 0 else 0,
+            'end_record': min(offset + per_page, total_departments),
+            'page_range': get_page_range(page, total_pages) if total_pages > 1 else []
+        }
+        
+        con.close()
+        
+        return render_template("hr_view_departments.html", 
+                             departments=departments, 
+                             pagination_info=pagination_info)
+        
+    except Exception as e:
+        con.close()
+        print(f"View Departments error: {e}")
+        flash(f"Error loading departments: {str(e)}", "error")
+        return redirect("/hr-dashboard")
+    
+@app.route("/hr-staff-overview")
+def hr_view_staff_overview():
+    if "hr_id" not in session:
+        return redirect("/hr-login")
+
+    hr_id = session["hr_id"]
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    try:
+        # Get HR manager's hospital
+        cur.execute("""
+            SELECT hospital_id FROM hr_managers WHERE id = %s
+        """, (hr_id,))
+        
+        hr_data = cur.fetchone()
+        if not hr_data:
+            flash("HR data not found.", "error")
+            return redirect("/hr-login")
+
+        hospital_id = hr_data['hospital_id']
+
+        # ✅ Corrected query with proper column names
+        try:
+            cur.execute("""
+                SELECT 
+                    s.id AS staff_id,
+                    s.full_name AS staff_name,
+                    s.email AS staff_email,
+                    s.phone AS staff_phone,
+                    s.gender AS staff_gender,
+                    s.role AS staff_role,
+                    s.created_at,
+                    d.department_name AS department_name,
+                    a.admin_name AS dept_admin_name
+                FROM staff_members s
+                LEFT JOIN departments d ON s.department_id = d.id
+                LEFT JOIN admins a ON s.admin_id = a.id
+                WHERE d.hospital_id = %s
+                ORDER BY s.created_at DESC
+            """, (hospital_id,))
+
+
+                        
+            all_staff = cur.fetchall()
+            
+            # Debug: Print the results to see what we're getting
+            print("Staff data:", all_staff)
+            for staff in all_staff:
+                print("Staff record:", dict(staff))
+                
+        except Exception as e:
+            print(f"Staff query error: {e}")
+            all_staff = []
+
+        con.close()
+        return render_template("hr_staff_overview.html", all_staff=all_staff)
+        
+    except Exception as e:
+        con.close()
+        print(f"Staff overview error: {e}")
+        flash(f"Error loading staff overview: {str(e)}", "error")
+        return redirect("/hr-dashboard")
+    
+
+# @app.route("/hr-view-all-admins")
+# def hr_view_all_admins():
+#     if "hr_id" not in session:
+#         return redirect("/department_admins")
+    
+#     hr_id = session["hr_id"]
+    
+#     try:
+#         con = get_db()
+#         cur = con.cursor(dictionary=True)
+        
+#         # Get HR's hospital
+#         cur.execute("SELECT hospital_id FROM hr_managers WHERE id = %s", (hr_id,))
+#         hr_data = cur.fetchone()
+        
+#         if not hr_data:
+#             flash("HR data not found.", "error")
+#             return redirect("/department_admins")
+        
+#         hospital_id = hr_data['hospital_id']
+        
+#         # Get all department admins for this hospital (FIXED TABLE NAME)
+#         cur.execute("""
+#             SELECT da.*, d.department_name 
+#             FROM department_admins da
+#             JOIN departments d ON da.department_id = d.id
+#             WHERE d.hospital_id = %s 
+#             ORDER BY da.created_on DESC
+#         """, (hospital_id,))
+#         dept_admins = cur.fetchall()
+        
+#         # Get all pharmacy admins for this hospital
+#         cur.execute("""
+#             SELECT * FROM pharmacy_admins 
+#             WHERE hospital_id = %s 
+#             ORDER BY created_on DESC
+#         """, (hospital_id,))
+#         pharmacy_admins = cur.fetchall()
+        
+#         con.close()
+        
+#         return render_template("hr_view_all_admins.html", 
+#                              dept_admins=dept_admins,
+#                              pharmacy_admins=pharmacy_admins)
+        
+#     except Exception as e:
+#         print(f"View all admins error: {e}")
+#         flash("Error loading admins.", "error")
+#         return redirect("/hr-dashboard")
+
+
+# @app.route("/hr-view-all-admins")
+# def hr_view_all_admins():
+#     if "hr_id" not in session:
+#         return redirect("/department_admins")
+    
+#     hr_id = session["hr_id"]
+    
+#     # Get the 'type' query parameter (which specifies 'all', 'dept', or 'pharmacy')
+#     admin_type = request.args.get('type', 'all')  # Default to 'all' if not provided
+    
+#     # Pagination parameters
+#     page = request.args.get('page', 1, type=int)
+#     per_page = request.args.get('per_page', 10, type=int)
+    
+#     try:
+#         con = get_db()
+#         cur = con.cursor(dictionary=True)
+        
+#         # Get HR's hospital
+#         cur.execute("SELECT hospital_id FROM hr_managers WHERE id = %s", (hr_id,))
+#         hr_data = cur.fetchone()
+        
+#         if not hr_data:
+#             flash("HR data not found.", "error")
+#             return redirect("/department_admins")
+        
+#         hospital_id = hr_data['hospital_id']
+        
+#         # Query to fetch department admins if 'dept' is selected
+#         if admin_type == 'dept' or admin_type == 'all':
+#             cur.execute(""" 
+#                 SELECT da.*, d.department_name
+#                 FROM department_admins da
+#                 JOIN departments d ON da.department_id = d.id
+#                 WHERE d.hospital_id = %s 
+#                 ORDER BY da.created_on DESC
+#                 LIMIT %s OFFSET %s
+#             """, (hospital_id, per_page, (page - 1) * per_page))
+#             dept_admins = cur.fetchall()
+            
+#             # Get total department admins for pagination
+#             cur.execute("""
+#                 SELECT COUNT(*) as total_count
+#                 FROM department_admins da
+#                 JOIN departments d ON da.department_id = d.id
+#                 WHERE d.hospital_id = %s
+#             """, (hospital_id,))
+#             total_dept_admins = cur.fetchone()['total_count']
+#         else:
+#             dept_admins = []
+#             total_dept_admins = 0
+        
+#         # Query to fetch pharmacy admins if 'pharmacy' is selected
+#         if admin_type == 'pharmacy' or admin_type == 'all':
+#             cur.execute("""
+#                 SELECT * FROM pharmacy_admins 
+#                 WHERE hospital_id = %s 
+#                 ORDER BY created_on DESC
+#                 LIMIT %s OFFSET %s
+#             """, (hospital_id, per_page, (page - 1) * per_page))
+#             pharmacy_admins = cur.fetchall()
+            
+#             # Get total pharmacy admins for pagination
+#             cur.execute("""
+#                 SELECT COUNT(*) as total_count
+#                 FROM pharmacy_admins
+#                 WHERE hospital_id = %s
+#             """, (hospital_id,))
+#             total_pharmacy_admins = cur.fetchone()['total_count']
+#         else:
+#             pharmacy_admins = []
+#             total_pharmacy_admins = 0
+        
+#         con.close()
+        
+#         # Pagination info for dept admins
+#         dept_pagination = {
+#             'current_page': page,
+#             'per_page': per_page,
+#             'total_pages': (total_dept_admins + per_page - 1) // per_page,
+#             'total_records': total_dept_admins,
+#             'start_record': (page - 1) * per_page + 1,
+#             'end_record': min(page * per_page, total_dept_admins)
+#         }
+        
+#         # Pagination info for pharmacy admins
+#         pharmacy_pagination = {
+#             'current_page': page,
+#             'per_page': per_page,
+#             'total_pages': (total_pharmacy_admins + per_page - 1) // per_page,
+#             'total_records': total_pharmacy_admins,
+#             'start_record': (page - 1) * per_page + 1,
+#             'end_record': min(page * per_page, total_pharmacy_admins)
+#         }
+
+#         return render_template("hr_view_all_admins.html", 
+#                              dept_admins=dept_admins,
+#                              pharmacy_admins=pharmacy_admins,
+#                              dept_pagination=dept_pagination,
+#                              pharmacy_pagination=pharmacy_pagination,
+#                              admin_type=admin_type)
+        
+#     except Exception as e:
+#         print(f"View all admins error: {e}")
+#         flash("Error loading admins.", "error")
+#         return redirect("/hr-dashboard")
+# First, add this helper function if you don't have it
+
+
+
+# @app.route("/hr-view-pharmacy-admins")
+# def hr_view_pharmacy_admins():
+#     if "hr_id" not in session:
+#         return redirect("/department_admins")
+    
+#     hr_id = session["hr_id"]
+    
+#     try:
+#         con = get_db()
+#         cur = con.cursor(dictionary=True)
+        
+#         # Get HR's hospital
+#         cur.execute("SELECT hospital_id FROM hr_managers WHERE id = %s", (hr_id,))
+#         hr_data = cur.fetchone()
+        
+#         if not hr_data:
+#             flash("HR data not found.", "error")
+#             return redirect("/department_admins")
+        
+#         hospital_id = hr_data['hospital_id']
+        
+#         # Get all pharmacy admins for this hospital
+#         cur.execute("""
+#             SELECT id, full_name, gender, email, phone, username,
+#                 is_active, can_login,
+#                 DATE_FORMAT(created_at, '%d-%m-%Y %H:%i')
+#             AS created_on
+#             FROM pharmacy_admins
+#             WHERE hospital_id = %s
+#             ORDER BY created_at DESC
+#         """, (hospital_id,))
+
+                
+#         pharmacy_admins = cur.fetchall()
+#         con.close()
+        
+#         return render_template("hr_view_pharmacy_admins.html", pharmacy_admins=pharmacy_admins)
+        
+#     except Exception as e:
+#         print(f"View pharmacy admins error: {e}")
+#         flash("Error loading pharmacy admins.", "error")
+#         return redirect("/hr-dashboard")
+
+
+
+
+def get_page_range(current_page, total_pages, max_pages=5):
+    if total_pages <= max_pages:
+        return list(range(1, total_pages + 1))
+    
+    if current_page <= 3:
+        return list(range(1, 4)) + ['...', total_pages]
+    elif current_page >= total_pages - 2:
+        return [1, '...'] + list(range(total_pages - 2, total_pages + 1))
+    else:
+        return [1, '...', current_page - 1, current_page, current_page + 1, '...', total_pages]
+
+
+
+
+# @app.route("/hr-view-all-admins")
+# def hr_view_all_admins():
+#     if "hr_id" not in session:
+#         return redirect("/hr-login")  # ✅ Fixed redirect
+
+#     hr_id = session["hr_id"]
+
+#     # Get the 'type' query parameter (which specifies 'all', 'dept', or 'pharmacy')
+#     admin_type = request.args.get('type', 'all')  # Default to 'all' if not provided
+
+#     # Pagination parameters
+#     page = request.args.get('page', 1, type=int)
+#     per_page = request.args.get('per_page', 10, type=int)
+
+#     try:
+#         con = get_db()
+#         cur = con.cursor(dictionary=True)
+
+#         # Get HR's hospital
+#         cur.execute("SELECT hospital_id FROM hr_managers WHERE id = %s", (hr_id,))
+#         hr_data = cur.fetchone()
+
+#         if not hr_data:
+#             flash("HR data not found.", "error")
+#             return redirect("/hr-login")
+
+#         hospital_id = hr_data['hospital_id']
+
+#         # Initialize variables
+#         dept_admins = []
+#         pharmacy_admins = []
+#         dept_pagination = None
+#         pharmacy_pagination = None
+#         total_dept_admins = 0
+#         total_pharmacy_admins = 0
+
+#         # Handle different admin types
+#         if admin_type == 'dept':
+#             # ✅ Use existing admins table instead of department_admins
+#             cur.execute("""
+#                 SELECT a.*, d.department_name
+#                 FROM admins a
+#                 LEFT JOIN departments d ON a.department_id = d.id
+#                 WHERE a.hospital_id = %s
+#                 ORDER BY a.created_at DESC
+#                 LIMIT %s OFFSET %s
+#             """, (hospital_id, per_page, (page - 1) * per_page))
+#             dept_admins = cur.fetchall()
+
+#             # Get total department admins for pagination
+#             cur.execute("""
+#                 SELECT COUNT(*) as total_count
+#                 FROM admins a
+#                 WHERE a.hospital_id = %s
+#             """, (hospital_id,))
+#             total_dept_admins = cur.fetchone()['total_count']
+
+#             # Create pagination info for dept admins
+#             dept_pagination = {
+#                 'current_page': page,
+#                 'per_page': per_page,
+#                 'total_pages': max(1, (total_dept_admins + per_page - 1) // per_page),
+#                 'total_records': total_dept_admins,
+#                 'start_record': (page - 1) * per_page + 1 if total_dept_admins > 0 else 0,
+#                 'end_record': min(page * per_page, total_dept_admins),
+#                 'page_range': get_page_range(page, max(1, (total_dept_admins + per_page - 1) // per_page))
+#             }
+
+#         elif admin_type == 'pharmacy':
+#             # ✅ FIXED: Fetch pharmacy admins with pagination
+#             cur.execute("""
+#                 SELECT id, full_name, gender, email, phone, username,
+#                        is_active, can_login, created_at, last_login
+#                 FROM pharmacy_admins
+#                 WHERE hospital_id = %s
+#                 ORDER BY created_at DESC
+#                 LIMIT %s OFFSET %s
+#             """, (hospital_id, per_page, (page - 1) * per_page))
+#             pharmacy_admins = cur.fetchall()
+
+#             # Get total pharmacy admins for pagination
+#             cur.execute("""
+#                 SELECT COUNT(*) AS total_count
+#                 FROM pharmacy_admins
+#                 WHERE hospital_id = %s
+#             """, (hospital_id,))
+#             total_pharmacy_admins = cur.fetchone()['total_count']
+
+#             pharmacy_pagination = {
+#                 'current_page': page,
+#                 'per_page': per_page,
+#                 'total_pages': max(1, (total_pharmacy_admins + per_page - 1) // per_page),
+#                 'total_records': total_pharmacy_admins,
+#                 'start_record': (page - 1) * per_page + 1 if total_pharmacy_admins > 0 else 0,
+#                 'end_record': min(page * per_page, total_pharmacy_admins),
+#                 'page_range': get_page_range(page, max(1, (total_pharmacy_admins + per_page - 1) // per_page))
+#             }
+
+#         else:  # admin_type == 'all'
+#             # Fetch both types but limit to show preview (e.g., 5 each for 'all' view)
+#             preview_limit = 5
+
+#             # ✅ Get department admins preview
+#             cur.execute("""
+#                 SELECT a.*, d.department_name
+#                 FROM admins a
+#                 LEFT JOIN departments d ON a.department_id = d.id
+#                 WHERE a.hospital_id = %s
+#                 ORDER BY a.created_at DESC
+#                 LIMIT %s
+#             """, (hospital_id, preview_limit))
+#             dept_admins = cur.fetchall()
+
+#             # Get total department admins count
+#             cur.execute("""
+#                 SELECT COUNT(*) as total_count
+#                 FROM admins a
+#                 WHERE a.hospital_id = %s
+#             """, (hospital_id,))
+#             total_dept_admins = cur.fetchone()['total_count']
+
+#             # ✅ FIXED: Get pharmacy admins preview
+#             cur.execute("""
+#                 SELECT id, full_name, gender, email, phone, username,
+#                        is_active, can_login, created_at, last_login
+#                 FROM pharmacy_admins
+#                 WHERE hospital_id = %s
+#                 ORDER BY created_at DESC
+#                 LIMIT %s
+#             """, (hospital_id, preview_limit))
+#             pharmacy_admins = cur.fetchall()
+
+#             # Get total pharmacy admins count
+#             cur.execute("""
+#                 SELECT COUNT(*) AS total_count
+#                 FROM pharmacy_admins
+#                 WHERE hospital_id = %s
+#             """, (hospital_id,))
+#             total_pharmacy_admins = cur.fetchone()['total_count']
+
+#         con.close()
+
+#         return render_template(
+#             "hr_view_all_admins.html",
+#             dept_admins=dept_admins,
+#             pharmacy_admins=pharmacy_admins,
+#             dept_pagination=dept_pagination,
+#             pharmacy_pagination=pharmacy_pagination,
+#             admin_type=admin_type,
+#             total_dept_admins=total_dept_admins,
+#             total_pharmacy_admins=total_pharmacy_admins
+#         )
+
+#     except Exception as e:
+#         print(f"View all admins error: {e}")
+#         flash("Error loading admins.", "error")
+#         return redirect("/hr-dashboard")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@app.route("/hr-view-all-admins")
+def hr_view_all_admins():
+    if "hr_id" not in session:
+        return redirect("/hr-login")
+
+    hr_id = session["hr_id"]
+
+    admin_type = request.args.get("type", "all")
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 10, type=int)
+
+    q = (request.args.get("q") or "").strip()
+    like = f"%{q}%"
+
+    try:
+        con = get_db()
+        cur = con.cursor(dictionary=True)
+
+        # HR hospital
+        cur.execute("SELECT hospital_id FROM hr_managers WHERE id = %s", (hr_id,))
+        hr_data = cur.fetchone()
+        if not hr_data:
+            flash("HR data not found.", "error")
+            return redirect("/hr-login")
+
+        hospital_id = hr_data["hospital_id"]
+
+        dept_admins = []
+        pharmacy_admins = []
+        dept_pagination = None
+        pharmacy_pagination = None
+        total_dept_admins = 0
+        total_pharmacy_admins = 0
+
+        # Helper: build pagination dict
+        def build_pagination(total_records):
+            total_pages = max(1, (total_records + per_page - 1) // per_page)
+            return {
+                "current_page": page,
+                "per_page": per_page,
+                "total_pages": total_pages,
+                "total_records": total_records,
+                "start_record": (page - 1) * per_page + 1 if total_records else 0,
+                "end_record": min(page * per_page, total_records),
+                "page_range": get_page_range(page, total_pages),
+            }
+
+        # ===========================
+        # DEPARTMENT ONLY
+        # ===========================
+        if admin_type == "dept":
+            if q:
+                cur.execute("""
+                    SELECT a.*, a.created_at AS created_on, d.department_name
+                    FROM admins a
+                    LEFT JOIN departments d ON a.department_id = d.id
+                    WHERE a.hospital_id = %s
+                      AND (
+                        a.admin_name LIKE %s OR
+                        a.admin_email LIKE %s OR
+                        a.admin_phone LIKE %s OR
+                        a.admin_username LIKE %s OR
+                        d.department_name LIKE %s
+                      )
+                    ORDER BY a.created_at DESC
+                    LIMIT %s OFFSET %s
+                """, (hospital_id, like, like, like, like, like, per_page, (page - 1) * per_page))
+                dept_admins = cur.fetchall()
+
+                cur.execute("""
+                    SELECT COUNT(*) AS total
+                    FROM admins a
+                    LEFT JOIN departments d ON a.department_id = d.id
+                    WHERE a.hospital_id = %s
+                      AND (
+                        a.admin_name LIKE %s OR
+                        a.admin_email LIKE %s OR
+                        a.admin_phone LIKE %s OR
+                        a.admin_username LIKE %s OR
+                        d.department_name LIKE %s
+                      )
+                """, (hospital_id, like, like, like, like, like))
+                total_dept_admins = cur.fetchone()["total"]
+            else:
+                cur.execute("""
+                    SELECT a.*, a.created_at AS created_on, d.department_name
+                    FROM admins a
+                    LEFT JOIN departments d ON a.department_id = d.id
+                    WHERE a.hospital_id = %s
+                    ORDER BY a.created_at DESC
+                    LIMIT %s OFFSET %s
+                """, (hospital_id, per_page, (page - 1) * per_page))
+                dept_admins = cur.fetchall()
+
+                cur.execute("SELECT COUNT(*) AS total FROM admins WHERE hospital_id = %s", (hospital_id,))
+                total_dept_admins = cur.fetchone()["total"]
+
+            dept_pagination = build_pagination(total_dept_admins)
+
+        # ===========================
+        # PHARMACY ONLY
+        # ===========================
+        elif admin_type == "pharmacy":
+            if q:
+                cur.execute("""
+                    SELECT
+                        id,
+                        full_name  AS pharmacy_admin_name,
+                        gender     AS pharmacy_admin_gender,
+                        email      AS pharmacy_admin_email,
+                        phone      AS pharmacy_admin_phone,
+                        username   AS pharmacy_admin_username,
+                        is_active,
+                        can_login,
+                        created_at AS created_on,
+                        last_login
+                    FROM pharmacy_admins
+                    WHERE hospital_id = %s
+                      AND (
+                        full_name LIKE %s OR
+                        email LIKE %s OR
+                        phone LIKE %s OR
+                        username LIKE %s
+                      )
+                    ORDER BY created_at DESC
+                    LIMIT %s OFFSET %s
+                """, (hospital_id, like, like, like, like, per_page, (page - 1) * per_page))
+                pharmacy_admins = cur.fetchall()
+
+                cur.execute("""
+                    SELECT COUNT(*) AS total
+                    FROM pharmacy_admins
+                    WHERE hospital_id = %s
+                      AND (
+                        full_name LIKE %s OR
+                        email LIKE %s OR
+                        phone LIKE %s OR
+                        username LIKE %s
+                      )
+                """, (hospital_id, like, like, like, like))
+                total_pharmacy_admins = cur.fetchone()["total"]
+            else:
+                cur.execute("""
+                    SELECT
+                        id,
+                        full_name  AS pharmacy_admin_name,
+                        gender     AS pharmacy_admin_gender,
+                        email      AS pharmacy_admin_email,
+                        phone      AS pharmacy_admin_phone,
+                        username   AS pharmacy_admin_username,
+                        is_active,
+                        can_login,
+                        created_at AS created_on,
+                        last_login
+                    FROM pharmacy_admins
+                    WHERE hospital_id = %s
+                    ORDER BY created_at DESC
+                    LIMIT %s OFFSET %s
+                """, (hospital_id, per_page, (page - 1) * per_page))
+                pharmacy_admins = cur.fetchall()
+
+                cur.execute("SELECT COUNT(*) AS total FROM pharmacy_admins WHERE hospital_id = %s", (hospital_id,))
+                total_pharmacy_admins = cur.fetchone()["total"]
+
+            pharmacy_pagination = build_pagination(total_pharmacy_admins)
+
+        # ===========================
+        # ALL (PAGINATE BOTH LISTS + SEARCH BOTH)
+        # ===========================
+        else:
+            # Dept
+            if q:
+                cur.execute("""
+                    SELECT a.*, a.created_at AS created_on, d.department_name
+                    FROM admins a
+                    LEFT JOIN departments d ON a.department_id = d.id
+                    WHERE a.hospital_id = %s
+                      AND (
+                        a.admin_name LIKE %s OR
+                        a.admin_email LIKE %s OR
+                        a.admin_phone LIKE %s OR
+                        a.admin_username LIKE %s OR
+                        d.department_name LIKE %s
+                      )
+                    ORDER BY a.created_at DESC
+                    LIMIT %s OFFSET %s
+                """, (hospital_id, like, like, like, like, like, per_page, (page - 1) * per_page))
+                dept_admins = cur.fetchall()
+
+                cur.execute("""
+                    SELECT COUNT(*) AS total
+                    FROM admins a
+                    LEFT JOIN departments d ON a.department_id = d.id
+                    WHERE a.hospital_id = %s
+                      AND (
+                        a.admin_name LIKE %s OR
+                        a.admin_email LIKE %s OR
+                        a.admin_phone LIKE %s OR
+                        a.admin_username LIKE %s OR
+                        d.department_name LIKE %s
+                      )
+                """, (hospital_id, like, like, like, like, like))
+                total_dept_admins = cur.fetchone()["total"]
+            else:
+                cur.execute("""
+                    SELECT a.*, a.created_at AS created_on, d.department_name
+                    FROM admins a
+                    LEFT JOIN departments d ON a.department_id = d.id
+                    WHERE a.hospital_id = %s
+                    ORDER BY a.created_at DESC
+                    LIMIT %s OFFSET %s
+                """, (hospital_id, per_page, (page - 1) * per_page))
+                dept_admins = cur.fetchall()
+
+                cur.execute("SELECT COUNT(*) AS total FROM admins WHERE hospital_id = %s", (hospital_id,))
+                total_dept_admins = cur.fetchone()["total"]
+
+            dept_pagination = build_pagination(total_dept_admins)
+
+            # Pharmacy
+            if q:
+                cur.execute("""
+                    SELECT
+                        id,
+                        full_name  AS pharmacy_admin_name,
+                        gender     AS pharmacy_admin_gender,
+                        email      AS pharmacy_admin_email,
+                        phone      AS pharmacy_admin_phone,
+                        username   AS pharmacy_admin_username,
+                        is_active,
+                        can_login,
+                        created_at AS created_on,
+                        last_login
+                    FROM pharmacy_admins
+                    WHERE hospital_id = %s
+                      AND (
+                        full_name LIKE %s OR
+                        email LIKE %s OR
+                        phone LIKE %s OR
+                        username LIKE %s
+                      )
+                    ORDER BY created_at DESC
+                    LIMIT %s OFFSET %s
+                """, (hospital_id, like, like, like, like, per_page, (page - 1) * per_page))
+                pharmacy_admins = cur.fetchall()
+
+                cur.execute("""
+                    SELECT COUNT(*) AS total
+                    FROM pharmacy_admins
+                    WHERE hospital_id = %s
+                      AND (
+                        full_name LIKE %s OR
+                        email LIKE %s OR
+                        phone LIKE %s OR
+                        username LIKE %s
+                      )
+                """, (hospital_id, like, like, like, like))
+                total_pharmacy_admins = cur.fetchone()["total"]
+            else:
+                cur.execute("""
+                    SELECT
+                        id,
+                        full_name  AS pharmacy_admin_name,
+                        gender     AS pharmacy_admin_gender,
+                        email      AS pharmacy_admin_email,
+                        phone      AS pharmacy_admin_phone,
+                        username   AS pharmacy_admin_username,
+                        is_active,
+                        can_login,
+                        created_at AS created_on,
+                        last_login
+                    FROM pharmacy_admins
+                    WHERE hospital_id = %s
+                    ORDER BY created_at DESC
+                    LIMIT %s OFFSET %s
+                """, (hospital_id, per_page, (page - 1) * per_page))
+                pharmacy_admins = cur.fetchall()
+
+                cur.execute("SELECT COUNT(*) AS total FROM pharmacy_admins WHERE hospital_id = %s", (hospital_id,))
+                total_pharmacy_admins = cur.fetchone()["total"]
+
+            pharmacy_pagination = build_pagination(total_pharmacy_admins)
+
+        con.close()
+
+        return render_template(
+            "hr_view_all_admins.html",
+            dept_admins=dept_admins,
+            pharmacy_admins=pharmacy_admins,
+            dept_pagination=dept_pagination,
+            pharmacy_pagination=pharmacy_pagination,
+            admin_type=admin_type,
+            total_dept_admins=total_dept_admins,
+            total_pharmacy_admins=total_pharmacy_admins,
+            q=q
+        )
+
+    except Exception as e:
+        print("View all admins error:", e)
+        flash("Error loading admins.", "error")
+        return redirect("/hr-dashboard")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# @app.route("/hr-view-all-admins")
+# def hr_view_all_admins():
+#     if "hr_id" not in session:
+#         return redirect("/department_admins")
+    
+#     hr_id = session["hr_id"]
+    
+#     # Get the 'type' query parameter (which specifies 'all', 'dept', or 'pharmacy')
+#     admin_type = request.args.get('type', 'all')  # Default to 'all' if not provided
+    
+#     # Pagination parameters
+#     page = request.args.get('page', 1, type=int)
+#     per_page = request.args.get('per_page', 10, type=int)
+    
+#     try:
+#         con = get_db()
+#         cur = con.cursor(dictionary=True)
+        
+#         # Get HR's hospital
+#         cur.execute("SELECT hospital_id FROM hr_managers WHERE id = %s", (hr_id,))
+#         hr_data = cur.fetchone()
+        
+#         if not hr_data:
+#             flash("HR data not found.", "error")
+#             return redirect("/department_admins")
+        
+#         hospital_id = hr_data['hospital_id']
+        
+#         # Initialize variables
+#         dept_admins = []
+#         pharmacy_admins = []
+#         dept_pagination = None
+#         pharmacy_pagination = None
+#         total_dept_admins = 0
+#         total_pharmacy_admins = 0
+        
+#         # Handle different admin types
+#         if admin_type == 'dept':
+#             # Only fetch department admins with pagination
+#             cur.execute(""" 
+#                 SELECT da.*, d.department_name
+#                 FROM department_admins da
+#                 JOIN departments d ON da.department_id = d.id
+#                 WHERE d.hospital_id = %s 
+#                 ORDER BY da.created_on DESC
+#                 LIMIT %s OFFSET %s
+#             """, (hospital_id, per_page, (page - 1) * per_page))
+#             dept_admins = cur.fetchall()
+            
+#             # Get total department admins for pagination
+#             cur.execute("""
+#                 SELECT COUNT(*) as total_count
+#                 FROM department_admins da
+#                 JOIN departments d ON da.department_id = d.id
+#                 WHERE d.hospital_id = %s
+#             """, (hospital_id,))
+#             total_dept_admins = cur.fetchone()['total_count']
+            
+#             # Create pagination info for dept admins
+#             dept_pagination = {
+#                 'current_page': page,
+#                 'per_page': per_page,
+#                 'total_pages': max(1, (total_dept_admins + per_page - 1) // per_page),
+#                 'total_records': total_dept_admins,
+#                 'start_record': (page - 1) * per_page + 1 if total_dept_admins > 0 else 0,
+#                 'end_record': min(page * per_page, total_dept_admins),
+#                 'page_range': get_page_range(page, max(1, (total_dept_admins + per_page - 1) // per_page))
+#             }
+            
+#         elif admin_type == 'pharmacy':
+#             # Only fetch pharmacy admins with pagination
+#             cur.execute("""
+#                 SELECT * FROM pharmacy_admins 
+#                 WHERE hospital_id = %s 
+#                 ORDER BY created_on DESC
+#                 LIMIT %s OFFSET %s
+#             """, (hospital_id, per_page, (page - 1) * per_page))
+#             pharmacy_admins = cur.fetchall()
+            
+#             # Get total pharmacy admins for pagination
+#             cur.execute("""
+#                 SELECT COUNT(*) as total_count
+#                 FROM pharmacy_admins
+#                 WHERE hospital_id = %s
+#             """, (hospital_id,))
+#             total_pharmacy_admins = cur.fetchone()['total_count']
+            
+#             # Create pagination info for pharmacy admins
+#             pharmacy_pagination = {
+#                 'current_page': page,
+#                 'per_page': per_page,
+#                 'total_pages': max(1, (total_pharmacy_admins + per_page - 1) // per_page),
+#                 'total_records': total_pharmacy_admins,
+#                 'start_record': (page - 1) * per_page + 1 if total_pharmacy_admins > 0 else 0,
+#                 'end_record': min(page * per_page, total_pharmacy_admins),
+#                 'page_range': get_page_range(page, max(1, (total_pharmacy_admins + per_page - 1) // per_page))
+#             }
+            
+#         else:  # admin_type == 'all'
+#             # Fetch both types but limit to show preview (e.g., 5 each for 'all' view)
+#             preview_limit = 5 if admin_type == 'all' else per_page
+            
+#             # Get department admins (limited for 'all' view)
+#             cur.execute(""" 
+#                 SELECT da.*, d.department_name
+#                 FROM department_admins da
+#                 JOIN departments d ON da.department_id = d.id
+#                 WHERE d.hospital_id = %s 
+#                 ORDER BY da.created_on DESC
+#                 LIMIT %s
+#             """, (hospital_id, preview_limit))
+#             dept_admins = cur.fetchall()
+            
+#             # Get total department admins count
+#             cur.execute("""
+#                 SELECT COUNT(*) as total_count
+#                 FROM department_admins da
+#                 JOIN departments d ON da.department_id = d.id
+#                 WHERE d.hospital_id = %s
+#             """, (hospital_id,))
+#             total_dept_admins = cur.fetchone()['total_count']
+            
+#             # Get pharmacy admins (limited for 'all' view)
+#             cur.execute("""
+#                 SELECT * FROM pharmacy_admins 
+#                 WHERE hospital_id = %s 
+#                 ORDER BY created_on DESC
+#                 LIMIT %s
+#             """, (hospital_id, preview_limit))
+#             pharmacy_admins = cur.fetchall()
+            
+#             # Get total pharmacy admins count
+#             cur.execute("""
+#                 SELECT COUNT(*) as total_count
+#                 FROM pharmacy_admins
+#                 WHERE hospital_id = %s
+#             """, (hospital_id,))
+#             total_pharmacy_admins = cur.fetchone()['total_count']
+        
+#         con.close()
+
+#         return render_template("hr_view_all_admins.html", 
+#                              dept_admins=dept_admins,
+#                              pharmacy_admins=pharmacy_admins,
+#                              dept_pagination=dept_pagination,
+#                              pharmacy_pagination=pharmacy_pagination,
+#                              admin_type=admin_type,
+#                              total_dept_admins=total_dept_admins,
+#                              total_pharmacy_admins=total_pharmacy_admins)
+        
+#     except Exception as e:
+#         print(f"View all admins error: {e}")
+#         flash("Error loading admins.", "error")
+#         return redirect("/hr-dashboard")
+
+
+
+
+
+
+# Helper function to generate page ranges for pagination
+def get_page_range(current_page, total_pages, max_pages=7):
+    """Generate page range for pagination with ellipsis"""
+    if total_pages <= max_pages:
+        return list(range(1, total_pages + 1))
+    
+    # Calculate start and end pages
+    start = max(1, current_page - max_pages // 2)
+    end = min(total_pages, start + max_pages - 1)
+    
+    # Adjust start if end is at maximum
+    start = max(1, end - max_pages + 1)
+    
+    page_range = list(range(start, end + 1))
+    
+    # Add ellipsis at the beginning if needed
+    if start > 1:
+        if start > 2:
+            page_range = [1, '...'] + page_range
+        else:
+            page_range = [1] + page_range
+    
+    # Add ellipsis at the end if needed
+    if end < total_pages:
+        if end < total_pages - 1:
+            page_range = page_range + ['...', total_pages]
+        else:
+            page_range = page_range + [total_pages]
+    
+    return page_range
+
+
+@app.route("/hr-view-department-admins")
+def hr_view_department_admins():
+    if "hr_id" not in session:
+        flash("Session expired. Please log in again.", "error")
+        return redirect("/hr-login")  # ✅ Fixed redirect
+    
+    hr_id = session["hr_id"]
+    print(f"HR ID from session: {hr_id}")
+    
+    try:
+        con = get_db()
+        cur = con.cursor(dictionary=True)
+        
+        # Get HR's hospital data (COMPLETE DATA)
+        cur.execute("""
+            SELECT hm.*, h.hospital_name, h.hospital_address, h.hospital_mode 
+            FROM hr_managers hm
+            JOIN hospitals h ON hm.hospital_id = h.id
+            WHERE hm.id = %s
+        """, (hr_id,))
+        hr_data = cur.fetchone()
+        
+        print(f"HR Data: {hr_data}")
+        
+        if not hr_data:
+            flash("HR data not found.", "error")
+            return redirect("/hr-login")
+        
+        hospital_id = hr_data['hospital_id']
+        
+        # ✅ Get all department admins using only admins table
+        cur.execute("""
+            SELECT a.*, d.department_name 
+            FROM admins a
+            LEFT JOIN departments d ON a.department_id = d.id
+            WHERE a.hospital_id = %s 
+            ORDER BY a.created_at DESC
+        """, (hospital_id,))
+        dept_admins = cur.fetchall()
+        
+        print(f"Department Admins: {dept_admins}")
+        
+        con.close()
+        
+        # Pass BOTH dept_admins AND hr_data to template
+        return render_template("hr_view_dept_admins.html", 
+                             dept_admins=dept_admins, 
+                             hr_data=hr_data)
+    
+    except Exception as e:
+        print(f"View department admins error: {e}")
+        flash("Error loading department admins.", "error")
+        return redirect("/hr-dashboard")
+
+
+@app.route("/hr-edit-pharmacy-admin/<int:id>", methods=["GET","POST"])
+def hr_edit_pharmacy_admin(id):
+    if "hr_id" not in session:
+        return redirect("/hr-login")
+
+    hr_id = session["hr_id"]
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # HR hospital
+    cur.execute("SELECT hospital_id FROM hr_managers WHERE id=%s", (hr_id,))
+    hr = cur.fetchone()
+    hospital_id = hr["hospital_id"]
+
+    # Fetch admin
+    cur.execute("""
+        SELECT *
+        FROM pharmacy_admins
+        WHERE id=%s AND hospital_id=%s
+    """, (id, hospital_id))
+    admin = cur.fetchone()
+
+    if not admin:
+        con.close()
+        flash("Pharmacy admin not found", "error")
+        return redirect("/hr-view-pharmacy-admins")
+
+    if request.method == "POST":
+        cur.execute("""
+            UPDATE pharmacy_admins SET
+                full_name=%s,
+                gender=%s,
+                email=%s,
+                phone=%s,
+                username=%s,
+                is_active=%s,
+                can_login=%s
+            WHERE id=%s AND hospital_id=%s
+        """, (
+            request.form["full_name"],
+            request.form["gender"],
+            request.form["email"],
+            request.form["phone"],
+            request.form["username"],
+            request.form["is_active"],
+            request.form["can_login"],
+            id,
+            hospital_id
+        ))
+
+        con.commit()
+        con.close()
+
+        flash("Updated successfully", "success")
+        return redirect("/hr-view-pharmacy-admins")
+
+    con.close()
+    return render_template("hr_edit_pharmacy_admin.html", admin=admin)
+
+@app.route("/hr-delete-department/<int:id>", methods=["POST"])
+def hr_delete_department(id):
+    if "hr_id" not in session:
+        return redirect("/department_admins")
+    
+    hr_id = session["hr_id"]
+    
+    con = get_db()
+    cur = con.cursor()
+    
+    try:
+        # Ensure the department belongs to the HR's hospital
+        cur.execute("""
+            SELECT * FROM departments 
+            WHERE id = %s AND hospital_id IN 
+            (SELECT hospital_id FROM hr_managers WHERE id = %s)
+        """, (id, hr_id))
+        
+        department = cur.fetchone()
+        
+        if not department:
+            flash("Department not found or you do not have access.", "error")
+            return redirect(url_for("hr_view_departments"))
+        
+        # Delete the department
+        cur.execute("DELETE FROM departments WHERE id = %s", (id,))
+        con.commit()
+        flash("Department deleted successfully!", "danger")
+        return redirect(url_for("hr_view_departments"))
+    
+    except Exception as e:
+        print(f"Error deleting department: {e}")
+        flash("Error deleting department.", "error")
+        return redirect(url_for("hr_view_departments"))
+    finally:
+        con.close()
+
+#=================================================================================
+#HR-VIEW-DEPARTMENTS
+#======================================================================
+@app.route("/hr-view-dept-admin/<int:id>")
+def hr_view_dept_admin(id):
+    if "hr_id" not in session:
+        flash("Session expired. Please log in again.", "error")
+        return redirect("/hr-view-department-admins")
+
+    try:
+        con = get_db()
+        cur = con.cursor(dictionary=True)
+
+        cur.execute("""
+            SELECT a.*, d.department_name
+            FROM admins a
+            LEFT JOIN departments d ON a.department_id = d.id
+            WHERE a.id = %s
+        """, (id,))
+        admin = cur.fetchone()
+
+        if not admin:
+            flash("Admin not found.", "error")
+            return redirect("/hr-view-department-admins")
+
+        return render_template("hr_view_dept_admin.html", admin=admin)
+
+    except Exception as e:
+        print(f"Error: {e}")
+        flash("Error loading admin details.", "error")
+        return redirect("/hr-view-department-admins")
+
+@app.route("/hr-edit-dept-admin/<int:id>", methods=["GET", "POST"])
+def hr_edit_dept_admin(id):
+    if "hr_id" not in session:
+        flash("Session expired. Please log in again.", "error")
+        return redirect("/hr-view-department-admins")
+
+    try:
+        con = get_db()
+        cur = con.cursor(dictionary=True)
+
+        cur.execute("""
+            SELECT a.*, d.department_name
+            FROM admins a
+            LEFT JOIN departments d ON a.department_id = d.id
+            WHERE a.id = %s
+        """, (id,))
+        admin = cur.fetchone()
+
+        if not admin:
+            flash("Admin not found.", "error")
+            return redirect("/hr-view-department-admins")
+
+        if request.method == "POST":
+            admin_name = request.form["admin_name"]
+            admin_email = request.form["admin_email"]
+            admin_phone = request.form["admin_phone"]
+            admin_gender = request.form["admin_gender"]
+            admin_username = request.form["admin_username"]
+
+            cur.execute("""
+                UPDATE admins
+                SET admin_name=%s, admin_email=%s, admin_phone=%s,
+                    admin_gender=%s, admin_username=%s
+                WHERE id=%s
+            """, (admin_name, admin_email, admin_phone, admin_gender, admin_username, id))
+            con.commit()
+
+            flash("Admin details updated successfully.", "success")
+            return redirect("/hr-view-department-admins")
+
+        return render_template("hr_edit_dept_admin.html", admin=admin)
+
+    except Exception as e:
+        print(f"Error: {e}")
+        flash("Error updating admin.", "error")
+        return redirect("/hr-view-department-admins")
+
+@app.route("/hr-delete-dept-admin/<int:id>", methods=["POST"])
+def hr_delete_dept_admin(id):
+    if "hr_id" not in session:
+        flash("Session expired. Please log in again.", "error")
+        return redirect("/hr-view-department-admins")
+
+    try:
+        con = get_db()
+        cur = con.cursor()
+
+        cur.execute("DELETE FROM admins WHERE id = %s", (id,))
+        con.commit()
+
+        flash("Admin deleted successfully.", "success")
+        return redirect("/hr-view-department-admins")
+
+    except Exception as e:
+        print(f"Error: {e}")
+        flash("Error deleting admin.", "error")
+        return redirect("/hr-view-department-admins")
+
+
+#================================================================
+#pharmacy
+#==============================================================================
+from flask import (
+    request, render_template, redirect, url_for,
+    flash, session, current_app
+)
+from werkzeug.security import check_password_hash
+import uuid
+
+@app.route("/pharmacy-admin-login", methods=["GET", "POST"])
+def pharmacy_admin_login():
+    if request.method == "POST":
+        username = (request.form.get("username") or "").strip().lower()
+        password = (request.form.get("password") or "").strip()
+
+        if not username or not password:
+            flash("Please enter both username and password.", "danger")
+            return redirect(url_for("pharmacy_admin_login"))
+
+        con = get_db()
+        cur = con.cursor(dictionary=True)
+
+        try:
+            # (Optional) sanity check you are querying the expected DB
+            cur.execute("SELECT DATABASE() AS db_name")
+            db_row = cur.fetchone()
+            current_app.logger.info(f"[pharmacy login] DATABASE() = {db_row}")
+
+            # 1) Fetch user (active + can_login)
+            cur.execute(
+                """
+                SELECT pa.*, h.hospital_name
+                FROM pharmacy_admins pa
+                JOIN hospitals h ON pa.hospital_id = h.id
+                WHERE LOWER(TRIM(pa.username)) = %s
+                  AND pa.is_active = 1
+                  AND pa.can_login = 1
+                LIMIT 1
+                """,
+                (username,),
+            )
+            pharmacy_admin = cur.fetchone()
+            current_app.logger.info(
+                f"[pharmacy login] Searching username='{username}' found={bool(pharmacy_admin)}"
+            )
+
+            # If not found, run a diagnostic lookup WITHOUT active/can_login filters
+            # (helps catch cases where account got disabled or you're on a different DB)
+            if not pharmacy_admin:
+                cur.execute(
+                    """
+                    SELECT id, username, is_active, can_login
+                    FROM pharmacy_admins
+                    WHERE LOWER(TRIM(username)) = %s
+                    LIMIT 1
+                    """,
+                    (username,),
+                )
+                diag = cur.fetchone()
+                current_app.logger.warning(
+                    f"[pharmacy login] Not found with filters. Diagnostic row={diag}"
+                )
+
+                flash("User not found or account inactive.", "danger")
+                return redirect(url_for("pharmacy_admin_login"))
+
+            # 2) Check password
+            # IMPORTANT: this expects the hash was created with werkzeug (generate_password_hash)
+            if not check_password_hash(pharmacy_admin["password"], password):
+                current_app.logger.warning(
+                    f"[pharmacy login] Invalid password for username='{username}', id={pharmacy_admin['id']}"
+                )
+                flash("Invalid password.", "danger")
+                return redirect(url_for("pharmacy_admin_login"))
+
+            # 3) Successful login: update status + create session token
+            session_token = str(uuid.uuid4())
+
+            cur.execute(
+                """
+                UPDATE pharmacy_admins
+                SET last_login = NOW(),
+                    login_status = 'online'
+                WHERE id = %s
+                """,
+                (pharmacy_admin["id"],),
+            )
+            con.commit()
+
+            # 4) Set session variables
+            session.clear()  # optional but recommended to avoid old session junk
+            session["pharmacy_admin_id"] = pharmacy_admin["id"]
+            session["pharmacy_admin_name"] = pharmacy_admin["full_name"]
+            session["hospital_id"] = pharmacy_admin["hospital_id"]
+            session["hospital_name"] = pharmacy_admin["hospital_name"]
+            session["session_token"] = session_token
+
+        finally:
+            # Close primary connection
+            try:
+                cur.close()
+            except Exception:
+                pass
+            try:
+                con.close()
+            except Exception:
+                pass
+
+        # 5) Track session in DB (optional)
+        try:
+            con2 = get_db()
+            cur2 = con2.cursor()
+            cur2.execute(
+                """
+                INSERT INTO user_sessions
+                    (user_id, user_type, session_token, ip_address, user_agent)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (
+                    pharmacy_admin["id"],
+                    "pharmacy_admin",
+                    session_token,
+                    request.headers.get("X-Forwarded-For", request.remote_addr),
+                    request.headers.get("User-Agent"),
+                ),
+            )
+            con2.commit()
+        except Exception as e:
+            current_app.logger.exception(f"[pharmacy login] Session tracking error: {e}")
+        finally:
+            try:
+                cur2.close()
+            except Exception:
+                pass
+            try:
+                con2.close()
+            except Exception:
+                pass
+
+        flash(f"Welcome back, {pharmacy_admin['full_name']}!", "success")
+        return redirect(url_for("pharmacy_dashboard"))  # change to your actual endpoint
+
+    return render_template("pharmacy_admin_login.html")
+
+
+# -----------------------------
+# Helpers
+
+
+def require_pharmacy_login():
+    if "pharmacy_admin_id" not in session:
+        return False
+    return True
+
+
+
+# @app.route("/pharmacy-login", methods=["GET", "POST"])
+# def pharmacy_login():
+#     if request.method == "POST":
+#         username = request.form.get("username", "").strip()
+#         password = request.form.get("password", "").strip()
+
+#         con = get_db()
+#         cur = con.cursor(dictionary=True)
+
+#         cur.execute("""
+#             SELECT pa.*, h.hospital_name 
+#             FROM pharmacy_admins pa
+#             JOIN hospitals h ON pa.hospital_id = h.id
+#             WHERE pa.username = %s AND pa.can_login = 1
+#         """, (username,))
+        
+#         pharmacy_user = cur.fetchone()
+#         con.close()
+
+#         if pharmacy_user and check_password_hash(pharmacy_user["password"], password):
+#             session_token = str(uuid.uuid4())
+#             session["pharmacy_admin_id"] = pharmacy_user["id"]
+#             session["pharmacy_admin_name"] = pharmacy_user["full_name"]
+#             session["pharmacy_hospital_id"] = pharmacy_user["hospital_id"]
+#             session["pharmacy_hospital_name"] = pharmacy_user["hospital_name"]
+#             session["session_token"] = session_token
+            
+#             # Update status to online
+#             update_user_status(pharmacy_user["id"], 'pharmacy_admin', 'online', session_token)
+            
+#             flash("Login successful!", "success")
+#             return redirect("/pharmacy-dashboard")
+#         else:
+#             flash("Invalid username or password!", "error")
+
+#     return render_template("pharmacy_login.html")
+
+# @app.route("/pharmacy-logout")
+# def pharmacy_logout():
+#     pharmacy_id = session.get("pharmacy_admin_id")
+#     session_token = session.get("session_token")
+    
+#     if pharmacy_id:
+#         update_user_status(pharmacy_id, 'pharmacy_admin', 'offline', session_token)
+    
+#     session.clear()
+#     flash("Logged out successfully!", "success")
+#     return redirect("/pharmacy-login")
+
+# ---------------------------------------
+# DASHBOARD
+# ---------------------------------------
+@app.route("/pharmacy-dashboard")
+def pharmacy_dashboard():
+    hospital_id = session["hospital_id"]
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    cur.execute("SELECT COUNT(*) AS c FROM pharmacy_vendors WHERE hospital_id=%s AND is_active=1", (hospital_id,))
+    vendors_count = cur.fetchone()["c"]
+
+    cur.execute("SELECT COUNT(*) AS c FROM pharmacy_products WHERE hospital_id=%s AND is_active=1", (hospital_id,))
+    products_count = cur.fetchone()["c"]
+
+    cur.execute("SELECT COUNT(*) AS c FROM pharmacy_hsn_tax WHERE hospital_id=%s", (hospital_id,))
+    hsn_count = cur.fetchone()["c"]
+
+    # if you haven't made templates yet, keep 0 safely
+    try:
+        cur.execute("SELECT COUNT(*) AS c FROM pharmacy_import_templates WHERE hospital_id=%s AND is_active=1", (hospital_id,))
+        templates_count = cur.fetchone()["c"]
+    except Exception:
+        templates_count = 0
+
+    cur.execute("SELECT COALESCE(SUM(qty_on_hand),0) AS total_qty FROM pharmacy_stock_batches WHERE hospital_id=%s", (hospital_id,))
+    total_stock_qty = cur.fetchone()["total_qty"]
+
+    cur.execute("""
+        SELECT COUNT(*) AS low_count
+        FROM (
+          SELECT p.id, p.reorder_level, COALESCE(SUM(b.qty_on_hand),0) AS total_qty
+          FROM pharmacy_products p
+          LEFT JOIN pharmacy_stock_batches b
+            ON b.product_id=p.id AND b.hospital_id=p.hospital_id
+          WHERE p.hospital_id=%s AND p.is_active=1
+          GROUP BY p.id, p.reorder_level
+        ) t
+        WHERE t.reorder_level > 0 AND t.total_qty < t.reorder_level
+    """, (hospital_id,))
+    low_stock_count = cur.fetchone()["low_count"]
+
+    cur.execute("""
+        SELECT COUNT(*) AS exp_count
+        FROM pharmacy_stock_batches
+        WHERE hospital_id=%s
+          AND expiry_date IS NOT NULL
+          AND expiry_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)
+          AND qty_on_hand > 0
+    """, (hospital_id,))
+    near_expiry_30 = cur.fetchone()["exp_count"]
+
+    con.close()
+
+    return render_template(
+        "pharmacy_dashboard.html",
+        pharmacy_admin_name=session.get("pharmacy_admin_name"),
+        hospital_name=session.get("hospital_name"),
+        vendors_count=vendors_count,
+        products_count=products_count,
+        hsn_count=hsn_count,
+        templates_count=templates_count,
+        total_stock_qty=total_stock_qty,
+        low_stock_count=low_stock_count,
+        near_expiry_30=near_expiry_30
+    )
+
+@app.route("/pharmacy/stock/<int:product_id>/batches")
+def pharmacy_product_batches(product_id):
+    hospital_id = session["hospital_id"]
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    cur.execute("""
+        SELECT b.*, p.product_name
+        FROM pharmacy_stock_batches b
+        JOIN pharmacy_products p ON p.id=b.product_id
+        WHERE b.hospital_id=%s AND b.product_id=%s
+        ORDER BY (b.expiry_date IS NULL), b.expiry_date ASC, b.created_at DESC
+    """, (hospital_id, product_id))
+
+    batches = cur.fetchall()
+    con.close()
+
+    return render_template("pharmacy_product_batches.html", batches=batches)
+
+@app.route("/pharmacy/stock")
+def pharmacy_stock():
+    if not require_pharmacy_login():
+        return redirect("/pharmacy-admin-login")
+
+    hospital_id = session["hospital_id"]
+    q = (request.args.get("q") or "").strip()
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    params = [hospital_id]
+    q_filter = ""
+    if q:
+        q_filter = " AND (p.product_name LIKE %s OR p.generic_name LIKE %s OR p.brand_name LIKE %s) "
+        params += [f"%{q}%", f"%{q}%", f"%{q}%"]
+
+    cur.execute(f"""
+        SELECT
+          p.id AS product_id,
+          p.product_name,
+          p.reorder_level,
+          COALESCE(SUM(b.qty_on_hand),0) AS total_qty,
+          COUNT(CASE WHEN b.qty_on_hand > 0 THEN 1 END) AS active_batches,
+          MIN(CASE WHEN b.qty_on_hand > 0 THEN b.expiry_date END) AS nearest_expiry
+        FROM pharmacy_products p
+        LEFT JOIN pharmacy_stock_batches b
+          ON b.hospital_id=p.hospital_id AND b.product_id=p.id
+        WHERE p.hospital_id=%s AND p.is_active=1
+        {q_filter}
+        GROUP BY p.id, p.product_name, p.reorder_level
+        ORDER BY p.product_name ASC
+    """, tuple(params))
+
+    rows = cur.fetchall()
+    con.close()
+    return render_template("pharmacy_stock.html", rows=rows, q=q)
+
+@app.route("/pharmacy/alerts/low-stock")
+def pharmacy_low_stock_alerts():
+    if not require_pharmacy_login():
+        return redirect("/pharmacy-admin-login")
+
+    hospital_id = session["hospital_id"]
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    cur.execute("""
+        SELECT *
+        FROM (
+          SELECT
+            p.id AS product_id,
+            p.product_name,
+            p.reorder_level,
+            COALESCE(SUM(b.qty_on_hand),0) AS total_qty
+          FROM pharmacy_products p
+          LEFT JOIN pharmacy_stock_batches b
+            ON b.product_id=p.id AND b.hospital_id=p.hospital_id
+          WHERE p.hospital_id=%s AND p.is_active=1
+          GROUP BY p.id, p.product_name, p.reorder_level
+        ) t
+        WHERE t.reorder_level > 0 AND t.total_qty < t.reorder_level
+        ORDER BY (t.total_qty*1.0 / NULLIF(t.reorder_level,0)) ASC, t.product_name ASC
+    """, (hospital_id,))
+
+    rows = cur.fetchall()
+    con.close()
+    return render_template("pharmacy_low_stock_alerts.html", rows=rows)
+
+
+@app.route("/pharmacy/alerts/near-expiry")
+def pharmacy_near_expiry_alerts():
+    if not require_pharmacy_login():
+        return redirect("/pharmacy-admin-login")
+
+    hospital_id = session["hospital_id"]
+    days = int(request.args.get("days") or 30)
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    cur.execute("""
+        SELECT b.*, p.product_name
+        FROM pharmacy_stock_batches b
+        JOIN pharmacy_products p ON p.id=b.product_id
+        WHERE b.hospital_id=%s
+          AND b.qty_on_hand > 0
+          AND b.expiry_date IS NOT NULL
+          AND b.expiry_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL %s DAY)
+        ORDER BY b.expiry_date ASC, p.product_name ASC
+    """, (hospital_id, days))
+
+    rows = cur.fetchall()
+    con.close()
+    return render_template("pharmacy_near_expiry_alerts.html", rows=rows, days=days)
+
+
+@app.route("/pharmacy/purchase/new", methods=["GET", "POST"])
+def pharmacy_purchase_new():
+    if not require_pharmacy_login():
+        return redirect("/pharmacy-admin-login")
+
+    hospital_id = session["hospital_id"]
+    pharmacy_admin_id = session.get("pharmacy_admin_id")
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    cur.execute("""
+        SELECT id, vendor_name
+        FROM pharmacy_vendors
+        WHERE hospital_id=%s AND is_active=1
+        ORDER BY vendor_name
+    """, (hospital_id,))
+    vendors = cur.fetchall()
+
+    cur.execute("""
+        SELECT p.id, p.product_name,
+               COALESCE(h.tax_percent,0) AS tax_percent
+        FROM pharmacy_products p
+        LEFT JOIN pharmacy_hsn_tax h ON h.id=p.hsn_id
+        WHERE p.hospital_id=%s AND p.is_active=1
+        ORDER BY p.product_name
+    """, (hospital_id,))
+    products = cur.fetchall()
+
+    if request.method == "POST":
+        vendor_id = request.form.get("vendor_id")
+        invoice_no = (request.form.get("invoice_no") or "").strip()
+        invoice_date = request.form.get("invoice_date") or None
+
+        product_ids = request.form.getlist("product_id[]")
+        batch_nos   = request.form.getlist("batch_no[]")
+        expiries    = request.form.getlist("expiry_date[]")
+        qtys        = request.form.getlist("qty[]")
+        purchase_rates = request.form.getlist("purchase_rate[]")
+        mrps        = request.form.getlist("mrp[]")
+        sell_prices = request.form.getlist("selling_price[]")
+        tax_percents= request.form.getlist("tax_percent[]")
+
+        if not vendor_id or not product_ids:
+            con.close()
+            flash("Vendor and at least 1 item required.", "danger")
+            return redirect(url_for("pharmacy_purchase_new"))
+
+        try:
+            cur2 = con.cursor()
+
+            # header
+            cur2.execute("""
+                INSERT INTO pharmacy_purchases
+                  (hospital_id, vendor_id, invoice_no, invoice_date,
+                   subtotal, tax_total, grand_total, created_by_pharmacy_admin_id)
+                VALUES (%s,%s,%s,%s,0,0,0,%s)
+            """, (hospital_id, vendor_id, invoice_no, invoice_date, pharmacy_admin_id))
+            purchase_id = cur2.lastrowid
+
+            subtotal = 0.0
+            tax_total = 0.0
+
+            for i in range(len(product_ids)):
+                pid = product_ids[i]
+                bno = (batch_nos[i] or "").strip()
+                exp = expiries[i] or None
+                qty = int(qtys[i] or 0)
+
+                pr  = float(purchase_rates[i] or 0)
+                mrp = float(mrps[i] or 0)
+                sp  = float(sell_prices[i] or 0)
+                tp  = float(tax_percents[i] or 0)
+
+                if not pid or not bno or qty <= 0:
+                    continue
+
+                # upsert batch
+                cur.execute("""
+                    SELECT id
+                    FROM pharmacy_stock_batches
+                    WHERE hospital_id=%s AND product_id=%s AND batch_no=%s
+                    LIMIT 1
+                """, (hospital_id, pid, bno))
+                existing = cur.fetchone()
+
+                if existing:
+                    batch_id = existing["id"]
+                    cur2.execute("""
+                        UPDATE pharmacy_stock_batches
+                        SET qty_on_hand = qty_on_hand + %s,
+                            expiry_date = COALESCE(%s, expiry_date),
+                            purchase_rate=%s, mrp=%s, selling_price=%s
+                        WHERE id=%s AND hospital_id=%s
+                    """, (qty, exp, pr, mrp, sp, batch_id, hospital_id))
+                else:
+                    cur2.execute("""
+                        INSERT INTO pharmacy_stock_batches
+                          (hospital_id, product_id, batch_no, expiry_date, qty_on_hand,
+                           purchase_rate, mrp, selling_price)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                    """, (hospital_id, pid, bno, exp, qty, pr, mrp, sp))
+                    batch_id = cur2.lastrowid
+
+                line_base = qty * pr
+                line_tax  = (line_base * tp) / 100.0
+                line_total = line_base + line_tax
+
+                subtotal += line_base
+                tax_total += line_tax
+
+                # items
+                cur2.execute("""
+                    INSERT INTO pharmacy_purchase_items
+                      (purchase_id, product_id, batch_id, batch_no, expiry_date, qty,
+                       purchase_rate, mrp, selling_price, tax_percent, line_total)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """, (purchase_id, pid, batch_id, bno, exp, qty, pr, mrp, sp, tp, line_total))
+
+                # ledger
+                cur2.execute("""
+                    INSERT INTO pharmacy_stock_ledger
+                      (hospital_id, product_id, batch_id, txn_type, ref_table, ref_id,
+                       qty_in, qty_out, note)
+                    VALUES (%s,%s,%s,'PURCHASE','pharmacy_purchases',%s,%s,0,%s)
+                """, (hospital_id, pid, batch_id, purchase_id, qty, f"Purchase {invoice_no}".strip()))
+
+            grand_total = subtotal + tax_total
+
+            cur2.execute("""
+                UPDATE pharmacy_purchases
+                SET subtotal=%s, tax_total=%s, grand_total=%s
+                WHERE id=%s AND hospital_id=%s
+            """, (subtotal, tax_total, grand_total, purchase_id, hospital_id))
+
+            con.commit()
+            con.close()
+
+            flash("Purchase saved successfully.", "success")
+            return redirect(url_for("pharmacy_purchase_view", purchase_id=purchase_id))
+
+        except Exception as e:
+            con.rollback()
+            con.close()
+            print("Purchase error:", e)
+            flash("Purchase save failed.", "danger")
+            return redirect(url_for("pharmacy_purchase_new"))
+
+    con.close()
+    return render_template("pharmacy_purchase_new.html", vendors=vendors, products=products)
+
+@app.route("/pharmacy/purchase/<int:purchase_id>")
+def pharmacy_purchase_view(purchase_id):
+    if not require_pharmacy_login():
+        return redirect("/pharmacy-admin-login")
+
+    hospital_id = session["hospital_id"]
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    cur.execute("""
+        SELECT p.*, v.vendor_name
+        FROM pharmacy_purchases p
+        JOIN pharmacy_vendors v ON v.id=p.vendor_id
+        WHERE p.id=%s AND p.hospital_id=%s
+    """, (purchase_id, hospital_id))
+    head = cur.fetchone()
+    if not head:
+        con.close()
+        flash("Purchase not found.", "danger")
+        return redirect(url_for("pharmacy_dashboard"))
+
+    cur.execute("""
+        SELECT i.*, pr.product_name
+        FROM pharmacy_purchase_items i
+        JOIN pharmacy_products pr ON pr.id=i.product_id
+        WHERE i.purchase_id=%s
+        ORDER BY pr.product_name ASC
+    """, (purchase_id,))
+    items = cur.fetchall()
+
+    con.close()
+    return render_template("pharmacy_purchase_view.html", head=head, items=items)
+
+@app.route("/hr-delete-pharmacy-admin/<int:id>", methods=["POST"])
+def hr_delete_pharmacy_admin(id):
+    if "hr_id" not in session:
+        flash("Session expired. Please log in again.", "error")
+        return redirect("/hr-login")
+
+    try:
+        con = get_db()
+        cur = con.cursor()
+
+        cur.execute("DELETE FROM pharmacy_admins WHERE id = %s", (id,))
+        con.commit()
+        con.close()
+
+        flash("Pharmacy admin deleted successfully.", "success")
+        return redirect("/hr-view-pharmacy-admins")
+
+    except Exception as e:
+        print("Error:", e)
+        flash("Error deleting pharmacy admin.", "error")
+        return redirect("/hr-view-pharmacy-admins")
+
+# -----------------------------
+# VENDORS (Add + List)
+# -----------------------------
+@app.route("/pharmacy/vendors", methods=["GET", "POST"])
+def pharmacy_vendors():
+    if not require_pharmacy_login():
+        return redirect("/pharmacy-admin-login")
+
+    hospital_id = session["hospital_id"]
+
+    if request.method == "POST":
+        vendor_name = (request.form.get("vendor_name") or "").strip()
+        phone = (request.form.get("phone") or "").strip()
+        email = (request.form.get("email") or "").strip()
+        address = (request.form.get("address") or "").strip()
+        gstin = (request.form.get("gstin") or "").strip()
+        dl_no = (request.form.get("dl_no") or "").strip()
+
+        if not vendor_name:
+            flash("Vendor name is required.", "danger")
+            return redirect(url_for("pharmacy_vendors"))
+
+        try:
+            con = get_db()
+            cur = con.cursor()
+            cur.execute("""
+                INSERT INTO pharmacy_vendors (hospital_id, vendor_name, phone, email, address, gstin, dl_no)
+                VALUES (%s,%s,%s,%s,%s,%s,%s)
+            """, (hospital_id, vendor_name, phone, email, address, gstin, dl_no))
+            con.commit()
+            con.close()
+            flash("Vendor added successfully.", "success")
+        except Exception as e:
+            print("Vendor insert error:", e)
+            flash("Vendor add failed (maybe duplicate name).", "danger")
+
+        return redirect(url_for("pharmacy_vendors"))
+
+    # GET list
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+    cur.execute("""
+        SELECT *
+        FROM pharmacy_vendors
+        WHERE hospital_id=%s
+        ORDER BY vendor_name ASC
+    """, (hospital_id,))
+    vendors = cur.fetchall()
+    con.close()
+
+    return render_template("pharmacy_vendors.html", vendors=vendors)
+
+
+@app.route("/pharmacy/vendors/<int:vendor_id>/toggle")
+def pharmacy_vendor_toggle(vendor_id):
+    if not require_pharmacy_login():
+        return redirect("/pharmacy-admin-login")
+
+    hospital_id = session["hospital_id"]
+
+    con = get_db()
+    cur = con.cursor()
+    cur.execute("""
+        UPDATE pharmacy_vendors
+        SET is_active = IF(is_active=1,0,1)
+        WHERE id=%s AND hospital_id=%s
+    """, (vendor_id, hospital_id))
+    con.commit()
+    con.close()
+
+    flash("Vendor status updated.", "success")
+    return redirect(url_for("pharmacy_vendors"))
+
+
+# -----------------------------
+# PRODUCTS (Add + List)
+# -----------------------------
+
+
+# -----------------------------
+# OPENING STOCK (Add batch + Ledger OPENING)
+# -----------------------------
+@app.route("/pharmacy/opening-stock", methods=["GET", "POST"])
+def pharmacy_opening_stock():
+    if not require_pharmacy_login():
+        return redirect("/pharmacy-admin-login")
+
+    hospital_id = session["hospital_id"]
+    pharmacy_admin_id = session.get("pharmacy_admin_id")
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # product dropdown
+    cur.execute("""
+        SELECT id, product_name
+        FROM pharmacy_products
+        WHERE hospital_id=%s AND is_active=1
+        ORDER BY product_name
+    """, (hospital_id,))
+    products = cur.fetchall()
+
+    if request.method == "POST":
+        product_id = request.form.get("product_id")
+        batch_no = (request.form.get("batch_no") or "").strip()
+        expiry_date = request.form.get("expiry_date") or None
+        qty = int(request.form.get("qty") or 0)
+        purchase_rate = float(request.form.get("purchase_rate") or 0)
+        mrp = float(request.form.get("mrp") or 0)
+        selling_price = float(request.form.get("selling_price") or 0)
+
+        if not product_id or not batch_no or qty <= 0:
+            con.close()
+            flash("Product, batch no and qty are required.", "danger")
+            return redirect(url_for("pharmacy_opening_stock"))
+
+        try:
+            # upsert batch
+            cur2 = con.cursor(dictionary=True)
+            cur2.execute("""
+                SELECT id, qty_on_hand
+                FROM pharmacy_stock_batches
+                WHERE hospital_id=%s AND product_id=%s AND batch_no=%s
+                LIMIT 1
+            """, (hospital_id, product_id, batch_no))
+            existing = cur2.fetchone()
+
+            if existing:
+                batch_id = existing["id"]
+                cur3 = con.cursor()
+                cur3.execute("""
+                    UPDATE pharmacy_stock_batches
+                    SET qty_on_hand = qty_on_hand + %s,
+                        expiry_date = COALESCE(%s, expiry_date),
+                        purchase_rate=%s, mrp=%s, selling_price=%s
+                    WHERE id=%s AND hospital_id=%s
+                """, (qty, expiry_date, purchase_rate, mrp, selling_price, batch_id, hospital_id))
+            else:
+                cur3 = con.cursor()
+                cur3.execute("""
+                    INSERT INTO pharmacy_stock_batches
+                      (hospital_id, product_id, batch_no, expiry_date, qty_on_hand, purchase_rate, mrp, selling_price)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                """, (hospital_id, product_id, batch_no, expiry_date, qty, purchase_rate, mrp, selling_price))
+                batch_id = cur3.lastrowid
+
+            # ledger entry
+            cur4 = con.cursor()
+            cur4.execute("""
+                INSERT INTO pharmacy_stock_ledger
+                  (hospital_id, product_id, batch_id, txn_type, ref_table, ref_id, qty_in, qty_out, note)
+                VALUES (%s,%s,%s,'OPENING','pharmacy_stock_batches',%s,%s,0,'Opening stock entry')
+            """, (hospital_id, product_id, batch_id, batch_id, qty))
+
+            con.commit()
+            flash("Opening stock added successfully.", "success")
+
+        except Exception as e:
+            print("Opening stock error:", e)
+            flash("Opening stock update failed.", "danger")
+
+        con.close()
+        return redirect(url_for("pharmacy_opening_stock"))
+
+    # list latest batches
+    cur.execute("""
+        SELECT b.*, p.product_name
+        FROM pharmacy_stock_batches b
+        JOIN pharmacy_products p ON p.id=b.product_id
+        WHERE b.hospital_id=%s
+        ORDER BY b.created_at DESC
+        LIMIT 100
+    """, (hospital_id,))
+    batches = cur.fetchall()
+    con.close()
+
+    return render_template("pharmacy_opening_stock.html", products=products, batches=batches)
+
+@app.route("/pharmacy/batch/<int:batch_id>/delete", methods=["POST"])
+def pharmacy_batch_delete(batch_id):
+    if not require_pharmacy_login():
+        return redirect("/pharmacy-admin-login")
+
+    hospital_id = session["hospital_id"]
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    cur.execute("""
+        SELECT id, qty_on_hand
+        FROM pharmacy_stock_batches
+        WHERE id=%s AND hospital_id=%s
+    """, (batch_id, hospital_id))
+    b = cur.fetchone()
+
+    if not b:
+        con.close()
+        flash("Batch not found.", "danger")
+        return redirect(url_for("pharmacy_opening_stock"))
+
+    if int(b["qty_on_hand"] or 0) > 0:
+        con.close()
+        flash("Cannot delete batch with qty > 0. Adjust it to 0 first.", "warning")
+        return redirect(url_for("pharmacy_opening_stock"))
+
+    cur2 = con.cursor()
+    cur2.execute("DELETE FROM pharmacy_stock_batches WHERE id=%s AND hospital_id=%s", (batch_id, hospital_id))
+
+    con.commit()
+    con.close()
+
+    flash("Batch deleted.", "success")
+    return redirect(url_for("pharmacy_opening_stock"))
+
+
+@app.route("/pharmacy/batch/<int:batch_id>/edit", methods=["POST"])
+def pharmacy_batch_edit(batch_id):
+    if not require_pharmacy_login():
+        return redirect("/pharmacy-admin-login")
+
+    hospital_id = session["hospital_id"]
+
+    expiry_date = request.form.get("expiry_date") or None
+    qty_on_hand = int(request.form.get("qty_on_hand") or 0)
+    purchase_rate = float(request.form.get("purchase_rate") or 0)
+    mrp = float(request.form.get("mrp") or 0)
+    selling_price = float(request.form.get("selling_price") or 0)
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    cur.execute("""
+        SELECT id, product_id
+        FROM pharmacy_stock_batches
+        WHERE id=%s AND hospital_id=%s
+    """, (batch_id, hospital_id))
+    b = cur.fetchone()
+
+    if not b:
+        con.close()
+        flash("Batch not found.", "danger")
+        return redirect(url_for("pharmacy_opening_stock"))
+
+    cur2 = con.cursor()
+    cur2.execute("""
+        UPDATE pharmacy_stock_batches
+        SET expiry_date=%s,
+            qty_on_hand=%s,
+            purchase_rate=%s,
+            mrp=%s,
+            selling_price=%s
+        WHERE id=%s AND hospital_id=%s
+    """, (expiry_date, qty_on_hand, purchase_rate, mrp, selling_price, batch_id, hospital_id))
+
+    con.commit()
+    con.close()
+
+    flash("Batch updated.", "success")
+    return redirect(url_for("pharmacy_opening_stock"))
+
+
+@app.route("/pharmacy/batch/<int:batch_id>/adjust", methods=["POST"])
+def pharmacy_batch_adjust(batch_id):
+    if not require_pharmacy_login():
+        return redirect("/pharmacy-admin-login")
+
+    hospital_id = session["hospital_id"]
+
+    direction = request.form.get("direction")  # IN / OUT
+    qty = int(request.form.get("qty") or 0)
+    note = (request.form.get("note") or "").strip()
+
+    if direction not in ("IN", "OUT") or qty <= 0:
+        flash("Invalid adjustment.", "danger")
+        return redirect(url_for("pharmacy_opening_stock"))
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    cur.execute("""
+        SELECT id, product_id, qty_on_hand
+        FROM pharmacy_stock_batches
+        WHERE id=%s AND hospital_id=%s
+    """, (batch_id, hospital_id))
+    b = cur.fetchone()
+
+    if not b:
+        con.close()
+        flash("Batch not found.", "danger")
+        return redirect(url_for("pharmacy_opening_stock"))
+
+    current_qty = int(b["qty_on_hand"] or 0)
+    product_id = b["product_id"]
+
+    if direction == "OUT" and qty > current_qty:
+        con.close()
+        flash("Cannot remove more than available qty.", "danger")
+        return redirect(url_for("pharmacy_opening_stock"))
+
+    cur2 = con.cursor()
+
+    if direction == "IN":
+        cur2.execute("""
+            UPDATE pharmacy_stock_batches
+            SET qty_on_hand = qty_on_hand + %s
+            WHERE id=%s AND hospital_id=%s
+        """, (qty, batch_id, hospital_id))
+        qty_in, qty_out = qty, 0
+    else:
+        cur2.execute("""
+            UPDATE pharmacy_stock_batches
+            SET qty_on_hand = qty_on_hand - %s
+            WHERE id=%s AND hospital_id=%s
+        """, (qty, batch_id, hospital_id))
+        qty_in, qty_out = 0, qty
+
+    cur2.execute("""
+        INSERT INTO pharmacy_stock_ledger
+          (hospital_id, product_id, batch_id, txn_type, ref_table, ref_id, qty_in, qty_out, note)
+        VALUES (%s,%s,%s,'ADJUSTMENT','pharmacy_stock_batches',%s,%s,%s,%s)
+    """, (hospital_id, product_id, batch_id, batch_id, qty_in, qty_out, note or f"Manual adjustment {direction}"))
+
+    con.commit()
+    con.close()
+
+    flash("Qty adjusted.", "success")
+    return redirect(url_for("pharmacy_opening_stock"))
+
+
+@app.route("/pharmacy/vendors/add", methods=["GET", "POST"])
+def pharmacy_vendor_add():
+    if "pharmacy_admin_id" not in session:
+        return redirect("/pharmacy-admin-login")
+
+    if request.method == "POST":
+        hospital_id = session.get("hospital_id")
+
+        vendor_name = request.form.get("vendor_name")
+        phone = request.form.get("phone")
+        email = request.form.get("email")
+        address = request.form.get("address")
+        gstin = request.form.get("gstin")
+        dl_no = request.form.get("dl_no")
+
+        if not vendor_name:
+            flash("Vendor name is required", "danger")
+            return redirect(url_for("pharmacy_vendor_add"))
+
+        con = get_db()
+        cur = con.cursor()
+        cur.execute("""
+            INSERT INTO pharmacy_vendors
+            (hospital_id, vendor_name, phone, email, address, gstin, dl_no)
+            VALUES (%s,%s,%s,%s,%s,%s,%s)
+        """, (hospital_id, vendor_name, phone, email, address, gstin, dl_no))
+        con.commit()
+        con.close()
+
+        flash("Vendor added successfully", "success")
+        return redirect(url_for("pharmacy_vendors"))
+
+    return render_template(
+        "pharmacy_vendor_add.html",
+        hospital_name=session.get("hospital_name"),
+        pharmacy_admin_name=session.get("pharmacy_admin_name")
+    )
+
+
+@app.route("/pharmacy/logout")
+def pharmacy_admin_logout():
+    session.clear()
+    return redirect("/pharmacy-admin-login")
+
+
+# -------------------------
+# HSN / TAX MASTER
+# -------------------------
+@app.route("/pharmacy/hsn-tax/add", methods=["GET", "POST"])
+def pharmacy_hsn_tax_add():
+    hospital_id = session.get("hospital_id")
+    if not hospital_id:
+        flash("Hospital not found in session.", "danger")
+        return redirect(url_for("pharmacy_dashboard"))
+
+    if request.method == "POST":
+        hsn_code = request.form.get("hsn_code", "").strip()
+        tax_percent = request.form.get("tax_percent", "0").strip()
+        description = request.form.get("description", "").strip()
+
+        if not hsn_code:
+            flash("HSN code is required.", "danger")
+            return redirect(url_for("pharmacy_hsn_tax_add"))
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                INSERT INTO pharmacy_hsn_tax (hospital_id, hsn_code, tax_percent, description)
+                VALUES (%s, %s, %s, %s)
+            """, (hospital_id, hsn_code, tax_percent, description))
+            conn.commit()
+            flash("HSN/Tax added successfully.", "success")
+        except mysql.connector.IntegrityError:
+            flash("This HSN code already exists for this hospital.", "warning")
+        finally:
+            cur.close()
+            conn.close()
+
+        return redirect(url_for("pharmacy_hsn_tax_list"))
+
+    return render_template("pharmacy_hsn_tax_add.html")
+
+@app.route("/pharmacy/hsn-tax")
+def pharmacy_hsn_tax_list():
+    hospital_id = session.get("hospital_id")
+    if not hospital_id:
+        flash("Hospital not found in session.", "danger")
+        return redirect(url_for("pharmacy_dashboard"))
+
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+    cur.execute("""
+        SELECT id, hsn_code, tax_percent, description
+        FROM pharmacy_hsn_tax
+        WHERE hospital_id=%s
+        ORDER BY hsn_code ASC
+    """, (hospital_id,))
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    return render_template("pharmacy_hsn_tax.html", rows=rows)
+
+
+# -------------------------
+# PRODUCT MASTER
+# -------------------------
+
+@app.route("/pharmacy/products")
+def pharmacy_products():
+    hospital_id = session.get("hospital_id")
+    if not hospital_id:
+        flash("Hospital not found in session.", "danger")
+        return redirect(url_for("pharmacy_dashboard"))
+
+    q = request.args.get("q", "").strip()
+
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+
+    if q:
+        cur.execute("""
+            SELECT p.id, p.product_name, p.generic_name, p.brand_name, p.unit, p.pack_size,
+                   p.reorder_level, p.is_active,
+                   h.hsn_code, h.tax_percent
+            FROM pharmacy_products p
+            LEFT JOIN pharmacy_hsn_tax h ON h.id = p.hsn_id
+            WHERE p.hospital_id=%s
+              AND (p.product_name LIKE %s OR p.generic_name LIKE %s OR p.brand_name LIKE %s)
+            ORDER BY p.product_name ASC
+        """, (hospital_id, f"%{q}%", f"%{q}%", f"%{q}%"))
+    else:
+        cur.execute("""
+            SELECT p.id, p.product_name, p.generic_name, p.brand_name, p.unit, p.pack_size,
+                   p.reorder_level, p.is_active,
+                   h.hsn_code, h.tax_percent
+            FROM pharmacy_products p
+            LEFT JOIN pharmacy_hsn_tax h ON h.id = p.hsn_id
+            WHERE p.hospital_id=%s
+            ORDER BY p.product_name ASC
+        """, (hospital_id,))
+
+    products = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    return render_template("pharmacy_products.html", products=products, q=q)
+
+@app.route("/pharmacy/products/add", methods=["GET", "POST"])
+def pharmacy_product_add():
+    hospital_id = session.get("hospital_id")
+    if not hospital_id:
+        flash("Hospital not found in session.", "danger")
+        return redirect(url_for("pharmacy_dashboard"))
+
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+
+    # Load HSN dropdown
+    cur.execute("""
+        SELECT id, hsn_code, tax_percent
+        FROM pharmacy_hsn_tax
+        WHERE hospital_id=%s
+        ORDER BY hsn_code ASC
+    """, (hospital_id,))
+    hsn_list = cur.fetchall()
+
+    if request.method == "POST":
+        product_name = request.form.get("product_name", "").strip()
+        generic_name = request.form.get("generic_name", "").strip()
+        brand_name = request.form.get("brand_name", "").strip()
+        unit = request.form.get("unit", "").strip()
+        pack_size = request.form.get("pack_size", "").strip()
+        reorder_level = request.form.get("reorder_level", "0").strip()
+        hsn_id = request.form.get("hsn_id")
+
+        if not product_name:
+            flash("Product name is required.", "danger")
+            cur.close()
+            conn.close()
+            return redirect(url_for("pharmacy_product_add"))
+
+        if hsn_id == "" or hsn_id is None:
+            hsn_id = None
+
+        cur2 = conn.cursor()
+        try:
+            cur2.execute("""
+                INSERT INTO pharmacy_products
+                (hospital_id, product_name, generic_name, brand_name, hsn_id, unit, pack_size, reorder_level)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (hospital_id, product_name, generic_name, brand_name, hsn_id, unit, pack_size, reorder_level))
+            conn.commit()
+            flash("Product added successfully.", "success")
+        except mysql.connector.IntegrityError:
+            flash("This product already exists for this hospital.", "warning")
+        finally:
+            cur2.close()
+            cur.close()
+            conn.close()
+
+        return redirect(url_for("pharmacy_products"))
+
+    cur.close()
+    conn.close()
+    return render_template("pharmacy_product_add.html", hsn_list=hsn_list)
+
+
+@app.route("/pharmacy/products/<int:product_id>/toggle", methods=["POST"])
+def pharmacy_product_toggle(product_id):
+    hospital_id = session.get("hospital_id")
+    if not hospital_id:
+        flash("Hospital not found in session.", "danger")
+        return redirect(url_for("pharmacy_dashboard"))
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        UPDATE pharmacy_products
+        SET is_active = CASE WHEN is_active=1 THEN 0 ELSE 1 END
+        WHERE id=%s AND hospital_id=%s
+    """, (product_id, hospital_id))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    flash("Product status updated.", "success")
+    return redirect(url_for("pharmacy_products"))
+
+# @app.route("/pharmacy/import/mapping", methods=["GET", "POST"])
+# def pharmacy_import_mapping():
+#     if not require_pharmacy_login():
+#         return redirect("/pharmacy-admin-login")
+    
+#     upload_info = session.get('upload_info')
+#     if not upload_info:
+#         flash('No upload session found', 'danger')
+#         return redirect(url_for('pharmacy_import'))
+    
+#     if request.method == 'GET':
+#         # Read file headers and sample data
+#         file_path = upload_info['temp_path']
+#         file_type = upload_info['file_type']
+        
+#         if file_type == 'CSV':
+#             import pandas as pd
+#             df = pd.read_csv(file_path, nrows=3)
+#             headers = df.columns.tolist()
+#             sample_data = df.to_dict('records')
+#         else:  # XLSX
+#             import pandas as pd
+#             df = pd.read_excel(file_path, nrows=3)
+#             headers = df.columns.tolist()
+#             sample_data = df.to_dict('records')
+        
+#         # Define your system fields
+#         system_fields = [
+#             'product_name', 'batch_no', 'expiry_date', 'qty', 
+#             'mrp', 'purchase_rate', 'hsn_code', 'manufacturer'
+#         ]
+        
+#         return render_template('pharmacy_import_mapping.html', 
+#                              headers=headers, 
+#                              sample_data=sample_data, 
+#                              system_fields=system_fields,
+#                              upload_info=upload_info)
+    
+#     else:  # POST - Save mapping
+#         template_name = request.form.get('template_name')
+#         field_mappings = {}
+        
+#         for field in request.form:
+#             if field.startswith('field_'):
+#                 system_field = field[6:]  # Remove 'field_' prefix
+#                 vendor_column = request.form[field]
+#                 if vendor_column:
+#                     field_mappings[system_field] = vendor_column
+        
+#         # Save template and mappings
+#         con = get_db()
+#         cur = con.cursor()
+        
+#         cur.execute("""
+#             INSERT INTO pharmacy_import_templates 
+#             (hospital_id, vendor_id, template_name, file_type, header_row, is_active)
+#             VALUES (%s, %s, %s, %s, 1, 1)
+#         """, (upload_info['hospital_id'], upload_info['vendor_id'], 
+#               template_name, upload_info['file_type']))
+        
+#         template_id = cur.lastrowid
+        
+#         for system_field, vendor_column in field_mappings.items():
+#             cur.execute("""
+#                 INSERT INTO pharmacy_import_mappings 
+#                 (template_id, canonical_field, vendor_column_name, is_required)
+#                 VALUES (%s, %s, %s, 1)
+#             """, (template_id, system_field, vendor_column))
+        
+#         con.commit()
+#         con.close()
+        
+#         flash(f'Template "{template_name}" created successfully!', 'success')
+#         return redirect(url_for('pharmacy_import_preview', template_id=template_id))
+#     # Show mapping UI for GET: load sample file, extract headers, show mapping form
+#     ...
+
+
+# @app.route("/pharmacy/purchase")
+# def pharmacy_purchase(): return "Purchase page"
+
+# @app.route("/pharmacy/billing")
+# def pharmacy_billing(): return "Billing page"
+
+# @app.route("/pharmacy/stock")
+# def pharmacy_stock(): return "Stock page"
+
+# @app.route("/pharmacy/sales")
+# def pharmacy_sale_history(): return "Sale History page"
+
+# @app.route("/pharmacy/wholesalers")
+# def pharmacy_wholesalers(): return "Wholesalers page"
+
+# @app.route("/pharmacy/register")
+# def pharmacy_register(): return "Register page"
+
+# @app.route("/pharmacy/change-password")
+# def pharmacy_change_password(): return "Change Password page"
+
+# @app.route("/pharmacy/manage-employee")
+# def pharmacy_manage_employee(): return "Manage Employee page"
+
+
+# @app.route("/pharmacy-dashboard")
+# def pharmacy_dashboard():
+#     if "pharmacy_admin_id" not in session:
+#         return redirect("/pharmacy-admin-login")
+
+#     return render_template(
+#         "pharmacy_dashboard.html",
+#         pharmacy_admin_name=session.get("pharmacy_admin_name"),
+#         hospital_name=session.get("hospital_name")
+#     )
+
+# ============================
+# REPRESENTATIVE LOGIN
+# ============================
+@app.route("/rep-login", methods=["GET", "POST"])
+def rep_login():
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    if request.method == "POST":
+        username = request.form.get("username", "").strip().lower()
+        password = request.form.get("password", "").strip()
+
+        # Fetch representative by username (case-insensitive)
+        cur.execute("""
+            SELECT hr.*, h.hospital_name 
+            FROM hospital_representatives hr
+            JOIN hospitals h ON hr.hospital_id = h.id
+            WHERE LOWER(hr.rep_username) = %s
+        """, (username,))
+        rep = cur.fetchone()
+
+        # Validate user & password & active status
+        if (not rep) or (not rep.get("is_active", 1)) or \
+           (not check_password_hash(rep["rep_password"], password)):
+            flash("Invalid username/password or inactive account.", "danger")
+            return render_template("rep_login.html", form=request.form)
+
+        # ✅ Successful login
+        session["rep_id"] = rep["id"]
+        session["rep_name"] = rep["rep_name"]
+        session["rep_hospital_name"] = rep["hospital_name"]
+
+        # Update last_login
+        cur.execute("""
+            UPDATE hospital_representatives
+            SET last_login = NOW()
+            WHERE id = %s
+        """, (rep["id"],))
+        con.commit()
+
+        return redirect("/rep-dashboard")
+
+    return render_template("rep_login.html", form={})
+#rep-add-admin
+# ============================
+# REPRESENTATIVE → ADD ADMIN
+# ============================
+
+@app.route("/rep-add-admin", methods=["GET", "POST"])
+def rep_add_admin():
+    if "rep_id" not in session:
+        return redirect("/rep-login")
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    if request.method == "POST":
+        # Admin details (NOT representative)
+        admin_name = request.form.get("name", "").strip()
+        admin_gender = request.form.get("gender")
+        admin_address = request.form.get("address", "").strip()
+        admin_phone = request.form.get("phone", "").strip()
+        admin_email = request.form.get("email", "").strip()
+        admin_username = request.form.get("username", "").strip()
+        department_id = request.form.get("department_id")
+        password_raw = request.form.get("password", "").strip()
+
+        admin_password_hashed = generate_password_hash(password_raw)
+        rep_id = session["rep_id"]
+
+        # Optional: fetch hospital info (only for email display)
+        cur.execute("""
+            SELECT h.hospital_name
+            FROM hospitals h
+            JOIN hospital_representatives hr ON hr.hospital_id = h.id
+            WHERE hr.id = %s
+        """, (rep_id,))
+        hospital = cur.fetchone()
+
+        hospital_name = hospital["hospital_name"] if hospital else "Your Hospital"
+
+        try:
+            # First, get hospital_id
+            cur.execute("SELECT hospital_id FROM hospital_representatives WHERE id = %s", (rep_id,))
+            rep_info = cur.fetchone()
+            hospital_id = rep_info["hospital_id"] if rep_info else None
+
+            # Debug prints
+            print(f"DEBUG INSERT: rep_id={rep_id}, hospital_id={hospital_id}, department_id={department_id}")
+
+            # Then insert with correct columns
+            cur.execute("""
+                INSERT INTO admins
+                (rep_id, hospital_id, department_id, admin_name, admin_gender, admin_address,
+                admin_phone, admin_email, admin_username, admin_password)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (
+                rep_id,
+                hospital_id,
+                department_id,
+                admin_name,
+                admin_gender,
+                admin_address,
+                admin_phone,
+                admin_email,
+                admin_username,
+                admin_password_hashed
+            ))
+            
+            con.commit()  # THIS IS THE MISSING LINE!
+            print("DEBUG: INSERT successful and committed")
+            
+        except Exception as e:
+            con.rollback()
+            print("DB ERROR:", e)
+            flash("Failed to add admin. Username or email may already exist.", "danger")
+            return redirect("/rep-add-admin")
+        flash("Admin added successfully.", "success")
+        return redirect("/rep-admins")
+        
+        # Get hospital_id for rep
+        cur.execute("SELECT hospital_id FROM hospital_representatives WHERE id = %s", (rep_id,))
+        rep_info = cur.fetchone()
+        hospital_id = rep_info["hospital_id"] if rep_info else None
+
+        # Load departments for this hospital
+        cur.execute("""
+            SELECT id, department_name
+            FROM departments
+            WHERE hospital_id = %s
+            ORDER BY department_name
+        """, (hospital_id,))
+        departments = cur.fetchall()
+
+        # Send ADMIN email (correct role + login)
+        try:
+            login_url = url_for("admin_login", _external=True)
+            subject = "Hospital Admin Login Credentials"
+            body = f"""
+Dear {admin_name},
+
+You have been added as a Hospital Admin for {hospital_name}.
+
+Admin Login URL: {login_url}
+Username: {admin_username}
+Password: {password_raw}
+
+Please log in and change your password immediately.
+
+Regards,
+Hospital Management System
+"""
+            send_email(admin_email, subject, body)
+        except Exception as e:
+            print("Email error:", e)
+
+        flash("Admin added successfully.", "success")
+        return redirect("/rep-admins")
+
+    return render_template("rep_add_admin.html")
+# ============================
+# REPRESENTATIVE → VIEW ADMINS
+@app.route("/rep-admins")
+def rep_admins():
+    if "rep_id" not in session:
+        return redirect("/rep-login")
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+    
+    rep_id = session["rep_id"]
+    print(f"DEBUG: Looking for admins with rep_id = {rep_id}")
+    
+    # Debug: Check what's in admins table
+    cur.execute("SELECT id, rep_id, admin_name FROM admins")
+    all_admins = cur.fetchall()
+    print(f"DEBUG: All admins in database: {all_admins}")
+    
+    # Debug: Check what's in hospital_representatives table
+    cur.execute("SELECT id, hospital_id FROM hospital_representatives WHERE id = %s", (rep_id,))
+    rep_info = cur.fetchone()
+    print(f"DEBUG: Rep info: {rep_info}")
+
+    cur.execute("""
+        SELECT
+            a.id,
+            h.hospital_name,
+            a.admin_name,
+            a.department_id,
+            a.admin_email,
+            a.admin_phone,
+            a.admin_username,
+            a.is_active,
+            DATE_FORMAT(a.created_at, '%d-%m-%Y %H:%i') AS created_on
+        FROM admins a
+        JOIN hospital_representatives hr ON a.rep_id = hr.id
+        JOIN hospitals h ON hr.hospital_id = h.id
+        WHERE a.rep_id = %s
+        ORDER BY a.id DESC
+    """, (rep_id,))
+    admins = cur.fetchall()
+    
+    print(f"DEBUG: Found {len(admins)} admins")
+    print(f"DEBUG: Admins data: {admins}")
+    
+    return render_template("rep_admin_list.html", admins=admins)
+# REPRESENTATIVE → EDIT ADMIN
+# ============================
+@app.route("/rep-edit-admin/<int:id>", methods=["GET", "POST"])
+def rep_edit_admin(id):
+    if "rep_id" not in session:
+        return redirect("/rep-login")
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # make sure this admin belongs to this representative
+    cur.execute("SELECT * FROM admins WHERE id = %s AND rep_id = %s",
+                (id, session["rep_id"]))
+    admin = cur.fetchone()
+    if not admin:
+        flash("Admin not found.", "danger")
+        return redirect("/rep-admins")
+
+    if request.method == "POST":
+        admin_name = request.form.get("name", "").strip()
+        admin_gender = request.form.get("gender")
+        admin_address = request.form.get("address", "").strip()
+        admin_phone = request.form.get("phone", "").strip()
+        admin_email = request.form.get("email", "").strip()
+        admin_username = request.form.get("username", "").strip()
+        department = request.form.get("department", "").strip() or None
+        password_raw = request.form.get("password", "").strip()
+
+        if password_raw:
+            admin_password_hashed = generate_password_hash(password_raw)
+            cur.execute("""
+                UPDATE admins
+                SET admin_name=%s, admin_gender=%s, admin_address=%s,
+                    admin_phone=%s, admin_email=%s,
+                    admin_username=%s, admin_password=%s,
+                    department=%s
+                WHERE id=%s AND rep_id=%s
+            """, (
+                admin_name, admin_gender, admin_address,
+                admin_phone, admin_email,
+                admin_username, admin_password_hashed,
+                department, id, session["rep_id"]
+            ))
+        else:
+            cur.execute("""
+                UPDATE admins
+                SET admin_name=%s, admin_gender=%s, admin_address=%s,
+                    admin_phone=%s, admin_email=%s,
+                    admin_username=%s, department=%s
+                WHERE id=%s AND rep_id=%s
+            """, (
+                admin_name, admin_gender, admin_address,
+                admin_phone, admin_email,
+                admin_username, department,
+                id, session["rep_id"]
+            ))
+
+        con.commit()
+        flash("Admin updated successfully.", "success")
+        return redirect("/rep-admins")
+
+    return render_template("rep_edit_admin.html", admin=admin)
+
+#rep forgot password
+# ============================
+# REPRESENTATIVE → DELETE ADMIN
+# ============================
+@app.route("/receptionistdelete-admin/<int:id>")
+def rep_delete_admin(id):
+    if "rep_id" not in session:
+        return redirect("/rep-login")
+
+    con = get_db()
+    cur = con.cursor()
+
+    cur.execute("DELETE FROM admins WHERE id=%s AND rep_id=%s",
+                (id, session["rep_id"]))
+    con.commit()
+
+    flash("Admin deleted successfully.", "success")
+    return redirect("/rep-admins")
+# ============================
+# ADMIN LOGIN (COMMON PORTAL)
+
+# @app.route("/admin-login", methods=["GET", "POST"])
+# def admin_login():
+#     con = get_db()
+#     cur = con.cursor(dictionary=True)
+
+#     if request.method == "POST":
+#         username = request.form.get("username", "").strip().lower()
+#         password = request.form.get("password", "").strip()
+#         remember = True if request.form.get("remember") == "on" else False
+
+#         print(f"Login attempt - Username: {username}")
+
+#         # ✅ Query only the admins table (no separate department_admins table)
+#         cur.execute("""
+#             SELECT a.*, h.hospital_name, d.department_name, 'admin' as user_type
+#             FROM admins a
+#             JOIN hospitals h ON a.hospital_id = h.id
+#             LEFT JOIN departments d ON a.department_id = d.id
+#             WHERE LOWER(a.admin_username) = %s
+#         """, (username,))
+#         user = cur.fetchone()
+
+#         if not user:
+#             flash("Invalid username or password.", "danger")
+#             con.close()
+#             return render_template("admin_login.html", form=request.form)
+
+#         # Check password
+#         if not check_password_hash(user["admin_password"], password):
+#             flash("Invalid username or password.", "danger")
+#             con.close()
+#             return render_template("admin_login.html", form=request.form)
+
+#         # Set session variables
+#         session["login_nonce"] = secrets.token_hex(16) 
+#         session["admin_id"] = user["id"]
+#         session["admin_name"] = user["admin_name"]
+#         session["admin_hospital_name"] = user["hospital_name"]
+#         session["admin_department"] = user["department_name"] if user["department_name"] else "General"
+#         session["user_type"] = "admin"
+#         session["hospital_id"] = user["hospital_id"] 
+            
+#         # Update last login
+#         cur.execute("""
+#             UPDATE admins
+#             SET is_active = 1, last_login = NOW()
+#             WHERE id = %s
+#         """, (user["id"],))
+
+#         session.permanent = remember
+#         if remember:
+#             app.permanent_session_lifetime = timedelta(days=7)
+
+#         con.commit()
+#         con.close()
+        
+#         return redirect("/admin-dashboard")
+
+#     con.close()
+#     return render_template("admin_login.html", form={})
+# # ============================
+# ADMIN FORGOT PASSWORD (EMAIL + OTP + NEW PASSWORD)
+# ============================
+@app.route("/forgot-password", methods=["GET", "POST"])
+def admin_forgot_password():
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # pre-fill email if we stored it in session earlier
+    email_prefill = session.get("admin_fp_email", "")
+
+    if request.method == "POST":
+        action = request.form.get("action")
+
+        # 1) SEND OTP
+        if action == "send_otp":
+            email = request.form.get("email", "").strip().lower()
+
+            if not email:
+                flash("Please enter your email.", "danger")
+                return render_template("admin_forgot_password.html", email=email)
+
+            # find admin by email
+            cur.execute("""
+                SELECT * FROM admins
+                WHERE LOWER(admin_email) = %s
+            """, (email,))
+            admin = cur.fetchone()
+
+            if not admin:
+                flash("No admin account found with that email.", "danger")
+                return render_template("admin_forgot_password.html", email=email)
+
+            # generate 6-digit OTP
+            otp = str(random.randint(100000, 999999))
+
+            # store OTP + email + timestamp in session (valid for 10 minutes)
+            session["admin_fp_email"] = email
+            session["admin_fp_otp"] = otp
+            session["admin_fp_time"] = time.time()
+
+            # send OTP email
+            try:
+                subject = "Admin Password Reset OTP"
+                body = f"""
+Dear {admin['admin_name']},
+
+You requested to reset your admin password.
+
+Your OTP is: {otp}
+
+This OTP is valid for 10 minutes.
+
+If you did not request this, please ignore this email.
+
+Regards,
+Hospital Management System
+"""
+                send_email(email, subject, body)
+                flash("OTP has been sent to your email.", "success")
+            except Exception as e:
+                print("Error sending admin OTP email:", e)
+                flash("Failed to send OTP email.", "warning")
+
+            return render_template("admin_forgot_password.html", email=email)
+
+        # 2) RESET PASSWORD USING OTP
+        elif action == "reset_password":
+            email = request.form.get("email", "").strip().lower()
+            otp = request.form.get("otp", "").strip()
+            new_pass = request.form.get("new_password", "").strip()
+            confirm_pass = request.form.get("confirm_password", "").strip()
+
+            # basic checks
+            if not (email and otp and new_pass and confirm_pass):
+                flash("Please fill in all fields.", "danger")
+                return render_template("admin_forgot_password.html", email=email)
+
+            if new_pass != confirm_pass:
+                flash("New password and confirm password do not match.", "danger")
+                return render_template("admin_forgot_password.html", email=email)
+
+            # check OTP from session
+            sess_email = session.get("admin_fp_email")
+            sess_otp = session.get("admin_fp_otp")
+            sess_time = session.get("admin_fp_time")
+
+            if not (sess_email and sess_otp and sess_time):
+                flash("OTP session expired or not requested. Please request OTP again.", "danger")
+                return render_template("admin_forgot_password.html", email=email)
+
+            # email must match the one that requested OTP
+            if email != sess_email:
+                flash("This email does not match the one used to request OTP.", "danger")
+                return render_template("admin_forgot_password.html", email=email)
+
+            # check OTP validity (10 minutes)
+            if time.time() - sess_time > 600:  # 600 seconds = 10 minutes
+                flash("OTP has expired. Please request a new one.", "danger")
+                # clear OTP session
+                session.pop("admin_fp_email", None)
+                session.pop("admin_fp_otp", None)
+                session.pop("admin_fp_time", None)
+                return render_template("admin_forgot_password.html", email=email)
+
+            if otp != sess_otp:
+                flash("Invalid OTP.", "danger")
+                return render_template("admin_forgot_password.html", email=email)
+
+            # OTP valid → update password
+            cur.execute("""
+                SELECT * FROM admins
+                WHERE LOWER(admin_email) = %s
+            """, (email,))
+            admin = cur.fetchone()
+
+            if not admin:
+                flash("Admin not found for this email.", "danger")
+                return render_template("admin_forgot_password.html", email=email)
+
+            hashed = generate_password_hash(new_pass)
+
+            cur.execute("""
+                UPDATE admins
+                SET admin_password = %s
+                WHERE id = %s
+            """, (hashed, admin["id"]))
+            con.commit()
+
+            # clear OTP session
+            session.pop("admin_fp_email", None)
+            session.pop("admin_fp_otp", None)
+            session.pop("admin_fp_time", None)
+
+            flash("Password reset successful. Please log in with your new password.", "success")
+            return redirect(url_for("admin_login"))
+
+    # GET request
+    return render_template("admin_forgot_password.html", email=email_prefill)
+
+# ===================================================================
+# ADMIN DASHBOARD + ADD STAFF
+#================================================================
+#admin dashboard
+# ============================
+@app.route("/admin-dashboard", methods=["GET", "POST"])
+def admin_dashboard():
+    if "admin_id" not in session:
+        return redirect("/admin-login")
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    admin_id = session["admin_id"]
+    admin_name = session.get("admin_name")
+
+    # ✅ Get hospital for admin
+    cur.execute("""
+        SELECT h.hospital_name, h.id AS hospital_id
+        FROM admins a
+        JOIN hospitals h ON h.id = a.hospital_id
+        WHERE a.id = %s
+    """, (admin_id,))
+    row = cur.fetchone()
+    hospital_name = row["hospital_name"] if row else "Unknown"
+    hospital_id = row["hospital_id"] if row else None
+
+    # ✅ Get admin department info
+    cur.execute("""
+        SELECT d.department_name, d.id AS department_id
+        FROM admins a
+        LEFT JOIN departments d ON a.department_id = d.id
+        WHERE a.id = %s
+    """, (admin_id,))
+    dept_row = cur.fetchone()
+    admin_department = dept_row["department_name"] if dept_row and dept_row["department_name"] else "General"
+    admin_department_id = dept_row["department_id"] if dept_row else None
+
+    # ✅ Get all departments for dropdown
+    cur.execute("""
+        SELECT id, department_name
+        FROM departments
+        WHERE hospital_id = %s
+        ORDER BY department_name
+    """, (hospital_id,))
+    departments = cur.fetchall()
+
+    # ---------- HANDLE ADD STAFF ----------
+    if request.method == "POST":
+        role = request.form.get("role")
+        full_name = request.form.get("full_name", "").strip()
+        gender = request.form.get("gender")
+        email = request.form.get("email", "").strip()
+        phone = request.form.get("phone", "").strip()
+        age = request.form.get("age", "").strip()
+        address = request.form.get("address", "").strip()
+        department_id = request.form.get("department_id") or None
+        username = request.form.get("username", "").strip()
+        password_r = request.form.get("password", "").strip()
+        rfid_uid = request.form.get("rfid_uid", "").strip()
+
+        # ✅ Basic required validation (STOP if failed)
+        # Determine mode
+        is_enterprise = len(departments) > 0
+
+        # Required fields for both modes (department excluded)
+        if not (role and full_name and gender and email and phone and age and address and username and password_r and rfid_uid):
+            flash("All fields are required (including RFID scan).", "danger")
+            con.close()
+            return redirect("/admin-dashboard")
+
+        # Department required ONLY in enterprise mode
+        if is_enterprise and not department_id:
+            flash("Please select a department.", "danger")
+            con.close()
+            return redirect("/admin-dashboard")
+
+        # ✅ Validate phone
+        if not phone.isdigit() or len(phone) != 10:
+            flash("Phone must be exactly 10 digits.", "danger")
+            con.close()
+            return redirect("/admin-dashboard")
+
+        # ✅ Validate role
+        if role not in ("Receptionist", "Nurse", "Doctor", "Receptionist + Nurse"):
+            flash("Invalid role selected.", "danger")
+            con.close()
+            return redirect("/admin-dashboard")
+
+        # ✅ Validate age
+        try:
+            age_int = int(age)
+        except ValueError:
+            flash("Age must be a number.", "danger")
+            con.close()
+            return redirect("/admin-dashboard")
+
+        password_hash = generate_password_hash(password_r)
+
+        # ✅ Insert staff
+        try:
+            cur.execute("""
+                INSERT INTO staff_members
+                (admin_id, department_id, role, full_name, gender, email, phone, age, address, username, rfid_uid, password)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (admin_id, department_id, role, full_name, gender, email, phone, age_int, address, username, rfid_uid, password_hash))
+
+            con.commit()
+
+        except Exception as e:
+            # ✅ If duplicate email/username/rfid_uid etc.
+            print("DB Insert Error:", e)
+            flash("Duplicate entry detected (Email / Username / RFID already exists).", "danger")
+            con.close()
+            return redirect("/admin-dashboard")
+
+        # ✅ Send login email
+        try:
+            if role == "Receptionist":
+                login_url = url_for("receptionist_login", _external=True)
+            elif role == "Nurse":
+                login_url = url_for("nurse_login", _external=True)
+            elif role == "Receptionist + Nurse":
+                login_url = url_for("staff.receptionist_nurse_login", _external=True)
+            else:
+                login_url = url_for("doctor_login", _external=True)
+
+            subject = f"Your {role} Login Credentials"
+            body = f"""
+Dear {full_name},
+
+You have been added as a {role} at {hospital_name}.
+
+Login URL : {login_url}
+Username  : {username}
+Password  : {password_r}
+
+Please log in and change your password after first login.
+
+Regards,
+Hospital Management System
+"""
+            send_email(email, subject, body)
+            flash(f"{role} added and credentials sent via email.", "success")
+
+        except Exception as e:
+            print("Error sending staff email:", e)
+            flash(f"{role} added, but email sending failed.", "warning")
+
+        con.close()
+        return redirect("/admin-dashboard")
+
+    # ---------- SHOW STAFF LIST (GET) ----------
+    # ✅ IMPORTANT: department_name aliased as department (matches HTML: s.department)
+    cur.execute("""
+        SELECT sm.id, sm.role, sm.full_name,
+               d.department_name AS department,
+               sm.email, sm.phone, sm.username, sm.is_active, sm.can_login,
+               DATE_FORMAT(sm.created_at, '%d-%m-%Y %H:%i') AS created_on
+        FROM staff_members sm
+        LEFT JOIN departments d ON sm.department_id = d.id
+        WHERE sm.admin_id = %s
+        ORDER BY sm.id DESC
+    """, (admin_id,))
+    staff_list = cur.fetchall()
+
+    con.close()
+
+    context = {
+        "admin_name": admin_name,
+        "hospital_name": hospital_name,
+        "staff_list": staff_list,
+        "admin_department": admin_department,
+        "admin_department_id": admin_department_id,
+        "user_type": "dept_admin" if admin_department_id else "hospital_admin",
+        "departments": departments
+    }
+
+
+    return render_template("admin_dashboard.html", **context)
+
+
+
+# ============================
+# ADMIN → EDIT STAFF
+# ============================
+@app.route("/admin-staff/edit/<int:staff_id>", methods=["GET", "POST"])
+def admin_edit_staff(staff_id):
+    if "admin_id" not in session:
+        return redirect("/admin-login")
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+    
+    admin_id = session["admin_id"]
+    user_type = session.get("user_type", "admin")
+
+    # Check if this staff belongs to this admin (handle both admin types)
+    if user_type == "admin":
+        cur.execute("SELECT * FROM staff_members WHERE id=%s AND admin_id=%s",
+                    (staff_id, admin_id))
+    else:  # dept_admin
+        cur.execute("""
+            SELECT sm.* FROM staff_members sm
+            JOIN departments d ON d.department_name = sm.department
+            JOIN department_admins da ON da.department_id = d.id
+            WHERE sm.id = %s AND da.id = %s
+        """, (staff_id, admin_id))
+    
+    staff = cur.fetchone()
+    if not staff:
+        flash("Staff not found or access denied.", "danger")
+        return redirect("/admin-dashboard")
+
+    if request.method == "POST":
+        role      = request.form.get("role")
+        full_name = request.form.get("full_name", "").strip()
+        gender    = request.form.get("gender")
+        email     = request.form.get("email", "").strip()
+        phone     = request.form.get("phone", "").strip()
+        age       = request.form.get("age", "").strip()
+        address   = request.form.get("address", "").strip()
+        department = request.form.get("department", "").strip() or None
+        username  = request.form.get("username", "").strip()
+        password  = request.form.get("password", "").strip()  # optional
+
+        # simple validation
+        try:
+            age_int = int(age)
+        except ValueError:
+            flash("Age must be a number.", "danger")
+            return render_template("admin_edit_staff.html", staff=staff)
+
+        if not phone.isdigit() or len(phone) != 10:
+            flash("Phone must be 10 digits.", "danger")
+            return render_template("admin_edit_staff.html", staff=staff)
+
+        # Update staff record (no admin_id constraint in WHERE clause)
+        if password:
+            password_hash = generate_password_hash(password)
+            cur.execute("""
+                UPDATE staff_members
+                SET role=%s, full_name=%s, gender=%s,
+                    email=%s, phone=%s, age=%s, address=%s, department=%s,
+                    username=%s, password=%s
+                WHERE id=%s
+            """, (role, full_name, gender,
+                  email, phone, age_int, address, department,
+                  username, password_hash, staff_id))
+        else:
+            cur.execute("""
+                UPDATE staff_members
+                SET role=%s, full_name=%s, gender=%s,
+                    email=%s, phone=%s, age=%s, address=%s,
+                    department=%s, username=%s
+                WHERE id=%s
+            """, (role, full_name, gender,
+                  email, phone, age_int, address, 
+                  department, username, staff_id))
+
+        con.commit()
+        flash("Staff updated successfully.", "success")
+        return redirect("/admin-dashboard")
+
+    return render_template("admin_edit_staff.html", staff=staff)
+
+
+# ============================
+# ADMIN → DELETE STAFF
+# ============================
+@app.route("/admin-staff/delete/<int:staff_id>")
+def admin_delete_staff(staff_id):
+    if "admin_id" not in session:
+        return redirect("/admin-login")
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+    
+    admin_id = session["admin_id"]
+    user_type = session.get("user_type", "admin")
+
+    # Verify staff belongs to this admin
+    if user_type == "admin":
+        cur.execute("SELECT id FROM staff_members WHERE id=%s AND admin_id=%s",
+                    (staff_id, admin_id))
+    else:  # dept_admin
+        cur.execute("""
+            SELECT sm.id FROM staff_members sm
+            JOIN departments d ON d.department_name = sm.department
+            JOIN department_admins da ON da.department_id = d.id
+            WHERE sm.id = %s AND da.id = %s
+        """, (staff_id, admin_id))
+    
+    staff = cur.fetchone()
+    if not staff:
+        flash("Staff not found or access denied.", "danger")
+        return redirect("/admin-dashboard")
+
+    # Delete the staff (no admin_id constraint needed since we verified access)
+    cur.execute("DELETE FROM staff_members WHERE id=%s", (staff_id,))
+    con.commit()
+
+    flash("Staff deleted successfully.", "success")
+    return redirect("/admin-dashboard")
+
+
+# ============================
+# ADMIN → BLOCK / UNBLOCK STAFF
+# ============================
+@app.route("/admin-staff/toggle/<int:staff_id>")
+def admin_toggle_staff(staff_id):
+    if "admin_id" not in session:
+        return redirect("/admin-login")
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+    
+    admin_id = session["admin_id"]
+    user_type = session.get("user_type", "admin")
+
+    # Get staff and verify access
+    if user_type == "admin":
+        cur.execute("SELECT id, can_login FROM staff_members WHERE id=%s AND admin_id=%s",
+                    (staff_id, admin_id))
+    else:  # dept_admin
+        cur.execute("""
+            SELECT sm.id, sm.can_login FROM staff_members sm
+            JOIN departments d ON d.department_name = sm.department
+            JOIN department_admins da ON da.department_id = d.id
+            WHERE sm.id = %s AND da.id = %s
+        """, (staff_id, admin_id))
+    
+    staff = cur.fetchone()
+    if not staff:
+        flash("Staff not found or access denied.", "danger")
+        return redirect("/admin-dashboard")
+
+    new_status = 0 if staff["can_login"] else 1
+    cur.execute("UPDATE staff_members SET can_login=%s WHERE id=%s",
+                (new_status, staff_id))
+    con.commit()
+
+    if new_status == 1:
+        flash("Staff account unblocked. They can log in again.", "success")
+    else:
+        flash("Staff account blocked. They can no longer log in.", "warning")
+
+    return redirect("/admin-dashboard")
+
+# @app.route("/admin-logout")
+# def admin_logout():
+#     admin_id = session.get("admin_id")
+
+#     if admin_id:
+#         con = get_db()
+#         cur = con.cursor()
+#         cur.execute("UPDATE admins SET is_active = 0 WHERE id = %s", (admin_id,))
+#         con.commit()
+
+#     session.pop("admin_id", None)
+#     session.pop("admin_name", None)
+#     session.pop("admin_hospital_name", None)
+#     return redirect("/admin-login")
+#rep forgot password
+
+@app.route("/rep-forgot-password", methods=["GET", "POST"])
+def rep_forgot_password():
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    email_prefill = session.get("rep_fp_email", "")
+
+    if request.method == "POST":
+        action = request.form.get("action")
+
+        # 1) SEND OTP
+        if action == "send_otp":
+            email = request.form.get("email", "").strip().lower()
+
+            if not email:
+                flash("Please enter your email.", "danger")
+                return render_template("rep_forgot_password.html", email=email)
+
+            # Fetch rep by email
+            cur.execute("""
+                SELECT * FROM hospital_representatives WHERE LOWER(rep_email) = %s
+            """, (email,))
+            rep = cur.fetchone()
+
+            if not rep:
+                flash("No representative account found with that email.", "danger")
+                return render_template("rep_forgot_password.html", email=email)
+
+            # Generate 6-digit OTP
+            otp = str(random.randint(100000, 999999))
+
+            # Store OTP, email, timestamp in session (valid 10min)
+            session["rep_fp_email"] = email
+            session["rep_fp_otp"] = otp
+            session["rep_fp_time"] = time.time()
+
+            # Send the OTP email
+            try:
+                subject = "Representative Password Reset OTP"
+                body = f"""
+Dear {rep['rep_name']},
+
+You requested a password reset for your representative account.
+
+Your OTP is: {otp}
+
+This OTP is valid for 10 minutes.
+
+If you did not request this, ignore this email.
+
+Regards,
+Hospital Management System
+"""
+                send_email(email, subject, body)
+                flash("OTP has been sent to your email.", "success")
+            except Exception as e:
+                print("Error sending rep OTP email:", e)
+                flash("Failed to send OTP email.", "warning")
+
+            return render_template("rep_forgot_password.html", email=email)
+
+        # 2) RESET PASSWORD USING OTP
+        elif action == "reset_password":
+            email = request.form.get("email", "").strip().lower()
+            otp = request.form.get("otp", "").strip()
+            new_pass = request.form.get("new_password", "").strip()
+            confirm_pass = request.form.get("confirm_password", "").strip()
+
+            if not (email and otp and new_pass and confirm_pass):
+                flash("Please fill in all fields.", "danger")
+                return render_template("rep_forgot_password.html", email=email)
+
+            if new_pass != confirm_pass:
+                flash("New password and confirm password do not match.", "danger")
+                return render_template("rep_forgot_password.html", email=email)
+
+            # Session data:
+            sess_email = session.get("rep_fp_email")
+            sess_otp = session.get("rep_fp_otp")
+            sess_time = session.get("rep_fp_time")
+
+            if not (sess_email and sess_otp and sess_time):
+                flash("OTP session expired or not requested. Please request OTP again.", "danger")
+                return render_template("rep_forgot_password.html", email=email)
+
+            if email != sess_email:
+                flash("This email does not match the one used to request OTP.", "danger")
+                return render_template("rep_forgot_password.html", email=email)
+
+            if time.time() - sess_time > 600:
+                flash("OTP has expired. Please request a new one.", "danger")
+                session.pop("rep_fp_email", None)
+                session.pop("rep_fp_otp", None)
+                session.pop("rep_fp_time", None)
+                return render_template("rep_forgot_password.html", email=email)
+
+            if otp != sess_otp:
+                flash("Invalid OTP.", "danger")
+                return render_template("rep_forgot_password.html", email=email)
+
+            # All good, update password
+            cur.execute("""
+                SELECT * FROM hospital_representatives WHERE LOWER(rep_email) = %s
+            """, (email,))
+            rep = cur.fetchone()
+
+            if not rep:
+                flash("Representative not found for this email.", "danger")
+                return render_template("rep_forgot_password.html", email=email)
+
+            hashed = generate_password_hash(new_pass)
+            cur.execute("""
+                UPDATE hospital_representatives
+                SET rep_password = %s WHERE id = %s
+            """, (hashed, rep['id']))
+            con.commit()
+
+            # Clear OTP session
+            session.pop("rep_fp_email", None)
+            session.pop("rep_fp_otp", None)
+            session.pop("rep_fp_time", None)
+
+            flash("Password reset successful. Please log in with your new password.", "success")
+            return redirect(url_for("rep_login"))
+
+    return render_template("rep_forgot_password.html", email=email_prefill)
+
+
+#logout
+@app.route("/rep-logout")
+def rep_logout():
+    session.pop("rep_id", None)
+    session.pop("rep_name", None)
+    session.pop("rep_hospital_name", None)
+    return redirect("/rep-login")
+
+
+
+# BED MANAGEMENT
+# @app.route("/mark-occupied/<int:bed_id>")
+# def mark_occupied(bed_id):
+#     con = get_db()
+#     cur = con.cursor()
+#     cur.execute("UPDATE beds SET is_occupied=1 WHERE id=%s", (bed_id,))
+#     con.commit()
+#     con.close()
+#     flash("Bed marked as occupied.", "success")
+#     return redirect(url_for("bed_management"))
+
+# @app.route("/mark-free/<int:bed_id>")
+# def mark_free(bed_id):
+#     con = get_db()
+#     cur = con.cursor()
+#     cur.execute("UPDATE beds SET is_occupied=0 WHERE id=%s", (bed_id,))
+#     con.commit()
+#     con.close()
+#     flash("Bed marked as free.", "success")
+#     return redirect(url_for("bed_management"))
+
+
+# @app.route("/edit-bed/<int:bed_id>", methods=["GET", "POST"])
+# def edit_bed(bed_id):
+#     # Only allow access if admin is logged in
+#     if "admin_id" not in session:
+#         flash("You must be logged in as admin.", "danger")
+#         return redirect(url_for("admin_login"))  # change as needed
+
+#     con = get_db()
+#     cur = con.cursor(dictionary=True)
+
+#     # Fetch the bed record to edit
+#     cur.execute("""
+#         SELECT b.*, d.department_name FROM beds b
+#         JOIN departments d ON b.department_id = d.id
+#         WHERE b.id = %s
+#     """, (bed_id,))
+#     bed = cur.fetchone()
+
+#     # If bed does not exist redirect back
+#     if not bed:
+#         con.close()
+#         flash("Bed not found.", "danger")
+#         return redirect(url_for("bed_management"))
+
+#     # Fetch all departments for the dropdown
+#     cur.execute("SELECT id, department_name FROM departments WHERE hospital_id = %s", (bed["hospital_id"],))
+#     departments = cur.fetchall()
+
+#     # Handle POST (form submission)
+#     if request.method == "POST":
+#         department_id = request.form.get("department_id")
+#         floor_number = request.form.get("floor_number")
+#         room_number = request.form.get("room_number")
+#         bed_number = request.form.get("bed_number")
+
+#         try:
+#             cur.execute("""
+#                 UPDATE beds
+#                 SET department_id=%s, floor_number=%s, room_number=%s, bed_number=%s
+#                 WHERE id=%s
+#             """, (department_id, floor_number, room_number, bed_number, bed_id))
+#             con.commit()
+#             flash("Bed updated successfully.", "success")
+#         except Exception as e:
+#             con.rollback()
+#             flash(f"Error updating bed: {str(e)}", "danger")
+#         con.close()
+#         return redirect(url_for("bed_management"))
+    
+#     con.close()
+#     # Render a simple edit form (reuse your add form HTML but pre-fill the values)
+#     return render_template(
+#         "edit_bed.html",
+#         bed=bed,
+#         departments=departments
+#     )
+
+@app.route("/bed-management", methods=["GET", "POST"])
+def bed_management():
+    # Check if user is logged in as admin or staff (nurse)
+    if "admin_id" not in session and "staff_id" not in session:
+        return redirect("/admin-login")
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # Get user details and role
+    admin_id = session.get("admin_id")
+    staff_id = session.get("staff_id")
+    staff_role = session.get("staff_role")
+    
+    # Determine user role
+    user_role = "admin" if admin_id else "nurse"
+    
+    # For staff, only allow nurses to access
+    # For staff (only when NOT admin), only allow nurses
+    if (not admin_id) and staff_id and (staff_role != "Nurse"):
+        flash("Access denied. Only nurses can access bed management.", "danger")
+        return redirect("/staff-dashboard")
+
+    print(f"User Role: {user_role}, Admin ID: {admin_id}, Staff ID: {staff_id}")
+
+    # Find hospital for the user
+    hospital_id = None
+    if admin_id:
+        cur.execute("SELECT hospital_id FROM admins WHERE id = %s", (admin_id,))
+        result = cur.fetchone()
+        hospital_id = result["hospital_id"] if result else None
+    elif staff_id:
+        cur.execute("SELECT sm.hospital_id FROM staff_members sm INNER JOIN admins a ON sm.admin_id = a.id WHERE sm.id = %s", (staff_id,))
+        result = cur.fetchone()
+        hospital_id = result["hospital_id"] if result else None
+
+    if not hospital_id:
+        con.close()
+        flash("Hospital not found for your account.", "danger")
+        return redirect("/admin-dashboard" if admin_id else "/nurse-dashboard")
+
+    # Fetch departments created by HR for this hospital
+    cur.execute("""
+        SELECT id, department_name, description 
+        FROM departments 
+        WHERE hospital_id = %s 
+        ORDER BY department_name
+    """, (hospital_id,))
+    departments = cur.fetchall()
+
+    # Handle POST - Only ADMIN can add beds
+    if request.method == "POST":
+        if user_role != "admin":
+            flash("Only administrators can add beds.", "danger")
+            return redirect(url_for("bed_management"))
+        
+        department_id = request.form.get("department_id")
+        floor_number = request.form.get("floor_number")
+        room_number = request.form.get("room_number")
+        bed_number = request.form.get("bed_number")
+
+        if not all([department_id, floor_number, room_number, bed_number]):
+            flash("All fields are required.", "danger")
+        else:
+            try:
+                # Check if this bed combination already exists
+                cur.execute("""
+                    SELECT id FROM beds 
+                    WHERE hospital_id = %s AND department_id = %s AND floor_number = %s 
+                    AND room_number = %s AND bed_number = %s
+                """, (hospital_id, department_id, floor_number, room_number, bed_number))
+                
+                existing_bed = cur.fetchone()
+                if existing_bed:
+                    flash("A bed with this combination already exists in the selected department.", "warning")
+                else:
+                    cur.execute("""
+                        INSERT INTO beds (hospital_id, department_id, floor_number, room_number, bed_number, is_occupied, created_at)
+                        VALUES (%s, %s, %s, %s, %s, 0, NOW())
+                    """, (hospital_id, int(department_id), int(floor_number), room_number, bed_number))
+                    
+                    con.commit()
+                    flash("Bed added successfully!", "success")
+                
+            except Exception as e:
+                con.rollback()
+                flash(f"Error adding bed: {str(e)}", "danger")
+        
+        return redirect(url_for("bed_management"))
+
+    # Pagination
+    page = int(request.args.get("page", 1))
+    records_per_page = 10
+    offset = (page - 1) * records_per_page
+
+    # Get existing beds with department names (simplified query without nurse tracking for now)
+    cur.execute("""
+        SELECT b.id, b.bed_number, b.floor_number, b.room_number, b.is_occupied,
+               b.created_at, b.patient_id, d.department_name
+        FROM beds b
+        INNER JOIN departments d ON b.department_id = d.id
+        WHERE b.hospital_id = %s
+        ORDER BY d.department_name, b.floor_number, b.room_number, b.bed_number
+        LIMIT %s OFFSET %s
+    """, (hospital_id, records_per_page, offset))
+    beds = cur.fetchall()
+    
+    # Get total count for pagination
+    cur.execute("SELECT COUNT(*) as total_beds FROM beds WHERE hospital_id = %s", (hospital_id,))
+    total_count = cur.fetchone()["total_beds"]
+    total_pages = (total_count + records_per_page - 1) // records_per_page
+
+    # Get bed statistics
+    cur.execute("""
+        SELECT 
+            COUNT(*) as total_beds,
+            SUM(is_occupied) as occupied_beds,
+            COUNT(*) - SUM(is_occupied) as available_beds
+        FROM beds 
+        WHERE hospital_id = %s
+    """, (hospital_id,))
+    stats = cur.fetchone() or {"total_beds": 0, "occupied_beds": 0, "available_beds": 0}
+
+    con.close()
+
+    return render_template(
+        "bed_management.html",
+        departments=departments,
+        beds=beds,
+        page=page,
+        total_pages=total_pages,
+        total_count=total_count,
+        user_role=user_role,
+        stats=stats,
+        records_per_page=records_per_page
+    )
+
+# Route for NURSES to update bed status
+@app.route("/update-bed-status/<int:bed_id>", methods=["POST"])
+def update_bed_status(bed_id):
+    # Only NURSES (staff members with role = 'Nurse') can update bed status
+    if "staff_id" not in session or session.get("staff_role") != "Nurse":
+        return jsonify({"success": False, "error": "Only nurses can update bed status"}), 401
+
+    try:
+        data = request.get_json()
+        new_status = data.get("status")
+        patient_id = data.get("patient_id", None)  # Optional patient ID
+        
+        staff_id = session.get("staff_id")
+        
+        con = get_db()
+        cur = con.cursor(dictionary=True)
+        
+        # Get nurse's hospital
+        cur.execute("""
+            SELECT sm.hospital_id 
+            FROM staff_members sm 
+            INNER JOIN admins a ON sm.admin_id = a.id 
+            WHERE sm.id = %s
+        """, (staff_id,))
+        result = cur.fetchone()
+        hospital_id = result["hospital_id"] if result else None
+
+        if not hospital_id:
+            return jsonify({"success": False, "error": "Hospital not found"}), 404
+
+        # Update bed status
+        is_occupied = 1 if new_status == "occupied" else 0
+        
+        cur.execute("""
+            UPDATE beds 
+            SET is_occupied = %s, 
+                patient_id = %s,
+                updated_at = NOW()
+            WHERE id = %s AND hospital_id = %s
+        """, (is_occupied, patient_id, bed_id, hospital_id))
+        
+        if cur.rowcount > 0:
+            con.commit()
+            con.close()
+            return jsonify({"success": True, "message": "Bed status updated successfully"})
+        else:
+            con.close()
+            return jsonify({"success": False, "error": "Bed not found"}), 404
+            
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+# Route for ADMINS to edit bed details
+@app.route("/edit-bed/<int:bed_id>", methods=["GET", "POST"])
+def edit_bed(bed_id):
+    # Only ADMINS can edit bed details
+    if "admin_id" not in session:
+        flash("Only administrators can edit bed details.", "danger")
+        return redirect("/bed-management")
+
+    admin_id = session.get("admin_id")
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # Get admin's hospital
+    cur.execute("SELECT hospital_id FROM admins WHERE id = %s", (admin_id,))
+    result = cur.fetchone()
+    hospital_id = result["hospital_id"] if result else None
+
+    if not hospital_id:
+        flash("Hospital not found.", "danger")
+        return redirect("/bed-management")
+
+    if request.method == "POST":
+        department_id = request.form.get("department_id")
+        floor_number = request.form.get("floor_number")
+        room_number = request.form.get("room_number")
+        bed_number = request.form.get("bed_number")
+
+        try:
+            cur.execute("""
+                UPDATE beds 
+                SET department_id = %s, floor_number = %s, room_number = %s, bed_number = %s,
+                    updated_at = NOW()
+                WHERE id = %s AND hospital_id = %s
+            """, (department_id, floor_number, room_number, bed_number, bed_id, hospital_id))
+            
+            con.commit()
+            flash("Bed updated successfully!", "success")
+            return redirect("/bed-management")
+            
+        except Exception as e:
+            flash(f"Error updating bed: {str(e)}", "danger")
+
+    # Get bed details and departments for GET request
+    cur.execute("""
+        SELECT b.*, d.department_name 
+        FROM beds b 
+        INNER JOIN departments d ON b.department_id = d.id 
+        WHERE b.id = %s AND b.hospital_id = %s
+    """, (bed_id, hospital_id))
+    bed = cur.fetchone()
+
+    cur.execute("""
+        SELECT id, department_name 
+        FROM departments 
+        WHERE hospital_id = %s 
+        ORDER BY department_name
+    """, (hospital_id,))
+    departments = cur.fetchall()
+
+    con.close()
+
+    if not bed:
+        flash("Bed not found.", "danger")
+        return redirect("/bed-management")
+
+    return render_template("edit_bed.html", bed=bed, departments=departments)
+
+# Route for ADMINS to delete beds
+@app.route("/delete-bed/<int:bed_id>")
+def delete_bed(bed_id):
+    # Only ADMINS can delete beds
+    if "admin_id" not in session:
+        flash("Only administrators can delete beds.", "danger")
+        return redirect("/bed-management")
+
+    admin_id = session.get("admin_id")
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # Get admin's hospital
+    cur.execute("SELECT hospital_id FROM admins WHERE id = %s", (admin_id,))
+    result = cur.fetchone()
+    hospital_id = result["hospital_id"] if result else None
+
+    if not hospital_id:
+        flash("Hospital not found.", "danger")
+        return redirect("/bed-management")
+
+    try:
+        # Check if bed is occupied
+        cur.execute("SELECT is_occupied FROM beds WHERE id = %s AND hospital_id = %s", (bed_id, hospital_id))
+        bed = cur.fetchone()
+        
+        if not bed:
+            flash("Bed not found.", "danger")
+        elif bed["is_occupied"]:
+            flash("Cannot delete occupied bed. Please mark it as available first.", "warning")
+        else:
+            cur.execute("DELETE FROM beds WHERE id = %s AND hospital_id = %s", (bed_id, hospital_id))
+            con.commit()
+            flash("Bed deleted successfully!", "success")
+        
+    except Exception as e:
+        flash(f"Error deleting bed: {str(e)}", "danger")
+
+    con.close()
+    return redirect("/bed-management")
+
+# Route to toggle bed status (simplified for testing)
+@app.route("/toggle-bed-status/<int:bed_id>")
+def toggle_bed_status(bed_id):
+    # Check if user is admin or nurse
+    if "admin_id" not in session and ("staff_id" not in session or session.get("staff_role") != "Nurse"):
+        flash("Access denied.", "danger")
+        return redirect("/admin-login")
+
+    user_id = session.get("admin_id") or session.get("staff_id")
+    user_type = "admin" if "admin_id" in session else "nurse"
+    
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # Get user's hospital
+    if user_type == "admin":
+        cur.execute("SELECT hospital_id FROM admins WHERE id = %s", (user_id,))
+    else:
+        cur.execute("""
+            SELECT sm.hospital_id 
+            FROM staff_members sm 
+            INNER JOIN admins a ON sm.admin_id = a.id 
+            WHERE sm.id = %s
+        """, (user_id,))
+    
+    result = cur.fetchone()
+    hospital_id = result["hospital_id"] if result else None
+
+    if not hospital_id:
+        flash("Hospital not found.", "danger")
+        return redirect("/bed-management")
+
+    try:
+        # Get current bed status
+        cur.execute("SELECT is_occupied FROM beds WHERE id = %s AND hospital_id = %s", (bed_id, hospital_id))
+        bed = cur.fetchone()
+        
+        if bed:
+            new_status = 0 if bed["is_occupied"] == 1 else 1
+            cur.execute("UPDATE beds SET is_occupied = %s, updated_at = NOW() WHERE id = %s AND hospital_id = %s", 
+                       (new_status, bed_id, hospital_id))
+            con.commit()
+            
+            status_text = "occupied" if new_status == 1 else "available"
+            flash(f"Bed status updated to {status_text}!", "success")
+        else:
+            flash("Bed not found.", "danger")
+            
+    except Exception as e:
+        flash(f"Error updating bed status: {str(e)}", "danger")
+
+    con.close()
+    return redirect("/bed-management")
+
+@app.route('/get-bed-list/<int:department_id>')
+def get_bed_list(department_id):
+    try:
+        print(f"DEBUG: Getting bed list for department {department_id}")
+        
+        # Create database connection
+        conn = mysql.connector.connect(**Config.DB_CONFIG)
+        cursor = conn.cursor(dictionary=True)
+        
+        # Query to get all beds with department and patient information
+        query = """
+        SELECT 
+            b.id,
+            b.bed_number,
+            b.floor_number,
+            b.room_number,
+            b.is_occupied,
+            d.department_name,
+            p.full_name as patient_name
+        FROM beds b
+        JOIN departments d ON b.department_id = d.id
+        LEFT JOIN patients p ON b.id = p.assigned_bed_id
+        WHERE b.department_id = %s
+        ORDER BY b.floor_number, b.room_number, b.bed_number
+        """
+        
+        cursor.execute(query, (department_id,))
+        beds = cursor.fetchall()
+        
+        print(f"DEBUG: Found {len(beds)} total beds for department {department_id}")
+        
+        beds_data = []
+        for bed in beds:
+            print(f"Bed: ID={bed['id']}, Floor={bed['floor_number']}, Room={bed['room_number']}, Number={bed['bed_number']}, Occupied={bed['is_occupied']}, Patient={bed['patient_name']}")
+            
+            beds_data.append({
+                'id': bed['id'],
+                'bed_number': bed['bed_number'],
+                'floor_number': bed['floor_number'],
+                'room_number': bed['room_number'],
+                'is_occupied': bool(bed['is_occupied']),
+                'department_name': bed['department_name'],
+                'patient_name': bed['patient_name'] if bed['patient_name'] else None
+            })
+        
+        cursor.close()
+        conn.close()
+        
+        available_count = len([b for b in beds_data if not b['is_occupied']])
+        
+        print(f"DEBUG: Total beds: {len(beds_data)}, Available: {available_count}")
+        
+        return jsonify({
+            'beds': beds_data,
+            'total_beds': len(beds_data),
+            'available_beds': available_count
+        })
+        
+    except Exception as e:
+        print(f"Error in get_bed_list: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to load bed list: {str(e)}'}), 500
+
+# # Route to get beds by department (AJAX)
+# @app.route("/get-department-beds/<int:dept_id>")
+# def get_department_beds(dept_id):
+#     if "admin_id" not in session and "nurse_id" not in session:
+#         return jsonify({"error": "Unauthorized"}), 401
+
+#     con = get_db()
+#     cur = con.cursor(dictionary=True)
+
+#     # Get user's hospital
+#     admin_id = session.get("admin_id")
+#     nurse_id = session.get("nurse_id")
+    
+#     hospital_id = None
+#     if admin_id:
+#         cur.execute("SELECT hospital_id FROM admins WHERE id = %s", (admin_id,))
+#         result = cur.fetchone()
+#         hospital_id = result["hospital_id"] if result else None
+#     elif nurse_id:
+#         cur.execute("SELECT hospital_id FROM nurses WHERE id = %s", (nurse_id,))
+#         result = cur.fetchone()
+#         hospital_id = result["hospital_id"] if result else None
+
+#     if not hospital_id:
+#         return jsonify({"error": "Hospital not found"}), 404
+
+#     # Get beds for the department
+#     cur.execute("""
+#         SELECT b.id, b.bed_number, b.floor_number, b.room_number, b.is_occupied,
+#                CASE WHEN b.is_occupied = 1 THEN 'Occupied' ELSE 'Available' END as status
+#         FROM beds b
+#         WHERE b.department_id = %s AND b.hospital_id = %s
+#         ORDER BY b.floor_number, b.room_number, b.bed_number
+#     """, (dept_id, hospital_id))
+    
+#     beds = cur.fetchall()
+#     con.close()
+    
+#     return jsonify({"beds": beds})
+# Route to delete bed
+# @app.route("/delete-bed/<int:bed_id>", methods=["POST"])
+# def delete_bed(bed_id):
+#     if session.get("role") != "admin":
+#         flash("Only administrators can delete beds.", "danger")
+#         return redirect(url_for("bed_management"))
+
+#     con = get_db()
+#     cur = con.cursor(dictionary=True)
+
+#     admin_id = session.get("admin_id")
+    
+#     # Get admin's hospital
+#     cur.execute("SELECT hospital_id FROM admins WHERE id = %s", (admin_id,))
+#     result = cur.fetchone()
+#     hospital_id = result["hospital_id"] if result else None
+
+#     if not hospital_id:
+#         con.close()
+#         flash("Hospital not found.", "danger")
+#         return redirect(url_for("bed_management"))
+
+#     try:
+#         # Check if bed is occupied
+#         cur.execute("""
+#             SELECT is_occupied 
+#             FROM beds 
+#             WHERE id = %s AND hospital_id = %s
+#         """, (bed_id, hospital_id))
+#         bed = cur.fetchone()
+        
+#         if not bed:
+#             flash("Bed not found.", "danger")
+#         elif bed["is_occupied"]:
+#             flash("Cannot delete an occupied bed.", "warning")
+#         else:
+#             cur.execute("""
+#                 DELETE FROM beds 
+#                 WHERE id = %s AND hospital_id = %s
+#             """, (bed_id, hospital_id))
+#             con.commit()
+#             flash("Bed deleted successfully.", "success")
+    
+#     except Exception as e:
+#         con.rollback()
+#         flash(f"Error deleting bed: {str(e)}", "danger")
+    
+#     con.close()
+#     return redirect(url_for("bed_management"))
+
+# # Route to update bed status
+# @app.route("/update-bed-status", methods=["POST"])
+# def update_bed_status():
+#     bed_id = request.form.get("bed_id")
+#     new_status = request.form.get("new_status")
+    
+#     con = get_db()
+#     cur = con.cursor(dictionary=True)
+    
+#     # Get user's hospital
+#     admin_id = session.get("admin_id")
+#     nurse_id = session.get("nurse_id")
+    
+#     hospital_id = None
+#     if admin_id:
+#         cur.execute("SELECT hospital_id FROM admins WHERE id = %s", (admin_id,))
+#         result = cur.fetchone()
+#         hospital_id = result["hospital_id"] if result else None
+#     elif nurse_id:
+#         cur.execute("SELECT hospital_id FROM nurses WHERE id = %s", (nurse_id,))
+#         result = cur.fetchone()
+#         hospital_id = result["hospital_id"] if result else None
+    
+#     if not hospital_id:
+#         flash("Hospital not found.", "danger")
+#         return redirect(url_for("bed_management"))
+    
+#     try:
+#         cur.execute("""
+#             UPDATE beds 
+#             SET is_occupied = %s, 
+#                 patient_id = NULL
+#             WHERE id = %s AND hospital_id = %s
+#         """, (new_status, bed_id, hospital_id))
+#         con.commit()
+        
+#         status_text = "Occupied" if new_status == "1" else "Available"
+#         flash(f"Bed status updated to {status_text}.", "success")
+        
+#     except Exception as e:
+#         con.rollback()
+#         flash(f"Error updating bed status: {str(e)}", "danger")
+    
+#     con.close()
+#     return redirect(url_for("bed_management"))
+
+# @app.route("/rep-dashboard")
+# def rep_dashboard():
+#     if "rep_id" not in session:
+#         return redirect("/rep-login")
+
+#     return render_template(
+#         "rep_dashboard.html",
+#         rep_name=session.get("rep_name"),
+#         hospital_name=session.get("rep_hospital_name")
+#     )
+
+@app.route("/rep-dashboard")
+def rep_dashboard():
+    print("APP RUNNING FROM:", os.getcwd())
+    if "rep_id" not in session:
+        return redirect("/rep-login")
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # Fetch representative's name and hospital details
+    rep_id = session["rep_id"]
+    cur.execute("""
+        SELECT hr.rep_name, h.hospital_name, h.hospital_mode
+        FROM hospital_representatives hr
+        JOIN hospitals h ON hr.hospital_id = h.id
+        WHERE hr.id = %s
+    """, (rep_id,))
+    result = cur.fetchone()
+
+    if not result:
+        flash("Representative or Hospital not found.", "danger")
+        return redirect("/rep-login")
+    
+    hospital_mode = (result["hospital_mode"] or "").strip().upper()
+    print("DEBUG hospital_mode:", repr(hospital_mode))
+
+    return render_template(
+        "rep_dashboard.html",
+        rep_name=result["rep_name"],
+        hospital_name=result["hospital_name"],
+        hospital_mode=hospital_mode
+    )
+
+
+
+
+#111111111111111111111111111111111111111111111111111111111
+#all logout
+
+
+# # sTAFFF# Receptionist login
+@app.route("/receptionist-login", methods=["GET", "POST"])
+def receptionist_login():
+    return staff_login_common("Receptionist", "receptionist_login.html", "receptionist_dashboard")
+
+# @app.route("/admin-logout")
+# def admin_logout():
+#     admin_id = session.get("admin_id")
+
+#     if admin_id:
+#         con = get_db()
+#         cur = con.cursor()
+#         cur.execute("UPDATE admins SET is_active = 0 WHERE id = %s", (admin_id,))
+#         con.commit()
+
+#     session.pop("admin_id", None)
+#     session.pop("admin_name", None)
+#     session.pop("admin_hospital_name", None)
+#     return redirect("/admin-login")
+
+
+# -------------------------nurse login and set and reset pin---------------------
+@app.route("/nurse-login", methods=["GET", "POST"])
+def nurse_login():
+    # uses common helper: role = "Nurse"
+    return staff_login_common("Nurse", "nurse_login.html", "nurse_dashboard")
+
+@app.route("/nurse/send-otp")
+def nurse_send_otp():
+    rfid_uid = session.get("pending_rfid_uid")
+    if not rfid_uid:
+        flash("Scan your card first.", "danger")
+        return redirect(url_for("nurse_login"))
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+    cur.execute("SELECT email FROM staff_members WHERE rfid_uid=%s", (rfid_uid,))
+    staff = cur.fetchone()
+    con.close()
+
+    if not staff or not staff.get("email"):
+        flash("No email linked to this staff. Please contact admin.", "danger")
+        return redirect(url_for("nurse_login"))
+
+    otp = str(random.randint(100000, 999999))
+    session["otp_code"] = otp
+    session["otp_expires"] = (datetime.now() + timedelta(minutes=5)).timestamp()
+    session["otp_email"] = staff["email"]
+
+    send_email(staff["email"], "Your OTP for PIN Setup", f"Your OTP is: {otp} (valid for 5 minutes)")
+    flash("OTP sent to your email. Enter it to set PIN.", "info")
+    return redirect(url_for("nurse_verify_otp"))
+
+
+@app.route("/nurse/verify-otp", methods=["GET", "POST"])
+def nurse_verify_otp():
+    rfid_uid = session.get("pending_rfid_uid")
+    if not rfid_uid:
+        flash("Scan your card first.", "danger")
+        return redirect(url_for("nurse_login"))
+
+    if request.method == "POST":
+        otp_input = request.form.get("otp", "").strip()
+        otp = session.get("otp_code")
+        expires = session.get("otp_expires", 0)
+
+        if not otp or datetime.now().timestamp() > float(expires):
+            flash("OTP expired. Please try again.", "danger")
+            return redirect(url_for("nurse_send_otp"))
+
+        if otp_input != otp:
+            flash("Invalid OTP. Try again.", "danger")
+            return render_template("verify_otp.html")
+
+        session.pop("otp_code", None)
+        session.pop("otp_expires", None)
+        return redirect(url_for("nurse_set_pin"))
+
+    return render_template("verify_otp.html")
+
+
+@app.route("/nurse/set-pin", methods=["GET", "POST"])
+def nurse_set_pin():
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    if request.method == "POST":
+        rfid_uid = request.form.get("rfid_uid", "").strip().upper()
+        new_pin = request.form.get("new_pin", "").strip()
+
+        if not re.match(r"^\d{4}$", new_pin):
+            flash("Enter a valid 4-digit PIN", "danger")
+            con.close()
+            return render_template("set_pin.html", rfid_uid=rfid_uid)
+
+        cur.execute("SELECT id FROM staff_members WHERE rfid_uid=%s", (rfid_uid,))
+        staff = cur.fetchone()
+
+        if not staff:
+            flash("Card not found.", "danger")
+            con.close()
+            return redirect(url_for("nurse_login"))
+
+        hashed_pin = generate_password_hash(new_pin)
+        cur.execute(
+            "UPDATE staff_members SET staff_pin_hash=%s WHERE rfid_uid=%s",
+            (hashed_pin, rfid_uid)
+        )
+        con.commit()
+        con.close()
+
+        flash("PIN set! Please login with your card and PIN.", "success")
+        return redirect(url_for("nurse_login"))
+
+    rfid_uid = session.pop("pending_rfid_uid", None) or request.args.get("rfid_uid")
+    con.close()
+
+    if not rfid_uid:
+        flash("Scan your card first.", "danger")
+        return redirect(url_for("nurse_login"))
+
+    return render_template("set_pin.html", rfid_uid=rfid_uid)
+
+
+@app.route("/doctor-login", methods=["GET", "POST"])
+def doctor_login():
+    return staff_login_common("Doctor", "doctor_login.html", "doctor_dashboard")
+
+@app.route('/staff_logout')
+def staff_logout():
+    staff_id = session.get("staff_id")
+    if staff_id:
+        con = get_db()
+        cur = con.cursor()
+        cur.execute("UPDATE staff_members SET is_active = 0 WHERE id = %s", (staff_id,))
+        con.commit()
+    session.clear()
+
+# @app.route("/doctor-logout")
+# def doctor_logout():
+#     try:
+#         close_serial()
+#     except:
+#         pass
+
+#     staff_id = session.get("staff_id")
+#     if staff_id:
+#         con = get_db()
+#         cur = con.cursor()
+#         cur.execute("UPDATE staff_members SET is_active = 0 WHERE id = %s", (staff_id,))
+#         con.commit()
+
+#     session.clear()
+#     return redirect(url_for("doctor_login"))
+
+
+# @app.route("/nurse-logout")
+# def nurse_logout():
+#     try:
+#         close_serial()
+#     except:
+#         pass
+
+#     staff_id = session.get("staff_id")
+#     if staff_id:
+#         con = get_db()
+#         cur = con.cursor()
+#         cur.execute("UPDATE staff_members SET is_active = 0 WHERE id = %s", (staff_id,))
+#         con.commit()
+
+#     session["rfid_scanning"] = False
+#     session.clear()
+#     return redirect(url_for("nurse_login"))
+
+
+# @app.route("/receptionist-logout")
+# def receptionist_logout():
+#     try:
+#         close_serial()
+#     except:
+#         pass
+
+#     staff_id = session.get("staff_id")
+#     if staff_id:
+#         con = get_db()
+#         cur = con.cursor()
+#         cur.execute("UPDATE staff_members SET is_active = 0 WHERE id = %s", (staff_id,))
+#         con.commit()
+
+#     session.clear()
+#     return redirect(url_for("receptionist_login"))
+
+# ============================
+# RECEPTIONIST FORGOT PASSWORD (EMAIL + OTP + NEW PASSWORD)
+# ============================
+@app.route("/receptionist-forgot-password", methods=["GET", "POST"])
+def receptionist_forgot_password():
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # prefill email if stored in session
+    email_prefill = session.get("receptionist_fp_email", "")
+
+    if request.method == "POST":
+        action = request.form.get("action")
+
+        # 1) SEND OTP
+        if action == "send_otp":
+            email = request.form.get("email", "").strip().lower()
+
+            if not email:
+                flash("Please enter your email.", "danger")
+                return render_template("receptionist_forgot_password.html", email=email)
+
+            # find receptionist by email
+            cur.execute("""
+                SELECT * FROM staff_members
+                WHERE LOWER(email) = %s AND role = %s
+            """, (email, "Receptionist"))
+            staff = cur.fetchone()
+
+            if not staff:
+                flash("No receptionist account found with that email.", "danger")
+                return render_template("receptionist_forgot_password.html", email=email)
+
+            # generate 6-digit OTP
+            otp = str(random.randint(100000, 999999))
+
+            # store otp + email + timestamp in session (10 minutes)
+            session["receptionist_fp_email"] = email
+            session["receptionist_fp_otp"] = otp
+            session["receptionist_fp_time"] = time.time()
+
+            # send OTP email
+            try:
+                subject = "Receptionist Password Reset OTP"
+                body = f"""
+Dear {staff['full_name']},
+
+You requested to reset your receptionist account password.
+
+Your OTP is: {otp}
+
+This OTP is valid for 10 minutes.
+
+If you did not request this, please ignore this email.
+
+Regards,
+Hospital Management System
+"""
+                send_email(email, subject, body)
+                flash("OTP has been sent to your email.", "success")
+            except Exception as e:
+                print("Error sending receptionist OTP email:", e)
+                flash("Failed to send OTP email.", "warning")
+
+            return render_template("receptionist_forgot_password.html", email=email)
+
+        # 2) RESET PASSWORD USING OTP
+        elif action == "reset_password":
+            email = request.form.get("email", "").strip().lower()
+            otp = request.form.get("otp", "").strip()
+            new_pass = request.form.get("new_password", "").strip()
+            confirm_pass = request.form.get("confirm_password", "").strip()
+
+            if not (email and otp and new_pass and confirm_pass):
+                flash("Please fill in all fields.", "danger")
+                return render_template("receptionist_forgot_password.html", email=email)
+
+            if new_pass != confirm_pass:
+                flash("New password and confirm password do not match.", "danger")
+                return render_template("receptionist_forgot_password.html", email=email)
+
+            # check data saved in session
+            sess_email = session.get("receptionist_fp_email")
+            sess_otp = session.get("receptionist_fp_otp")
+            sess_time = session.get("receptionist_fp_time")
+
+            if not (sess_email and sess_otp and sess_time):
+                flash("OTP session expired or not requested. Please request OTP again.", "danger")
+                return render_template("receptionist_forgot_password.html", email=email)
+
+            if email != sess_email:
+                flash("This email does not match the one used to request OTP.", "danger")
+                return render_template("receptionist_forgot_password.html", email=email)
+
+            if time.time() - sess_time > 600:
+                flash("OTP has expired. Please request a new one.", "danger")
+                session.pop("receptionist_fp_email", None)
+                session.pop("receptionist_fp_otp", None)
+                session.pop("receptionist_fp_time", None)
+                return render_template("receptionist_forgot_password.html", email=email)
+
+            if otp != sess_otp:
+                flash("Invalid OTP.", "danger")
+                return render_template("receptionist_forgot_password.html", email=email)
+
+            # OTP valid -> update password
+            cur.execute("""
+                SELECT * FROM staff_members
+                WHERE LOWER(email) = %s AND role = %s
+            """, (email, "Receptionist"))
+            staff = cur.fetchone()
+
+            if not staff:
+                flash("Receptionist not found for this email.", "danger")
+                return render_template("receptionist_forgot_password.html", email=email)
+
+            hashed = generate_password_hash(new_pass)
+            cur.execute("""
+                UPDATE staff_members
+                SET password = %s
+                WHERE id = %s
+            """, (hashed, staff["id"]))
+            con.commit()
+
+            # clear session
+            session.pop("receptionist_fp_email", None)
+            session.pop("receptionist_fp_otp", None)
+            session.pop("receptionist_fp_time", None)
+
+            flash("Password reset successful. Please log in with your new password.", "success")
+            return redirect(url_for("receptionist_login"))
+
+    # GET request
+    return render_template("receptionist_forgot_password.html", email=email_prefill)
+
+# === CONSULTANCY RECORDS PAGE - ONLY DOCTOR'S OWN RECORDS ===
+@app.route('/consultancy_records')
+def consultancy_records():
+    if 'staff_id' not in session:
+        return redirect(url_for('doctor_login'))  # Fixed redirect
+    
+    try:
+        # Use your existing get_db() function
+        con = get_db()
+        cursor = con.cursor(dictionary=True)
+        
+        # Get ONLY consultancy records created by THIS DOCTOR
+        doctor_id = session['staff_id']
+        cursor.execute("""
+            SELECT c.*, p.full_name as patient_name
+            FROM consultancy_records c
+            LEFT JOIN patients p ON c.patient_id = p.id
+            WHERE c.doctor_id = %s
+            ORDER BY c.created_at DESC
+        """, (doctor_id,))
+        
+        records = cursor.fetchall()
+        cursor.close()
+        con.close()
+        
+        return render_template('consultancy_records.html', records=records)
+        
+    except Exception as e:
+        print(f"Error fetching consultancy records: {e}")
+        flash('Error loading consultancy records', 'error')
+        return redirect(url_for('doctor_dashboard'))
+
+# === VIEW FULL CONSULTANCY DETAILS ===
+@app.route('/view_consultancy_details/<int:id>')
+def view_consultancy_details(id):
+    if 'staff_id' not in session:
+        return redirect(url_for('doctor_login'))
+    
+    try:
+        con = get_db()
+        cursor = con.cursor(dictionary=True)
+        
+        # Security: Only allow viewing records created by this doctor
+        doctor_id = session['staff_id']
+        cursor.execute("""
+            SELECT c.*, p.full_name as patient_name, p.age, p.gender, p.phone
+            FROM consultancy_records c
+            LEFT JOIN patients p ON c.patient_id = p.id
+            WHERE c.id = %s AND c.doctor_id = %s
+        """, (id, doctor_id))
+        
+        record = cursor.fetchone()
+        cursor.close()
+        con.close()
+        
+        if not record:
+            flash('Consultancy record not found or access denied', 'error')
+            return redirect(url_for('consultancy_records'))
+            
+        return render_template('view_consultancy_details.html', record=record)
+        
+    except Exception as e:
+        print(f"Error fetching consultancy details: {e}")
+        flash('Error loading consultancy details', 'error')
+        return redirect(url_for('consultancy_records'))
+
+
+# === EDIT CONSULTANCY - SECURITY CHECK ===
+@app.route('/edit-consultancy/<int:id>', methods=['GET', 'POST'])  # Changed underscore to hyphen
+def edit_consultancy(id):
+    if 'staff_id' not in session:
+        return redirect(url_for('doctor_login'))
+    
+    con = get_db()
+    cursor = con.cursor(dictionary=True)
+    doctor_id = session['staff_id']
+    
+    if request.method == 'GET':
+        # Security: Only allow editing records created by this doctor
+        cursor.execute("""
+            SELECT c.*, p.full_name as patient_name 
+            FROM consultancy_records c
+            LEFT JOIN patients p ON c.patient_id = p.id
+            WHERE c.id = %s AND c.doctor_id = %s
+        """, (id, doctor_id))
+        record = cursor.fetchone()
+        cursor.close()
+        con.close()
+        
+        if not record:
+            flash('Consultancy record not found or access denied', 'error')
+            return redirect(url_for('consultancy_records'))
+            
+        return render_template('edit_consultancy.html', record=record)
+    
+    elif request.method == 'POST':
+        try:
+            data = request.get_json()
+            
+            # Security: Double-check doctor ownership before updating
+            cursor.execute("SELECT doctor_id FROM consultancy_records WHERE id = %s", (id,))
+            result = cursor.fetchone()
+            
+            if not result or result['doctor_id'] != doctor_id:
+                cursor.close()
+                con.close()
+                return jsonify({'success': False, 'error': 'Access denied'}), 403
+            
+            cursor.execute("""
+                UPDATE consultancy_records 
+                SET chief_complaint = %s, diagnosis = %s, prescription = %s, 
+                    additional_notes = %s, appointment_datetime = %s
+                WHERE id = %s AND doctor_id = %s
+            """, (
+                data['chief_complaint'],
+                data['diagnosis'], 
+                data['prescription'],
+                data['additional_notes'],
+                data['appointment_datetime'],
+                id,
+                doctor_id
+            ))
+            
+            con.commit()
+            cursor.close()
+            con.close()
+            
+            return jsonify({'success': True, 'message': 'Record updated successfully'})
+            
+        except Exception as e:
+            print(f"Error updating consultancy: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+# === DELETE CONSULTANCY - SECURITY CHECK ===
+@app.route('/delete_consultancy/<int:id>')
+def delete_consultancy(id):
+    if 'staff_id' not in session:
+        return redirect(url_for('doctor_login'))
+    
+    try:
+        con = get_db()
+        cursor = con.cursor(dictionary=True)
+        doctor_id = session['staff_id']
+        
+        # Security: Only allow deleting records created by this doctor
+        cursor.execute("DELETE FROM consultancy_records WHERE id = %s AND doctor_id = %s", (id, doctor_id))
+        
+        if cursor.rowcount > 0:
+            con.commit()
+            flash('Consultancy record deleted successfully', 'success')
+        else:
+            flash('Record not found or access denied', 'error')
+            
+        cursor.close()
+        con.close()
+        
+    except Exception as e:
+        print(f"Error deleting consultancy: {e}")
+        flash('Error deleting record', 'error')
+    
+    return redirect(url_for('consultancy_records'))
+@app.route('/doctor-forgot-password', methods=['GET', 'POST'])
+def doctor_forgot_password():
+    # Handle forgot password logic for doctors
+    return render_template('doctor_forgot_password.html')
+
+@app.route('/verify-doctor-otp', methods=['GET', 'POST'])
+def verify_doctor_otp():
+    # Handle OTP verification for doctor
+    return render_template('doctor_verify_otp.html')
+
+@app.route('/doctor-reset-password', methods=['GET', 'POST'])
+def doctor_reset_password():
+    # Handle reset password logic for doctor
+    return render_template('doctor_reset_password.html')
+
+@app.route("/receptionist-dashboard", methods=["GET", "POST"])
+def receptionist_dashboard():
+    # ✅ Allow Receptionist OR Receptionist + Nurse
+    role = (session.get("staff_role") or "").lower()
+    if "receptionist" not in role:
+        return redirect(url_for("receptionist_login"))
+
+    staff_id = session.get("staff_id")
+    if not staff_id:
+        return redirect(url_for("receptionist_login"))
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # ✅ Get staff + hospital using admins.hospital_id (more reliable)
+    cur.execute("""
+        SELECT s.*, h.id AS hospital_id, h.hospital_name
+        FROM staff_members s
+        LEFT JOIN admins a ON s.admin_id = a.id
+        LEFT JOIN hospitals h ON h.id = a.hospital_id
+        WHERE s.id = %s
+    """, (staff_id,))
+    staff = cur.fetchone()
+
+    if not staff:
+        session.clear()
+        flash("STAFF record not found!", "danger")
+        return redirect(url_for("receptionist_login"))
+
+    # ✅ Must have hospital linked (because patients insert needs hospital_id)
+    hospital_id = staff.get("hospital_id")
+    hospital_name = staff.get("hospital_name")
+
+    if not hospital_id:
+        flash("Your staff account is not linked to a hospital. Please assign admin & hospital.", "danger")
+        return redirect(url_for("receptionist_login"))
+
+    session["staff_hospital_id"] = hospital_id
+    session["staff_hospital_name"] = hospital_name
+    # ============= GET DEPARTMENTS FOR DROPDOWN =============
+    cur.execute("""
+        SELECT id, department_name 
+        FROM departments 
+        WHERE hospital_id = %s 
+        ORDER BY department_name
+    """, (hospital_id,))
+    departments = cur.fetchall()
+    is_enterprise = len(departments) > 0
+
+    # ================= ADD PATIENT (POST) =================
+    if request.method == "POST":
+        full_name = request.form.get("full_name", "").strip()
+        age = request.form.get("age", "").strip()
+        gender = request.form.get("gender")
+        email = request.form.get("email", "").strip()
+        phone = request.form.get("phone", "").strip()
+        address = request.form.get("address", "").strip()
+        rfid_uid = request.form.get("rfid_uid", "").strip()
+
+        aadhar_number = request.form.get("aadhar_number", "").strip()
+        id_proof_type = request.form.get("id_proof_type", "").strip()
+        id_proof_number = request.form.get("id_proof_number", "").strip()
+
+        has_insurance = request.form.get("has_insurance", "no")
+        insurance_provider = request.form.get("insurance_provider", "").strip()
+        insurance_policy_number = request.form.get("insurance_policy_number", "").strip()
+        policy_start_date = request.form.get("policy_start_date", "").strip()
+        policy_expiry_date = request.form.get("policy_expiry_date", "").strip()
+
+        emergency_contact_name = request.form.get("emergency_contact_name", "").strip()
+        emergency_contact_relation = request.form.get("emergency_contact_relation", "").strip()
+        emergency_contact_phone = request.form.get("emergency_contact_phone", "").strip()
+
+        # NEW: Get bed assignment data
+       # Enterprise-only fields (admission/department/bed)
+        if is_enterprise:
+            admission_type = request.form.get("admission_type", "outpatient")
+            department_id = request.form.get("department_id")
+            assigned_bed_id = request.form.get("assigned_bed_id") if admission_type == "inpatient" else None
+        else:
+            admission_type = "outpatient"
+            department_id = None
+            assigned_bed_id = None
+
+        if not (full_name and age and gender and phone and address and rfid_uid and
+                emergency_contact_name and emergency_contact_relation and emergency_contact_phone):
+            flash("Please fill all required fields.", "danger")
+            return redirect(url_for("receptionist_dashboard"))
+
+        # Extra validation only in enterprise mode
+        if is_enterprise:
+            if not department_id:
+                flash("Please select a department.", "danger")
+                return redirect(url_for("receptionist_dashboard"))
+
+            if admission_type == "inpatient" and not assigned_bed_id:
+                flash("Please select a bed for inpatient admission.", "danger")
+                return redirect(url_for("receptionist_dashboard"))
+            
+           
+        try:
+            age_int = int(age)
+        except ValueError:
+            flash("Age must be a number.", "danger")
+            return redirect(url_for("receptionist_dashboard"))
+
+        if not phone.isdigit() or len(phone) != 10:
+            flash("Phone must be 10 digits.", "danger")
+            return redirect(url_for("receptionist_dashboard"))
+
+        if not emergency_contact_phone.isdigit() or len(emergency_contact_phone) != 10:
+            flash("Emergency contact phone must be 10 digits.", "danger")
+            return redirect(url_for("receptionist_dashboard"))
+
+        if aadhar_number and (not aadhar_number.isdigit() or len(aadhar_number) != 12):
+            flash("Aadhaar number must be 12 digits.", "danger")
+            return redirect(url_for("receptionist_dashboard"))
+
+        if gender not in ("Male", "Female", "Other"):
+            flash("Invalid gender selected.", "danger")
+            return redirect(url_for("receptionist_dashboard"))
+
+        if emergency_contact_relation not in ("spouse", "parent", "child", "sibling", "friend", "other"):
+            flash("Invalid emergency contact relationship.", "danger")
+            return redirect(url_for("receptionist_dashboard"))
+
+        if has_insurance not in ("no", "yes", "cashless"):
+            flash("Invalid insurance status.", "danger")
+            return redirect(url_for("receptionist_dashboard"))
+
+        from datetime import datetime
+        start_date = None
+        expiry_date = None
+
+        if policy_start_date:
+            try:
+                start_date = datetime.strptime(policy_start_date, "%Y-%m-%d").date()
+            except ValueError:
+                flash("Invalid policy start date format.", "danger")
+                return redirect(url_for("receptionist_dashboard"))
+
+        if policy_expiry_date:
+            try:
+                expiry_date = datetime.strptime(policy_expiry_date, "%Y-%m-%d").date()
+            except ValueError:
+                flash("Invalid policy expiry date format.", "danger")
+                return redirect(url_for("receptionist_dashboard"))
+
+        try:
+            # Insert patient with bed assignment info
+            cur.execute("""
+                INSERT INTO patients
+                (hospital_id, created_by_staff_id, full_name, age, gender, email, phone, address,
+                 rfid_uid, aadhar_number, id_proof_type, id_proof_number,
+                 emergency_contact_name, emergency_contact_relation, emergency_contact_phone,
+                 admission_type, department_id, assigned_bed_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                hospital_id, staff_id, full_name, age_int, gender, email, phone, address,
+                rfid_uid, aadhar_number or None, id_proof_type or None, id_proof_number or None,
+                emergency_contact_name, emergency_contact_relation, emergency_contact_phone,
+                admission_type, department_id, assigned_bed_id
+            ))
+            
+            patient_id = cur.lastrowid
+
+            # If bed is assigned, update bed status
+            if assigned_bed_id and admission_type == "inpatient":
+                cur.execute("""
+                    UPDATE beds 
+                    SET is_occupied = 1, patient_id = %s, updated_at = NOW()
+                    WHERE id = %s AND hospital_id = %s AND is_occupied = 0
+                """, (patient_id, assigned_bed_id, hospital_id))
+                
+                if cur.rowcount == 0:
+                    con.rollback()
+                    flash("Selected bed is no longer available. Please try again.", "danger")
+                    return redirect(url_for("receptionist_dashboard"))
+
+            # Insert insurance details
+            cur.execute("""
+                INSERT INTO patient_insurance_details
+                (patient_id, has_insurance, insurance_provider, insurance_policy_number, policy_start_date, policy_expiry_date)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (
+                patient_id, has_insurance,
+                insurance_provider or None,
+                insurance_policy_number or None,
+                start_date, expiry_date
+            ))
+            
+            con.commit()
+            flash("Patient added successfully with all details.", "success")
+
+        except mysql.connector.Error as e:
+            con.rollback()
+            print("Error inserting patient:", e)
+            flash("Error saving patient (maybe duplicate RFID tag).", "danger")
+
+        return redirect(url_for("receptionist_dashboard"))
+
+    # ============= GET DEPARTMENTS FOR DROPDOWN =============
+    # cur.execute("""
+    #     SELECT id, department_name 
+    #     FROM departments 
+    #     WHERE hospital_id = %s 
+    #     ORDER BY department_name
+    # """, (hospital_id,))
+    # departments = cur.fetchall()
+    # is_enterprise = len(departments) > 0
+
+    
+    # Debug: Check if departments are found
+    print(f"DEBUG: Found {len(departments)} departments for hospital {hospital_id}")
+    for dept in departments:
+        print(f"Department: ID={dept['id']}, Name={dept['department_name']}")
+
+    # ============= PATIENT LIST (last 50 for this staff/hospital) =============
+    cur.execute("""
+        SELECT
+            p.id, p.full_name, p.age, p.gender, p.phone, p.rfid_uid,
+            DATE_FORMAT(p.created_at, '%d-%m-%Y %H:%i') AS created_on,
+            p.is_active, p.admission_type,
+            pid.has_insurance, pid.insurance_provider,
+            p.emergency_contact_name, p.emergency_contact_phone,
+            d.department_name,
+            b.bed_number, b.room_number, b.floor_number
+        FROM patients p
+        LEFT JOIN patient_insurance_details pid ON pid.patient_id = p.id
+        LEFT JOIN departments d ON p.department_id = d.id
+        LEFT JOIN beds b ON p.assigned_bed_id = b.id
+        WHERE p.created_by_staff_id = %s
+        ORDER BY p.id DESC
+        LIMIT 50
+    """, (staff_id,))
+    patients = cur.fetchall()
+
+    # ============= STATS for GRAPH (today / this week / this month) =============
+    # today
+    cur.execute("""
+        SELECT COUNT(*) AS c
+        FROM patients
+        WHERE created_by_staff_id = %s
+          AND DATE(created_at) = CURDATE()
+    """, (staff_id,))
+    today_count = cur.fetchone()["c"]
+
+    # this week (ISO week, Monday start)
+    cur.execute("""
+        SELECT COUNT(*) AS c
+        FROM patients
+        WHERE created_by_staff_id = %s
+          AND YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)
+    """, (staff_id,))
+    week_count = cur.fetchone()["c"]
+
+    # this month
+    cur.execute("""
+        SELECT COUNT(*) AS c
+        FROM patients
+        WHERE created_by_staff_id = %s
+          AND YEAR(created_at) = YEAR(CURDATE())
+          AND MONTH(created_at) = MONTH(CURDATE())
+    """, (staff_id,))
+    month_count = cur.fetchone()["c"]
+
+    stats = {
+        "today": today_count,
+        "week": week_count,
+        "month": month_count
+    }
+
+    con.close()
+
+    # ✅ SINGLE return statement at the end with ALL data
+    return render_template(
+        "receptionist_dashboard.html",
+        staff=staff,
+        staff_name=session.get("staff_name"),
+        hospital_name=hospital_name,
+        staff_photo=session.get("staff_photo"),
+        patients=patients,
+        stats=stats,
+        departments=departments,
+        is_enterprise=is_enterprise
+    )
+ # ← Now this will have data!
+    
+    
+@app.route('/get_departments')
+def get_departments():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT id, department_name
+            FROM departments
+            WHERE is_active = 1
+            ORDER BY department_name ASC
+        """)
+
+        departments = cursor.fetchall()
+        cursor.close()
+        conn.close()
+
+        return jsonify([
+            {"id": row["id"], "name": row["department_name"]}
+            for row in departments
+        ])
+
+    except Exception as e:
+        print(f"Error in get_departments: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/get-available-beds/<int:department_id>')
+def get_available_beds(department_id):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(dictionary=True)
+        
+        # Get the hospital_id from session
+        hospital_id = session.get('staff_hospital_id')
+        if not hospital_id:
+            return jsonify({'error': 'Hospital ID not found in session'}), 400
+        
+        # Query using correct column names from your table structure
+        cur.execute("""
+            SELECT DISTINCT 
+                b.id,
+                b.bed_number,
+                b.floor_number,
+                b.room_number,
+                b.is_occupied,
+                b.patient_id
+            FROM beds b
+            JOIN departments d ON b.department_id = d.id
+            WHERE d.id = %s 
+            AND d.hospital_id = %s
+            AND b.is_occupied = 0
+            ORDER BY b.floor_number, b.room_number, b.bed_number
+        """, (department_id, hospital_id))
+        
+        beds = cur.fetchall()
+        
+        cur.close()
+        conn.close()
+        
+        print(f"DEBUG: Found {len(beds)} available beds for department {department_id}")
+        for bed in beds:
+            print(f"Bed: ID={bed['id']}, Floor={bed['floor_number']}, Room={bed['room_number']}, Number={bed['bed_number']}")
+        
+        return jsonify({
+            'beds': beds,
+            'count': len(beds)
+        })
+        
+    except Exception as e:
+        print(f"Error in get_available_beds: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/get-department-bed-details/<int:department_id>', methods=['GET'])
+def get_department_bed_details(department_id):
+    try:
+        # Get department name
+        cursor.execute("SELECT department_name FROM departments WHERE id = %s", (department_id,))
+        dept_result = cursor.fetchone()
+        
+        if not dept_result:
+            return jsonify({'success': False, 'error': 'Department not found'}), 404
+        
+        department_name = dept_result[0]
+        
+        # Get all beds in the department with patient info if occupied
+        query = """
+            SELECT 
+                b.id,
+                b.bed_number,
+                b.bed_type,
+                b.is_occupied,
+                w.ward_name,
+                p.full_name as patient_name,
+                p.created_on as admission_date,
+                b.department_id
+            FROM beds b
+            LEFT JOIN wards w ON b.ward_id = w.id
+            LEFT JOIN patients p ON b.id = p.bed_id AND p.is_active = 1
+            WHERE b.department_id = %s 
+                AND b.is_active = 1
+            ORDER BY b.bed_number
+        """
+        
+        cursor.execute(query, (department_id,))
+        beds = cursor.fetchall()
+        
+        bed_list = []
+        for bed in beds:
+            bed_list.append({
+                'id': bed[0],
+                'bed_number': bed[1],
+                'bed_type': bed[2],
+                'is_occupied': bool(bed[3]),
+                'ward_name': bed[4],
+                'patient_name': bed[5],
+                'admission_date': bed[6],
+                'department_id': bed[7]
+            })
+        
+        return jsonify({
+            'success': True,
+            'department_name': department_name,
+            'beds': bed_list
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+    # ============================
+# RECEPTIONIST → EDIT PATIENT
+# ============================
+@app.route("/receptionist-patient/edit/<int:pid>", methods=["GET", "POST"])
+def receptionist_edit_patient(pid):
+    if session.get("staff_role") != "Receptionist":
+        return redirect("/receptionist-login")
+
+    staff_id = session.get("staff_id")
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # Make sure this patient was added by this receptionist
+    cur.execute("""
+        SELECT * FROM patients
+        WHERE id = %s AND created_by_staff_id = %s
+    """, (pid, staff_id))
+    patient = cur.fetchone()
+
+    if not patient:
+        flash("Patient not found.", "danger")
+        return redirect(url_for("receptionist_dashboard"))
+
+    if request.method == "POST":
+        full_name = request.form.get("full_name", "").strip()
+        age       = request.form.get("age", "").strip()
+        gender    = request.form.get("gender")
+        email     = request.form.get("email", "").strip()
+        phone     = request.form.get("phone", "").strip()
+        address   = request.form.get("address", "").strip()
+        rfid_uid  = request.form.get("rfid_uid", "").strip()
+
+        if not (full_name and age and gender and phone and address and rfid_uid):
+            flash("Please fill all required fields.", "danger")
+        else:
+            try:
+                age_int = int(age)
+            except ValueError:
+                age_int = None
+                flash("Age must be a number.", "danger")
+
+            if not phone.isdigit() or len(phone) != 10:
+                flash("Phone must be 10 digits.", "danger")
+                age_int = None
+
+            if gender not in ("Male", "Female", "Other"):
+                flash("Invalid gender selected.", "danger")
+                age_int = None
+
+            if age_int is not None:
+                try:
+                    cur.execute("""
+                        UPDATE patients
+                        SET full_name = %s,
+                            age       = %s,
+                            gender    = %s,
+                            email     = %s,
+                            phone     = %s,
+                            address   = %s,
+                            rfid_uid  = %s
+                        WHERE id = %s AND created_by_staff_id = %s
+                    """, (
+                        full_name, age_int, gender, email, phone, address, rfid_uid,
+                        pid, staff_id
+                    ))
+                    con.commit()
+                    flash("Patient updated successfully.", "success")
+                    return redirect(url_for("receptionist_dashboard"))
+                except mysql.connector.Error as e:
+                    print("Error updating patient:", e)
+                    flash("Error updating patient (maybe duplicate RFID).", "danger")
+
+    return render_template("receptionist_edit_patient.html", patient=patient)
+#-------------------Receptionist-nurse-dashboard---------------------------------------
+
+# @staff_bp.route('/receptionist-nurse-dashboard')
+# def receptionist_nurse_dashboard():
+#     if "staff_id" not in session or session.get("staff_role") != "Receptionist + Nurse":
+#         return redirect(url_for("staff.receptionist_nurse_login"))
+#     # Fetch dashboard data and render
+#     return render_template("receptionist_nurse_dashboard.html", staff_name=session.get("staff_name"))
+
+# ============================
+# RECEPTIONIST → DELETE PATIENT
+# ============================
+@app.route("/receptionist-patient/delete/<int:pid>")
+def receptionist_delete_patient(pid):
+    if session.get("staff_role") != "Receptionist":
+        return redirect("/receptionist-login")
+
+    staff_id = session.get("staff_id")
+    con = get_db()
+    cur = con.cursor()
+
+    cur.execute("""
+        DELETE FROM patients
+        WHERE id = %s AND created_by_staff_id = %s
+    """, (pid, staff_id))
+    con.commit()
+
+    flash("Patient deleted successfully.", "success")
+    return redirect(url_for("receptionist_dashboard"))
+
+@app.route("/doctor-dashboard")
+def doctor_dashboard():
+    if session.get("staff_role") != "Doctor":
+        return redirect("/doctor-login")
+
+    staff = {
+        "full_name": session.get("staff_name"),
+        "hospital_name": session.get("staff_hospital_name"),
+        "hospital_id": session.get("staff_hospital_id"),
+        "profile_photo": session.get("staff_photo"),
+    }
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # ✅ Enterprise check (same logic as receptionist/nurse)
+    cur.execute("""
+        SELECT id
+        FROM departments
+        WHERE hospital_id = %s
+        LIMIT 1
+    """, (staff["hospital_id"],))
+    is_enterprise = cur.fetchone() is not None
+
+    # Fetch patients + latest vitals for this hospital
+    cur.execute("""
+        SELECT 
+            p.id, p.full_name, p.age, p.gender, p.email, p.phone, p.address, p.rfid_uid,
+            DATE_FORMAT(p.created_at, '%d-%m-%Y %H:%i') AS created_on,
+            pv.temperature, pv.bp_systolic, pv.bp_diastolic, pv.pulse,
+            pv.sp_o2, pv.weight, pv.height, pv.blood_sugar, pv.pain_score, pv.additional_notes,
+            pv.created_at AS vitals_time
+        FROM patients p
+        LEFT JOIN patient_vitals pv ON pv.patient_id = p.id
+        WHERE p.hospital_id = %s
+        ORDER BY p.created_at DESC
+        LIMIT 100
+    """, (staff["hospital_id"],))
+    patients = cur.fetchall()
+
+    # ✅ Pharmacy medicines ONLY for enterprise
+    available_medicines = []
+    if is_enterprise:
+        cur.execute("""
+            SELECT 
+                p.id, p.product_name, p.generic_name, p.brand_name,
+                COALESCE(SUM(b.qty_on_hand), 0) as available_qty,
+                MIN(b.selling_price) as min_price,
+                MAX(b.selling_price) as max_price,
+                GROUP_CONCAT(DISTINCT b.batch_no) as available_batches
+            FROM pharmacy_products p
+            LEFT JOIN pharmacy_stock_batches b ON b.product_id = p.id AND b.qty_on_hand > 0
+            WHERE p.hospital_id = %s AND p.is_active = 1
+            GROUP BY p.id, p.product_name, p.generic_name, p.brand_name
+            HAVING available_qty > 0
+            ORDER BY p.product_name
+        """, (staff["hospital_id"],))
+        available_medicines = cur.fetchall()
+
+    con.close()
+
+    return render_template(
+        "doctor_dashboard.html",
+        staff=staff,
+        patients=patients,
+        is_enterprise=is_enterprise,
+        available_medicines=available_medicines
+    )
+
+
+@app.route("/patient-medication-history/<int:patient_id>")
+def patient_medication_history(patient_id):
+    if session.get("staff_role") != "Doctor":
+        return jsonify({"error": "Unauthorized"}), 403
+
+    con = None
+    cur = None
+    try:
+        con = get_db()
+        cur = con.cursor(dictionary=True)
+
+        cur.execute("""
+            SELECT 
+                DATE_FORMAT(cr.created_at, '%d-%m-%Y') AS consultation_date,
+                COALESCE(cr.prescription, '') AS prescription,
+                COALESCE(cr.diagnosis, '') AS diagnosis,
+                COALESCE(sm.full_name, '') AS doctor_name
+            FROM consultancy_records cr
+            LEFT JOIN staff_members sm ON cr.doctor_id = sm.id
+            WHERE cr.patient_id = %s
+            ORDER BY cr.created_at DESC
+            LIMIT 5
+        """, (patient_id,))
+
+        records = cur.fetchall()
+
+        history = []
+        for r in records:
+            lines = r["prescription"].split("\n")[:2] if r["prescription"] else []
+            summary = " | ".join([ln.strip() for ln in lines if ln.strip()])
+            if len(summary) > 100:
+                summary = summary[:97] + "..."
+
+            history.append({
+                "consultation_date": r["consultation_date"],
+                "prescription_summary": summary or "No prescription recorded",
+                "diagnosis": r["diagnosis"],
+                "doctor_name": r["doctor_name"] or "Unknown"
+            })
+
+        return jsonify({"history": history})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        try:
+            if cur: cur.close()
+            if con: con.close()
+        except:
+            pass
+
+
+
+@app.route("/send-prescription-to-pharmacy", methods=["POST"])
+def send_prescription_to_pharmacy():
+    """Send prescription directly to pharmacy for preparation"""
+    if session.get("staff_role") != "Doctor":
+        return jsonify({"error": "Unauthorized"}), 403
+    
+    try:
+        data = request.json
+        patient_id = data.get('patient_id')
+        doctor_id = data.get('doctor_id')
+        medications = data.get('medications', [])
+        
+        if not patient_id or not doctor_id or not medications:
+            return jsonify({"error": "Missing required data"}), 400
+        
+        con = get_db()
+        cur = con.cursor(dictionary=True)
+        
+        # Create pharmacy prescription record
+        cur.execute("""
+            INSERT INTO pharmacy_prescriptions 
+            (patient_id, doctor_id, hospital_id, prescription_status, notes, created_at)
+            VALUES (%s, %s, %s, 'PENDING', %s, NOW())
+        """, (
+            patient_id, 
+            doctor_id, 
+            session.get('staff_hospital_id'),
+            data.get('consultation_notes', '')
+        ))
+        
+        prescription_id = cur.lastrowid
+        
+        # Add each medication to prescription details
+        for med in medications:
+            cur.execute("""
+                INSERT INTO pharmacy_prescription_details 
+                (prescription_id, medicine_id, medicine_name, dosage, frequency, 
+                 duration, quantity_prescribed, notes)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                prescription_id,
+                med.get('medicine_id'),
+                med.get('medicine_name'),
+                med.get('dosage'),
+                med.get('frequency'),
+                med.get('duration'),
+                med.get('quantity', 0),
+                data.get('prescription_notes', '')
+            ))
+        
+        con.commit()
+        con.close()
+        
+        return jsonify({
+            "success": True, 
+            "prescription_id": prescription_id,
+            "message": "Prescription sent to pharmacy successfully"
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# @app.route("/doctor-logout")
+# def doctor_logout():
+#     session.clear()
+#     return redirect("/doctor-login")
+@app.route("/get-doctor-weekly-snapshot")
+def get_doctor_weekly_snapshot():
+    if session.get("staff_role") not in ["Admin", "Dept Admin", "Super Admin"]:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    doctor_id = request.args.get("doctor_id", type=int)
+    week_start = request.args.get("week_start")  # YYYY-MM-DD
+
+    if not doctor_id or not week_start:
+        return jsonify({"days": []})
+
+    # week_end = week_start + 6
+    from datetime import datetime, timedelta
+    ws = datetime.strptime(week_start, "%Y-%m-%d")
+    we = ws + timedelta(days=6)
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    cur.execute("""
+        SELECT schedule_date, day_of_week, shift_type, start_time, end_time, max_patients, is_available, notes
+        FROM doctor_schedules
+        WHERE doctor_id=%s
+          AND schedule_date BETWEEN %s AND %s
+        ORDER BY schedule_date, start_time
+    """, (doctor_id, ws.date(), we.date()))
+    rows = cur.fetchall()
+    con.close()
+
+    # group by date
+    days = []
+    for i in range(7):
+        dt = ws + timedelta(days=i)
+        date_str = dt.strftime("%Y-%m-%d")
+        day_name = dt.strftime("%A")
+        items = []
+        for r in rows:
+            if str(r["schedule_date"]) == date_str:
+                items.append({
+                    "shift_type": r["shift_type"],
+                    "start_time": r["start_time"].strftime("%H:%M") if r["start_time"] else "",
+                    "end_time": r["end_time"].strftime("%H:%M") if r["end_time"] else "",
+                    "max_patients": r["max_patients"],
+                    "is_available": r["is_available"],
+                    "notes": r.get("notes") or ""
+                })
+        days.append({"day": day_name, "date": date_str, "items": items})
+
+    return jsonify({
+        "week_start": week_start,
+        "week_end": we.strftime("%Y-%m-%d"),
+        "days": days
+    })
+
+@app.route("/get-doctor-upcoming-schedules")
+def get_doctor_upcoming_schedules():
+    if session.get("staff_role") not in ["Admin", "Dept Admin", "Super Admin"]:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    doctor_id = request.args.get("doctor_id", type=int)
+    if not doctor_id:
+        return jsonify({"items": []})
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    cur.execute("""
+        SELECT schedule_date, day_of_week, shift_type, start_time, end_time, notes
+        FROM doctor_schedules
+        WHERE doctor_id=%s AND schedule_date >= CURDATE()
+        ORDER BY schedule_date, start_time
+        LIMIT 20
+    """, (doctor_id,))
+    rows = cur.fetchall()
+    con.close()
+
+    items = []
+    for r in rows:
+        items.append({
+            "date": r["schedule_date"].strftime("%Y-%m-%d") if r["schedule_date"] else "",
+            "day_of_week": r["day_of_week"],
+            "shift_type": r["shift_type"],
+            "start_time": r["start_time"].strftime("%H:%M") if r["start_time"] else "",
+            "end_time": r["end_time"].strftime("%H:%M") if r["end_time"] else "",
+            "notes": r.get("notes") or ""
+        })
+
+    return jsonify({"items": items})
+
+@app.route("/doctor-view-patient/<rfid_uid>")
+def doctor_view_patient_by_rfid(rfid_uid):
+    con = mysql.connector.connect(**Config.DB_CONFIG)
+    cur = con.cursor(dictionary=True)
+
+    cur.execute("""
+        SELECT 
+            p.id AS patient_id,
+            p.full_name AS patient_name,
+            p.age,
+            p.gender,
+            p.email,
+            pv.temperature,
+            pv.bp_systolic,
+            pv.bp_diastolic,
+            pv.pulse,
+            pv.respiratory_rate,
+            pv.sp_o2,
+            pv.weight,
+            pv.height,
+            pv.blood_sugar,
+            pv.pain_score,
+            pv.additional_notes,
+            DATE_FORMAT(pv.created_at, '%d-%m-%Y %H:%i') AS created_at
+        FROM 
+            patients p
+        LEFT JOIN 
+            patient_vitals pv ON p.id = pv.patient_id
+        WHERE p.rfid_uid = %s
+        ORDER BY pv.created_at DESC
+        LIMIT 1;
+    """, (rfid_uid,))
+    patient = cur.fetchone()
+    cur.close()
+    con.close()
+
+    # Return patient's data (all relevant fields for your dashboard table)
+    if not patient:
+        return jsonify({'patient': None})
+    return jsonify({'patient': patient})
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'admin_logged_in' not in session:
+            return redirect(url_for('admin_login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# Doctor Scheduling Routes
+@app.route("/doctor-schedules")
+def doctor_schedules():
+    # Check if admin is logged in
+    if 'admin_logged_in' not in session:
+        return redirect(url_for('admin_login'))
+    
+    if session.get("user_role") != "Admin":
+        return redirect("/admin-login")
+    # ... rest of your code
+    
+    hospital_id = session.get('admin_hospital_id')
+    if not hospital_id:
+        flash("Hospital information not found.", "error")
+        return redirect("/admin-login")
+    
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+    
+    # Get all doctors in this hospital
+    cur.execute("""
+        SELECT s.id, s.full_name, s.email, s.phone, d.department_name
+        FROM staff_members s
+        LEFT JOIN departments d ON s.department_id = d.id
+        WHERE s.role = 'Doctor' AND s.is_active = 1
+        AND EXISTS (
+            SELECT 1 FROM admins a 
+            WHERE a.hospital_id = %s AND s.admin_id = a.id
+        )
+        ORDER BY s.full_name
+    """, (hospital_id,))
+    doctors = cur.fetchall()
+    
+    # Get departments for dropdown
+    cur.execute("""
+        SELECT id, department_name 
+        FROM departments 
+        WHERE hospital_id = %s AND is_active = 1
+        ORDER BY department_name
+    """, (hospital_id,))
+    departments = cur.fetchall()
+    
+    # Get current week schedules
+    from datetime import datetime, timedelta
+    today = datetime.now().date()
+    start_of_week = today - timedelta(days=today.weekday())
+    end_of_week = start_of_week + timedelta(days=6)
+    
+    cur.execute("""
+        SELECT ds.*, s.full_name as doctor_name, d.department_name,
+               DATE_FORMAT(ds.start_time, '%H:%i') as start_time_formatted,
+               DATE_FORMAT(ds.end_time, '%H:%i') as end_time_formatted
+        FROM doctor_schedules ds
+        JOIN staff_members s ON ds.doctor_id = s.id
+        LEFT JOIN departments d ON ds.department_id = d.id
+        WHERE ds.hospital_id = %s 
+        AND ds.schedule_date BETWEEN %s AND %s
+        ORDER BY ds.schedule_date, ds.start_time, s.full_name
+    """, (hospital_id, start_of_week, end_of_week))
+    schedules = cur.fetchall()
+    
+    con.close()
+    
+    return render_template(
+        "doctor_schedules.html",
+        doctors=doctors,
+        departments=departments,
+        schedules=schedules,
+        start_of_week=start_of_week,
+        end_of_week=end_of_week
+    )
+
+# @app.route("/add-doctor-schedule", methods=["POST"])
+# def add_doctor_schedule():
+#     if session.get("user_role") != "Admin":
+#         return jsonify({"error": "Unauthorized"}), 403
+    
+#     try:
+#         data = request.json
+#         hospital_id = session.get('admin_hospital_id')
+#         admin_id = session.get('admin_id')
+        
+#         con = get_db()
+#         cur = con.cursor()
+        
+#         # Check for conflicts
+#         cur.execute("""
+#             SELECT id FROM doctor_schedules 
+#             WHERE doctor_id = %s AND schedule_date = %s 
+#             AND ((start_time <= %s AND end_time > %s) 
+#                  OR (start_time < %s AND end_time >= %s)
+#                  OR (start_time >= %s AND end_time <= %s))
+#             AND is_active = 1
+#         """, (
+#             data['doctor_id'], data['schedule_date'],
+#             data['start_time'], data['start_time'],
+#             data['end_time'], data['end_time'],
+#             data['start_time'], data['end_time']
+#         ))
+        
+#         if cur.fetchone():
+#             return jsonify({"error": "Doctor has conflicting schedule at this time"}), 400
+        
+#         # Insert new schedule
+#         cur.execute("""
+#             INSERT INTO doctor_schedules 
+#             (hospital_id, doctor_id, department_id, schedule_date, day_of_week, 
+#              shift_type, start_time, end_time, max_patients, notes, created_by_admin_id)
+#             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+#         """, (
+#             hospital_id,
+#             data['doctor_id'],
+#             data.get('department_id'),
+#             data['schedule_date'],
+#             data['day_of_week'],
+#             data['shift_type'],
+#             data['start_time'],
+#             data['end_time'],
+#             data.get('max_patients', 20),
+#             data.get('notes', ''),
+#             admin_id
+#         ))
+        
+#         con.commit()
+#         con.close()
+        
+#         return jsonify({"success": True, "message": "Schedule added successfully"})
+        
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+
+@app.route("/update-doctor-schedule", methods=["POST"])
+def update_doctor_schedule():
+    if session.get("user_role") != "Admin":
+        return jsonify({"error": "Unauthorized"}), 403
+    
+    try:
+        data = request.json
+        schedule_id = data['schedule_id']
+        
+        con = get_db()
+        cur = con.cursor()
+        
+        # Check for conflicts (excluding current schedule)
+        cur.execute("""
+            SELECT id FROM doctor_schedules 
+            WHERE doctor_id = %s AND schedule_date = %s AND id != %s
+            AND ((start_time <= %s AND end_time > %s) 
+                 OR (start_time < %s AND end_time >= %s)
+                 OR (start_time >= %s AND end_time <= %s))
+            AND is_active = 1
+        """, (
+            data['doctor_id'], data['schedule_date'], schedule_id,
+            data['start_time'], data['start_time'],
+            data['end_time'], data['end_time'],
+            data['start_time'], data['end_time']
+        ))
+        
+        if cur.fetchone():
+            return jsonify({"error": "Doctor has conflicting schedule at this time"}), 400
+        
+        # Update schedule
+        cur.execute("""
+            UPDATE doctor_schedules 
+            SET department_id = %s, schedule_date = %s, day_of_week = %s,
+                shift_type = %s, start_time = %s, end_time = %s,
+                max_patients = %s, notes = %s, is_available = %s
+            WHERE id = %s AND hospital_id = %s
+        """, (
+            data.get('department_id'),
+            data['schedule_date'],
+            data['day_of_week'],
+            data['shift_type'],
+            data['start_time'],
+            data['end_time'],
+            data.get('max_patients', 20),
+            data.get('notes', ''),
+            data.get('is_available', 1),
+            schedule_id,
+            session.get('admin_hospital_id')
+        ))
+        
+        con.commit()
+        con.close()
+        
+        return jsonify({"success": True, "message": "Schedule updated successfully"})
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/delete-doctor-schedule", methods=["POST"])
+def delete_doctor_schedule():
+    if session.get("user_role") != "Admin":
+        return jsonify({"error": "Unauthorized"}), 403
+    
+    try:
+        data = request.json
+        schedule_id = data['schedule_id']
+        
+        con = get_db()
+        cur = con.cursor()
+        
+        cur.execute("""
+            DELETE FROM doctor_schedules 
+            WHERE id = %s AND hospital_id = %s
+        """, (schedule_id, session.get('admin_hospital_id')))
+        
+        con.commit()
+        con.close()
+        
+        return jsonify({"success": True, "message": "Schedule deleted successfully"})
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/bulk-generate-schedules", methods=["POST"])
+def bulk_generate_schedules():
+    if session.get("user_role") != "Admin":
+        return jsonify({"error": "Unauthorized"}), 403
+    
+    try:
+        data = request.json
+        hospital_id = session.get('admin_hospital_id')
+        admin_id = session.get('admin_id')
+        
+        from datetime import datetime, timedelta
+        import calendar
+        
+        start_date = datetime.strptime(data['start_date'], '%Y-%m-%d').date()
+        end_date = datetime.strptime(data['end_date'], '%Y-%m-%d').date()
+        
+        con = get_db()
+        cur = con.cursor()
+        
+        generated_count = 0
+        current_date = start_date
+        
+        while current_date <= end_date:
+            day_name = calendar.day_name[current_date.weekday()]
+            
+            if day_name in data['selected_days']:
+                # Check if schedule already exists
+                cur.execute("""
+                    SELECT id FROM doctor_schedules 
+                    WHERE doctor_id = %s AND schedule_date = %s
+                """, (data['doctor_id'], current_date))
+                
+                if not cur.fetchone():
+                    cur.execute("""
+                        INSERT INTO doctor_schedules 
+                        (hospital_id, doctor_id, department_id, schedule_date, day_of_week, 
+                         shift_type, start_time, end_time, max_patients, notes, created_by_admin_id)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (
+                        hospital_id,
+                        data['doctor_id'],
+                        data.get('department_id'),
+                        current_date,
+                        day_name,
+                        data['shift_type'],
+                        data['start_time'],
+                        data['end_time'],
+                        data.get('max_patients', 20),
+                        data.get('notes', ''),
+                        admin_id
+                    ))
+                    generated_count += 1
+            
+            current_date += timedelta(days=1)
+        
+        con.commit()
+        con.close()
+        
+        return jsonify({
+            "success": True, 
+            "message": f"Generated {generated_count} schedules successfully"
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/doctor-availability-report")
+def doctor_availability_report():
+    if session.get("user_role") != "Admin":
+        return redirect("/admin-login")
+    
+    hospital_id = session.get('admin_hospital_id')
+    
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+    
+    # Get doctor availability summary
+    cur.execute("""
+        SELECT 
+            s.id as doctor_id,
+            s.full_name as doctor_name,
+            d.department_name,
+            COUNT(ds.id) as total_schedules,
+                       SUM(ds.max_patients) as total_capacity,
+            SUM(ds.current_patients) as current_bookings,
+            ROUND(AVG(ds.current_patients / ds.max_patients * 100), 2) as utilization_rate
+        FROM staff_members s
+        LEFT JOIN departments d ON s.department_id = d.id
+        LEFT JOIN doctor_schedules ds ON s.id = ds.doctor_id 
+            AND ds.schedule_date >= CURDATE() 
+            AND ds.schedule_date <= DATE_ADD(CURDATE(), INTERVAL 7 DAY)
+        WHERE s.role = 'Doctor' AND s.is_active = 1
+        AND EXISTS (
+            SELECT 1 FROM admins a 
+            WHERE a.hospital_id = %s AND s.admin_id = a.id
+        )
+        GROUP BY s.id, s.full_name, d.department_name
+        ORDER BY s.full_name
+    """, (hospital_id,))
+    availability_report = cur.fetchall()
+    
+    con.close()
+    
+    return render_template(
+        "doctor_availability_report.html",
+        availability_report=availability_report
+    )
+
+# @app.route("/get-doctor-schedules-json")
+# def get_doctor_schedules_json():
+#     if session.get("user_role") != "Admin":
+#         return jsonify({"error": "Unauthorized"}), 403
+    
+#     hospital_id = session.get('admin_hospital_id')
+#     date = request.args.get('date')
+#     doctor_id = request.args.get('doctor_id')
+    
+#     con = get_db()
+#     cur = con.cursor(dictionary=True)
+    
+#     query = """
+#         SELECT ds.*, s.full_name as doctor_name, d.department_name,
+#                DATE_FORMAT(ds.start_time, '%H:%i') as start_time_formatted,
+#                DATE_FORMAT(ds.end_time, '%H:%i') as end_time_formatted
+#         FROM doctor_schedules ds
+#         JOIN staff_members s ON ds.doctor_id = s.id
+#         LEFT JOIN departments d ON ds.department_id = d.id
+#         WHERE ds.hospital_id = %s
+#     """
+#     params = [hospital_id]
+    
+#     if date:
+#         query += " AND ds.schedule_date = %s"
+#         params.append(date)
+    
+#     if doctor_id:
+#         query += " AND ds.doctor_id = %s"
+#         params.append(doctor_id)
+    
+#     query += " ORDER BY ds.schedule_date, ds.start_time"
+    
+#     cur.execute(query, params)
+#     schedules = cur.fetchall()
+    
+#     con.close()
+    
+#     return jsonify({"schedules": schedules})
+
+
+
+
+
+
+
+
+# Add these routes to your Flask app
+# Add these routes to your Flask app.py
+@app.route('/get_doctors')
+def get_doctors():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT 
+                s.id,
+                s.full_name,
+                COALESCE(d.department_name, '') AS specialization
+            FROM staff_members s
+            LEFT JOIN departments d ON s.department_id = d.id
+            WHERE s.role = 'Doctor'
+              AND s.is_active = 1
+              AND s.can_login = 1
+            ORDER BY s.full_name ASC
+        """)
+
+        doctors = cursor.fetchall()
+        cursor.close()
+        conn.close()
+
+        return jsonify([
+            {
+                "id": row["id"],
+                "name": row["full_name"],
+                "specialization": row["specialization"]
+            }
+            for row in doctors
+        ])
+
+    except Exception as e:
+        print(f"Error in get_doctors: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+# @app.route('/get_departments')
+# def get_departments():
+#     try:
+#         conn = get_db_connection()
+#         cursor = conn.cursor()
+#         cursor.execute("SELECT id, department_name FROM departments")
+#         departments = cursor.fetchall()
+#         conn.close()
+        
+#         return jsonify([{
+#             'id': dept[0], 
+#             'name': dept[1]
+#         } for dept in departments])
+        
+#     except Exception as e:
+#         print(f"Error in get_departments: {str(
+
+from datetime import datetime
+
+@app.route('/add-doctor-schedule', methods=['POST'])
+def add_doctor_schedule():
+    try:
+        if "admin_id" not in session:
+            return jsonify({'success': False, 'error': 'Unauthorized'}), 401
+
+        hospital_id = session.get("hospital_id")
+        if not hospital_id:
+            return jsonify({'success': False, 'error': 'Hospital ID missing in session'}), 401
+
+        data = request.get_json() or {}
+
+        # ✅ compute day_of_week safely from schedule_date (YYYY-MM-DD)
+        schedule_date = data.get("schedule_date")
+        if not schedule_date:
+            return jsonify({'success': False, 'error': 'schedule_date is required'}), 400
+
+        day_of_week = datetime.strptime(schedule_date, "%Y-%m-%d").strftime("%A")  # Monday, Tuesday...
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # conflict check
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM doctor_schedules
+            WHERE hospital_id = %s
+              AND doctor_id = %s
+              AND schedule_date = %s
+              AND (start_time < %s AND end_time > %s)
+        """, (
+            hospital_id,
+            data["doctor_id"],
+            schedule_date,
+            data["end_time"],
+            data["start_time"],
+        ))
+
+        if cursor.fetchone()[0] > 0:
+            conn.close()
+            return jsonify({'success': False, 'error': 'Schedule conflict detected'})
+
+        cursor.execute("""
+            INSERT INTO doctor_schedules
+              (hospital_id, doctor_id, department_id, schedule_date, day_of_week,
+               shift_type, start_time, end_time, max_patients, created_by_admin_id)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (
+            hospital_id,
+            data["doctor_id"],
+            data.get("department_id"),
+            schedule_date,
+            day_of_week,                      # ✅ backend generated
+            data["shift_type"],
+            data["start_time"],
+            data["end_time"],
+            data.get("max_patients", 20),
+            session["admin_id"]
+        ))
+
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'message': 'Schedule added successfully'})
+
+    except Exception as e:
+        print(f"Error in add_doctor_schedule: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/add-emergency-schedule', methods=['POST'])
+def add_emergency_schedule():
+    conn = None
+    cursor = None
+    try:
+        hospital_id = session.get("hospital_id")
+        if not hospital_id:
+            return jsonify({'success': False, 'error': 'Hospital ID missing in session'}), 401
+
+        data = request.get_json(force=True) or {}
+
+        required = ["doctor_id", "emergency_date", "emergency_start", "emergency_end", "emergency_reason"]
+        for k in required:
+            if not data.get(k):
+                return jsonify({'success': False, 'error': f"Missing field: {k}"}), 400
+
+        doctor_id = int(data["doctor_id"])
+        schedule_date = data["emergency_date"]
+        start_time = data["emergency_start"]
+        end_time = data["emergency_end"]
+        reason = data["emergency_reason"]
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # ✅ Ensure doctor belongs to this hospital
+        cursor.execute("""
+            SELECT 1
+            FROM staff_members
+            WHERE id=%s AND hospital_id=%s AND role='Doctor' AND is_active=1
+        """, (doctor_id, hospital_id))
+        if not cursor.fetchone():
+            return jsonify({'success': False, 'error': 'Doctor not found for this hospital'}), 404
+
+        # ✅ Insert emergency schedule including hospital_id
+        cursor.execute("""
+            INSERT INTO doctor_schedules
+              (hospital_id, doctor_id, schedule_date, start_time, end_time,
+               shift_type, max_patients, department_id, is_emergency, emergency_reason)
+            VALUES
+              (%s, %s, %s, %s, %s,
+               'Emergency', 50, NULL, 1, %s)
+        """, (hospital_id, doctor_id, schedule_date, start_time, end_time, reason))
+
+        conn.commit()
+        return jsonify({'success': True, 'message': 'Emergency schedule created'})
+
+    except Exception as e:
+        print(f"Error in add_emergency_schedule: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+    finally:
+        try:
+            if cursor: cursor.close()
+            if conn: conn.close()
+        except:
+            pass
+
+@app.route('/check-doctor-availability/<int:doctor_id>/<schedule_date>')
+def check_doctor_availability(doctor_id, schedule_date):
+    conn = None
+    cursor = None
+    try:
+        hospital_id = session.get("hospital_id")
+        if not hospital_id:
+            return jsonify({"error": "Hospital ID missing in session. Please login again."}), 401
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # ✅ Get doctor name from staff_members (doctor is staff with role Doctor)
+        cursor.execute("""
+        SELECT sm.full_name
+        FROM staff_members sm
+        JOIN admins a ON sm.admin_id = a.id
+        WHERE sm.id = %s
+        AND a.hospital_id = %s
+        AND sm.role = 'Doctor'
+        AND sm.is_active = 1
+    """, (doctor_id, hospital_id))
+
+
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({"error": "Doctor not found for this hospital."}), 404
+
+        doctor_name = row[0]
+
+        # ✅ Get existing schedules for that date (filter by hospital too)
+        cursor.execute("""
+            SELECT start_time, end_time, shift_type, max_patients
+            FROM doctor_schedules
+            WHERE doctor_id = %s
+              AND hospital_id = %s
+              AND schedule_date = %s
+            ORDER BY start_time
+        """, (doctor_id, hospital_id, schedule_date))
+
+        schedules = cursor.fetchall()
+
+        schedule_list = [{
+            "start_time": str(s[0]),
+            "end_time": str(s[1]),
+            "shift_type": s[2],
+            "max_patients": s[3]
+        } for s in schedules]
+
+        # ✅ Available rule (keep your logic)
+        available = len(schedules) < 3
+
+        return jsonify({
+            "available": available,
+            "doctor_name": doctor_name,
+            "schedules": schedule_list
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        try:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
+        except:
+            pass
+
+# @app.route('/add-emergency-schedule', methods=['POST'])
+# def add_emergency_schedule():
+#     try:
+#         data = request.get_json()
+#         conn = get_db_connection()
+#         cursor = conn.cursor()
+        
+#         # Insert emergency schedule (override conflicts)
+#         cursor.execute("""
+#             INSERT INTO doctor_schedules (doctor_id, schedule_date, start_time, end_time, 
+#                                         shift_type, max_patients, is_emergency, emergency_reason)
+#             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+#         """, (data['doctor_id'], data['emergency_date'], data['emergency_start'], 
+#               data['emergency_end'], 'Emergency', 50, True, data['emergency_reason']))
+        
+#         conn.commit()
+#         return jsonify({'success': True})
+        
+#     except Exception as e:
+
+
+@app.route("/api/doctor-status")
+def api_doctor_status():
+    if "staff_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    admin_id = session.get("admin_id")
+    if not admin_id:
+        return jsonify({"error": "Missing admin_id in session"}), 400
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    cur.execute("""
+        SELECT id, full_name, phone, department_id, is_available, last_status_update
+        FROM staff_members
+        WHERE admin_id = %s
+          AND role = 'Doctor'
+          AND is_active = 1
+        ORDER BY is_available DESC, full_name ASC
+    """, (admin_id,))
+    doctors = cur.fetchall()
+    con.close()
+
+    return jsonify({"doctors": doctors})
+
+
+
+@app.route("/doctor-status", methods=["GET"])
+def doctor_status_api():
+    if "admin_id" not in session:
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
+
+    hospital_id = session.get("hospital_id")
+    if not hospital_id:
+        return jsonify({"success": False, "error": "Hospital ID missing in session"}), 401
+
+    now = datetime.now()
+    today = now.strftime("%Y-%m-%d")
+    now_time = now.strftime("%H:%M:%S")
+
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+
+    # All doctors for this admin's hospital
+    cur.execute("""
+        SELECT sm.id,
+               sm.full_name,
+               sm.email,
+               sm.phone,
+               sm.username,
+               sm.is_active,
+               sm.can_login,
+               d.department_name
+        FROM staff_members sm
+        JOIN admins a ON a.id = sm.admin_id
+        LEFT JOIN departments d ON d.id = sm.department_id
+        WHERE a.hospital_id = %s
+          AND sm.role = 'Doctor'
+        ORDER BY sm.full_name
+    """, (hospital_id,))
+    doctors = cur.fetchall()
+
+    # Busy doctors RIGHT NOW (in an active available schedule slot)
+    cur.execute("""
+        SELECT DISTINCT doctor_id
+        FROM doctor_schedules
+        WHERE hospital_id = %s
+          AND schedule_date = %s
+          AND is_active = 1
+          AND is_available = 1
+          AND start_time <= %s
+          AND end_time > %s
+    """, (hospital_id, today, now_time, now_time))
+    busy_ids = {r["doctor_id"] for r in cur.fetchall()}
+
+    # Optional: get today's shifts for each doctor (small summary)
+    cur.execute("""
+        SELECT doctor_id, start_time, end_time, shift_type
+        FROM doctor_schedules
+        WHERE hospital_id = %s
+          AND schedule_date = %s
+          AND is_active = 1
+        ORDER BY start_time
+    """, (hospital_id, today))
+    shifts = cur.fetchall()
+
+    shift_map = {}
+    for s in shifts:
+        shift_map.setdefault(s["doctor_id"], []).append({
+            "start_time": str(s["start_time"]),
+            "end_time": str(s["end_time"]),
+            "shift_type": s["shift_type"]
+        })
+
+    for doc in doctors:
+        if not doc["is_active"] or not doc["can_login"]:
+            doc["status"] = "INACTIVE"
+        else:
+            doc["status"] = "BUSY" if doc["id"] in busy_ids else "FREE"
+
+        doc["today_shifts"] = shift_map.get(doc["id"], [])
+
+    cur.close()
+    conn.close()
+
+    return jsonify({
+        "success": True,
+        "date": today,
+        "time": now_time,
+        "doctors": doctors
+    })
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# --------------------------------doctor shedule
+# ============================
+# RECEPTIONIST → TOGGLE PATIENT STATUS (BLOCK / UNBLOCK)
+# ============================
+@app.route("/receptionist-patient/toggle/<int:pid>", methods=["POST"])
+def receptionist_toggle_patient(pid):
+    if session.get("staff_role") != "Receptionist":
+        return redirect("/receptionist-login")
+
+    staff_id = session.get("staff_id")
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # make sure this patient belongs to this receptionist
+    cur.execute("""
+        SELECT id, is_active
+        FROM patients
+        WHERE id = %s AND created_by_staff_id = %s
+    """, (pid, staff_id))
+    patient = cur.fetchone()
+
+    if not patient:
+        flash("Patient not found.", "danger")
+        return redirect(url_for("receptionist_dashboard"))
+
+    new_status = 0 if patient["is_active"] == 1 else 1
+
+    cur = con.cursor()
+    cur.execute("""
+        UPDATE patients
+        SET is_active = %s
+        WHERE id = %s AND created_by_staff_id = %s
+    """, (new_status, pid, staff_id))
+    con.commit()
+
+    flash("Patient status updated.", "success")
+    return redirect(url_for("receptionist_dashboard"))
+
+
+
+@app.route("/rep-staff")
+def rep_staff():
+    if "rep_id" not in session:
+        return redirect("/rep-login")
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # Step 1. Get the current rep's hospital name (use hospital_representatives)
+    cur.execute("""
+    SELECT h.id AS hospital_id, h.hospital_name
+    FROM hospital_representatives hr
+    JOIN hospitals h ON hr.hospital_id = h.id
+    WHERE hr.id = %s
+    """, (session["rep_id"],))
+
+    result = cur.fetchone()
+    if not result:
+        flash("Invalid session or hospital.")
+        return redirect("/rep-login")
+    
+    hospital_id = result["hospital_id"]
+    hospital_name = result["hospital_name"] 
+    # Step 2. Get all staff (grouping by admin) in this hospital, with stats
+    cur.execute("""
+        SELECT
+            s.id AS staff_id,
+            s.role,
+            s.full_name,
+            s.email,
+            s.phone,
+            s.username,
+            s.department_id,
+            s.is_active AS staff_active,
+            DATE_FORMAT(s.created_at, '%d-%m-%Y %H:%i') AS staff_created_on,
+
+            a.id AS admin_id,
+            a.admin_name,
+            a.admin_username,
+            a.admin_email,
+            a.admin_phone,
+            a.department_id AS admin_department,
+            a.is_active AS admin_active,
+            DATE_FORMAT(a.created_at, '%d-%m-%Y %H:%i') AS admin_created_on,
+
+            COALESCE(pc.patient_count, 0) AS patient_count,
+            COALESCE(vc.vitals_count, 0) AS vitals_count,
+            COALESCE(cc.consultation_count, 0) AS consultation_count
+
+        FROM staff_members s
+        JOIN admins a ON s.admin_id = a.id
+        LEFT JOIN (
+            SELECT created_by_staff_id, COUNT(*) AS patient_count
+            FROM patients
+            GROUP BY created_by_staff_id
+        ) pc ON s.id = pc.created_by_staff_id AND s.role = 'Receptionist'
+        LEFT JOIN (
+            SELECT recorded_by_staff_id, COUNT(*) AS vitals_count
+            FROM patient_vitals
+            GROUP BY recorded_by_staff_id
+        ) vc ON s.id = vc.recorded_by_staff_id AND s.role = 'Nurse'
+        LEFT JOIN (
+            SELECT doctor_id, COUNT(*) AS consultation_count
+            FROM consultancy_records
+            GROUP BY doctor_id
+        ) cc ON s.id = cc.doctor_id AND s.role = 'Doctor'
+
+        WHERE a.rep_id = %s
+        ORDER BY a.admin_name, s.role, s.full_name
+    """, (hospital_id,))
+    staff_rows = cur.fetchall()
+
+    # Step 3. Calculate admin statistics (optional)
+    admin_stats = {}
+    for row in staff_rows:
+        admin_name = row['admin_name']
+        if admin_name not in admin_stats:
+            admin_stats[admin_name] = {
+                'total_patients': 0,
+                'total_vitals': 0,
+                'total_consultations': 0,
+                'receptionist_count': 0,
+                'nurse_count': 0,
+                'doctor_count': 0
+            }
+        # Add counts based on role
+        if row['role'] == 'Receptionist':
+            admin_stats[admin_name]['total_patients'] += row['patient_count']
+            admin_stats[admin_name]['receptionist_count'] += 1
+        elif row['role'] == 'Nurse':
+            admin_stats[admin_name]['total_vitals'] += row['vitals_count']
+            admin_stats[admin_name]['nurse_count'] += 1
+        elif row['role'] == 'Doctor':
+            admin_stats[admin_name]['total_consultations'] += row['consultation_count']
+            admin_stats[admin_name]['doctor_count'] += 1
+
+    # Step 4. Get detailed patient info for this hospital only
+    cur.execute("""
+        SELECT
+            p.id, p.full_name, p.age, p.gender, p.rfid_uid, p.is_active, 
+            p.created_by_staff_id,
+            DATE_FORMAT(p.created_at, '%d-%m-%Y %H:%i') AS created_at,
+            s.full_name AS added_by_staff,
+            a.admin_name
+        FROM patients p
+        JOIN staff_members s ON p.created_by_staff_id = s.id
+        JOIN admins a ON s.admin_id = a.id
+        WHERE p.hospital_id = %s
+        ORDER BY p.created_at DESC
+    """, (hospital_id,))
+    patients = cur.fetchall()
+    receptionist_patients = {}
+    for pat in patients:
+        rid = pat['created_by_staff_id']
+        receptionist_patients.setdefault(rid, []).append(pat)
+
+    # Step 5. Get detailed vitals info for nurses in this hospital
+    cur.execute("""
+        SELECT
+            pv.recorded_by_staff_id as nurse_id,
+            pv.patient_id,
+            p.full_name as patient_name,
+            p.rfid_uid,
+            DATE_FORMAT(pv.created_at, '%d-%m-%Y %H:%i') as vitals_time,
+            pv.temperature,
+            pv.bp_systolic,
+            pv.bp_diastolic,
+            pv.pulse,
+            pv.sp_o2,
+            s.full_name AS nurse_name,
+            a.admin_name
+        FROM patient_vitals pv
+        JOIN patients p ON pv.patient_id = p.id
+        JOIN staff_members s ON pv.recorded_by_staff_id = s.id
+        JOIN admins a ON s.admin_id = a.id
+        WHERE a.rep_id = %s
+        ORDER BY pv.created_at DESC
+    """, (hospital_id,))
+    vitals = cur.fetchall()
+    nurse_vitals = {}
+    for vt in vitals:
+        nid = vt['nurse_id']
+        nurse_vitals.setdefault(nid, []).append(vt)
+
+    # Step 6. Get detailed consultations for doctors in this hospital
+    cur.execute("""
+        SELECT
+            c.doctor_id,
+            c.patient_id,
+            p.full_name as patient_name,
+            p.rfid_uid,
+            c.chief_complaint,
+            c.diagnosis,
+            c.prescription,
+            DATE_FORMAT(c.created_at, '%d-%m-%Y %H:%i') as consultation_time,
+            s.full_name AS doctor_name,
+            s.department_id AS doctor_department,
+            a.admin_name
+        FROM consultancy_records c
+        JOIN patients p ON c.patient_id = p.id
+        JOIN staff_members s ON c.doctor_id = s.id
+        JOIN admins a ON s.admin_id = a.id
+        WHERE a.rep_id = %s
+        ORDER BY c.created_at DESC
+    """, (hospital_id,))
+    consults = cur.fetchall()
+    doctor_consultancy = {}
+    for cc in consults:
+        did = cc['doctor_id']
+        doctor_consultancy.setdefault(did, []).append(cc)
+
+    con.close()
+
+    return render_template(
+        "rep_staff_comprehensive.html",
+        staff_rows=staff_rows,
+        admin_stats=admin_stats,
+        receptionist_patients=receptionist_patients,
+        nurse_vitals=nurse_vitals,
+        doctor_consultancy=doctor_consultancy
+    )
+
+# ============================
+# STAFF PROFILE (Receptionist / Nurse / Doctor)
+# ============================
+@app.route("/staff-profile", methods=["GET", "POST"])
+def staff_profile():
+    if "staff_id" not in session:
+        return redirect("/")
+
+    staff_id = session["staff_id"]
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # get current data
+    cur.execute("SELECT * FROM staff_members WHERE id = %s", (staff_id,))
+    staff = cur.fetchone()
+    if not staff:
+        flash("Staff record not found.", "danger")
+        return redirect("/")
+
+    if request.method == "POST":
+        full_name      = request.form.get("full_name", "").strip()
+        gender         = request.form.get("gender")
+        email          = request.form.get("email", "").strip()
+        phone          = request.form.get("phone", "").strip()
+        dob            = request.form.get("date_of_birth") or None
+        marital_status = request.form.get("marital_status") or None
+        father_name    = request.form.get("father_name", "").strip() or None
+        mother_name    = request.form.get("mother_name", "").strip() or None
+        qualification  = request.form.get("qualification", "").strip() or None
+        department     = request.form.get("department", "").strip() or None
+        address        = request.form.get("address", "").strip()
+
+        # simple validation
+        if not (full_name and gender and phone and address):
+            flash("Name, gender, phone and address are required.", "danger")
+            return render_template("staff_profile.html", staff=staff)
+
+        if not phone.isdigit() or len(phone) != 10:
+            flash("Phone must be 10 digits.", "danger")
+            return render_template("staff_profile.html", staff=staff)
+
+        # handle profile photo upload
+        photo_path = staff.get("profile_photo")
+        file = request.files.get("profile_photo")
+        remove_photo = request.form.get("remove_photo")
+
+        if remove_photo == "on":
+            photo_path = None
+        elif file and file.filename:
+            if allowed_file(file.filename):
+                filename = secure_filename(f"staff_{staff_id}_{file.filename}")
+                save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+                file.save(save_path)
+                # path relative to static/
+                photo_path = f"uploads/staff_photos/{filename}"
+            else:
+                flash("Invalid image type. Use png/jpg/jpeg/gif.", "danger")
+                return render_template("staff_profile.html", staff=staff)
+
+        # update DB
+        cur.execute("""
+            UPDATE staff_members
+            SET full_name = %s,
+                gender    = %s,
+                email     = %s,
+                phone     = %s,
+                date_of_birth = %s,
+                marital_status = %s,
+                father_name = %s,
+                mother_name = %s,
+                qualification = %s,
+                department = %s,
+                address    = %s,
+                profile_photo = %s
+            WHERE id = %s
+        """, (
+            full_name, gender, email, phone,
+            dob, marital_status, father_name, mother_name,
+            qualification, department, address,
+            photo_path, staff_id
+        ))
+        con.commit()
+
+        # keep session updated
+        session["staff_name"] = full_name
+        session["staff_photo"] = photo_path
+
+        flash("Profile updated successfully.", "success")
+
+        # reload updated data
+        cur.execute("SELECT * FROM staff_members WHERE id = %s", (staff_id,))
+        staff = cur.fetchone()
+
+    return render_template("staff_profile.html", staff=staff)
+
+#logout
+@app.route("/logout")
+def logout():
+    session.clear()
+    resp = redirect("/")
+    resp.delete_cookie("remember_token")
+    return resp
+#1111111111111111111111111111111111111111111111111111111111111111
+# Nurse login
+# @app.route("/nurse-login", methods=["GET", "POST"])
+# def nurse_login():
+#     # uses common helper: role = "Nurse"
+#     return staff_login_common("Nurse", "nurse_login.html", "nurse_dashboard")
+
+# @app.route("/nurse-logout")
+# def nurse_logout():
+#     # Clear all session data to log the user out
+#     session.clear()   
+    
+#     # Optional: Flash a message to the user
+#     flash("You have been successfully logged out.", "success")
+    
+#     # Redirect to the nurse login page
+#     return redirect("/nurse-login")
+#  # Replace with your database helper module
+# @app.route("/receptionist-logout")
+# def receptionist_logout():
+#     # Clear all session data to log the user out
+#     session.clear()
+    
+#     # Optional: Flash a message to the user
+#     flash("You have been successfully logged out.", "success")
+    
+#     # Redirect to the nurse login page
+#     return redirect("/receptionist-login")
+
+@app.route("/nurse-forgot-password", methods=["GET", "POST"])
+def nurse_forgot_password():
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # pre-fill email if we stored it in session earlier
+    email_prefill = session.get("nurse_fp_email", "")
+
+    if request.method == "POST":
+        action = request.form.get("action")
+
+        # 1) SEND OTP
+        if action == "send_otp":
+            email = request.form.get("email", "").strip().lower()
+
+            if not email:
+                flash("Please enter your email.", "danger")
+                return render_template("nurse_forgot_password.html", email=email)
+
+            # find nurse by email
+            cur.execute("""
+                SELECT * FROM nurses
+                WHERE LOWER(nurse_email) = %s
+            """, (email,))
+            nurse = cur.fetchone()
+
+            if not nurse:
+                flash("No nurse account found with that email.", "danger")
+                return render_template("nurse_forgot_password.html", email=email)
+
+            # generate 6-digit OTP
+            otp = str(random.randint(100000, 999999))
+
+            # store OTP + email + timestamp in session (valid for 10 minutes)
+            session["nurse_fp_email"] = email
+            session["nurse_fp_otp"] = otp
+            session["nurse_fp_time"] = time.time()
+
+            # send OTP email
+            try:
+                subject = "Nurse Password Reset OTP"
+                body = f"""
+Dear {nurse['nurse_name']},
+
+You requested to reset your nurse password.
+
+Your OTP is: {otp}
+
+This OTP is valid for 10 minutes.
+
+If you did not request this, please ignore this email.
+
+Regards,
+Hospital Management System
+"""
+                send_email(email, subject, body)
+                flash("OTP has been sent to your email.", "success")
+            except Exception as e:
+                print("Error sending nurse OTP email:", e)
+                flash("Failed to send OTP email.", "warning")
+
+            return render_template("nurse_forgot_password.html", email=email)
+
+        # 2) RESET PASSWORD USING OTP
+        elif action == "reset_password":
+            email = request.form.get("email", "").strip().lower()
+            otp = request.form.get("otp", "").strip()
+            new_pass = request.form.get("new_password", "").strip()
+            confirm_pass = request.form.get("confirm_password", "").strip()
+
+            # basic checks
+            if not (email and otp and new_pass and confirm_pass):
+                flash("Please fill in all fields.", "danger")
+                return render_template("nurse_forgot_password.html", email=email)
+
+            if new_pass != confirm_pass:
+                flash("New password and confirm password do not match.", "danger")
+                return render_template("nurse_forgot_password.html", email=email)
+
+            # check OTP from session
+            sess_email = session.get("nurse_fp_email")
+            sess_otp = session.get("nurse_fp_otp")
+            sess_time = session.get("nurse_fp_time")
+
+            if not (sess_email and sess_otp and sess_time):
+                flash("OTP session expired or not requested. Please request OTP again.", "danger")
+                return render_template("nurse_forgot_password.html", email=email)
+
+            # email must match the one that requested OTP
+            if email != sess_email:
+                flash("This email does not match the one used to request OTP.", "danger")
+                return render_template("nurse_forgot_password.html", email=email)
+
+            # check OTP validity (10 minutes)
+            if time.time() - sess_time > 600:  # 600 seconds = 10 minutes
+                flash("OTP has expired. Please request a new one.", "danger")
+                # clear OTP session
+                session.pop("nurse_fp_email", None)
+                session.pop("nurse_fp_otp", None)
+                session.pop("nurse_fp_time", None)
+                return render_template("nurse_forgot_password.html", email=email)
+
+            if otp != sess_otp:
+                flash("Invalid OTP.", "danger")
+                return render_template("nurse_forgot_password.html", email=email)
+
+            # OTP valid → update password
+            cur.execute("""
+                SELECT * FROM nurses
+                WHERE LOWER(nurse_email) = %s
+            """, (email,))
+            nurse = cur.fetchone()
+
+            if not nurse:
+                flash("Nurse not found for this email.", "danger")
+                return render_template("nurse_forgot_password.html", email=email)
+
+            hashed = generate_password_hash(new_pass)
+
+            cur.execute("""
+                UPDATE nurses
+                SET nurse_password = %s
+                WHERE id = %s
+            """, (hashed, nurse["id"]))
+            con.commit()
+
+            # clear OTP session
+            session.pop("nurse_fp_email", None)
+            session.pop("nurse_fp_otp", None)
+            session.pop("nurse_fp_time", None)
+
+            flash("Password reset successful. Please log in with your new password.", "success")
+            return redirect(url_for("nurse_login"))
+
+    # GET request
+    return render_template("nurse_forgot_password.html", email=email_prefill)
+
+@app.route("/nurse-dashboard")
+def nurse_dashboard():
+    if session.get("staff_role") != "Nurse":
+        return redirect("/nurse-login")
+
+    staff_name = session.get("staff_name")
+    hospital_name = session.get("staff_hospital_name")
+    staff_photo = session.get("staff_photo")
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # ✅ Enterprise check
+    cur.execute("""
+        SELECT id
+        FROM departments
+        WHERE hospital_id = (
+            SELECT id FROM hospitals WHERE hospital_name = %s
+        )
+        LIMIT 1
+    """, (hospital_name,))
+    is_enterprise = cur.fetchone() is not None
+
+    # Patients list
+    cur.execute("""
+        SELECT p.id, p.full_name, p.age, p.gender, p.email, p.phone, p.address, p.rfid_uid,
+               DATE_FORMAT(p.created_at, '%d-%m-%Y %H:%i') AS created_on
+        FROM patients p
+        JOIN hospitals h ON p.hospital_id = h.id
+        WHERE h.hospital_name = %s
+        ORDER BY p.created_at DESC
+        LIMIT 100
+    """, (hospital_name,))
+
+    patients = cur.fetchall()
+    con.close()
+
+    return render_template(
+        "nurse_dashboard.html",
+        staff_name=staff_name,
+        hospital_name=hospital_name,
+        staff_photo=staff_photo,
+        patients=patients,
+        is_enterprise=is_enterprise
+    )
+
+
+# nurse bed management
+
+# Separate route for NURSE bed management (view-only with status toggle)
+# Separate route for NURSE bed management (view-only with status toggle)
+@app.route("/nurse-bed-management", methods=["GET"])
+def nurse_bed_management():
+    # Only nurses can access
+    if "staff_id" not in session or session.get("staff_role") != "Nurse":
+        flash("Access denied. Only nurses can access this page.", "danger")
+        return redirect("/nurse-login")
+
+    staff_id = session.get("staff_id")
+    hospital_name = session.get("staff_hospital_name")
+    
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # Get nurse's hospital ID through admin relationship
+    cur.execute("""
+        SELECT a.hospital_id 
+        FROM staff_members sm 
+        INNER JOIN admins a ON sm.admin_id = a.id 
+        WHERE sm.id = %s
+    """, (staff_id,))
+    result = cur.fetchone()
+    hospital_id = result["hospital_id"] if result else None
+
+    if not hospital_id:
+        flash("Hospital not found for your account.", "danger")
+        return redirect("/nurse-dashboard")
+
+    # Get departments for filter
+    cur.execute("""
+        SELECT id, department_name 
+        FROM departments 
+        WHERE hospital_id = %s 
+        ORDER BY department_name
+    """, (hospital_id,))
+    departments = cur.fetchall()
+
+    # Handle department filter
+    department_id = request.args.get('department_id')
+    
+    # Pagination
+    page = int(request.args.get("page", 1))
+    records_per_page = 15
+    offset = (page - 1) * records_per_page
+
+    # Build query with optional department filter
+    if department_id:
+        bed_query = """
+            SELECT b.id, b.bed_number, b.floor_number, b.room_number, b.is_occupied,
+                   b.created_at, b.patient_id, d.department_name
+            FROM beds b
+            INNER JOIN departments d ON b.department_id = d.id
+            WHERE b.hospital_id = %s AND b.department_id = %s
+            ORDER BY d.department_name, b.floor_number, b.room_number, b.bed_number
+            LIMIT %s OFFSET %s
+        """
+        count_query = "SELECT COUNT(*) as total_beds FROM beds WHERE hospital_id = %s AND department_id = %s"
+        cur.execute(bed_query, (hospital_id, department_id, records_per_page, offset))
+        beds = cur.fetchall()
+        cur.execute(count_query, (hospital_id, department_id))
+    else:
+        bed_query = """
+            SELECT b.id, b.bed_number, b.floor_number, b.room_number, b.is_occupied,
+                   b.created_at, b.patient_id, d.department_name
+            FROM beds b
+            INNER JOIN departments d ON b.department_id = d.id
+            WHERE b.hospital_id = %s
+            ORDER BY d.department_name, b.floor_number, b.room_number, b.bed_number
+            LIMIT %s OFFSET %s
+        """
+        count_query = "SELECT COUNT(*) as total_beds FROM beds WHERE hospital_id = %s"
+        cur.execute(bed_query, (hospital_id, records_per_page, offset))
+        beds = cur.fetchall()
+        cur.execute(count_query, (hospital_id,))
+    
+    total_count = cur.fetchone()["total_beds"]
+    total_pages = (total_count + records_per_page - 1) // records_per_page
+
+    con.close()
+
+    return render_template(
+        "nurse_bed_management.html",
+        departments=departments,
+        beds=beds,
+        page=page,
+        total_pages=total_pages,
+        total_count=total_count,
+        records_per_page=records_per_page,
+        hospital_name=hospital_name
+    )
+
+# Updated mark_occupied route
+@app.route("/mark-occupied/<int:bed_id>")
+def mark_occupied(bed_id):
+
+    # ✅ allow admin OR nurse
+    if "admin_id" not in session and ("staff_id" not in session or session.get("staff_role") != "Nurse"):
+        flash("Access denied.", "danger")
+        return redirect("/admin-login")
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # ✅ find hospital_id depending on who is logged in
+    hospital_id = None
+
+    if "admin_id" in session:
+        cur.execute("SELECT hospital_id FROM admins WHERE id = %s", (session["admin_id"],))
+        row = cur.fetchone()
+        hospital_id = row["hospital_id"] if row else None
+
+    else:
+        # nurse
+        staff_id = session.get("staff_id")
+        cur.execute("""
+            SELECT a.hospital_id
+            FROM staff_members sm
+            INNER JOIN admins a ON sm.admin_id = a.id
+            WHERE sm.id = %s
+        """, (staff_id,))
+        row = cur.fetchone()
+        hospital_id = row["hospital_id"] if row else None
+
+    if not hospital_id:
+        con.close()
+        flash("Hospital not found.", "danger")
+        return redirect("/admin-dashboard" if "admin_id" in session else "/nurse-dashboard")
+
+    try:
+        cur.execute("""
+            UPDATE beds
+            SET is_occupied = 1, updated_at = NOW()
+            WHERE id = %s AND hospital_id = %s AND is_occupied = 0
+        """, (bed_id, hospital_id))
+
+        if cur.rowcount > 0:
+            con.commit()
+            flash("Bed marked as occupied successfully!", "success")
+        else:
+            flash("Bed not found or already occupied.", "warning")
+
+    except Exception as e:
+        con.rollback()
+        flash(f"Error updating bed status: {str(e)}", "danger")
+
+    con.close()
+
+    # ✅ go back where user came from
+    return redirect(request.referrer or "/bed-management")
+
+# Updated mark_free route
+@app.route("/mark-free/<int:bed_id>")
+def mark_free(bed_id):
+
+    # ✅ allow admin OR nurse
+    if "admin_id" not in session and ("staff_id" not in session or session.get("staff_role") != "Nurse"):
+        flash("Access denied.", "danger")
+        return redirect("/admin-login")
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    hospital_id = None
+
+    if "admin_id" in session:
+        cur.execute("SELECT hospital_id FROM admins WHERE id = %s", (session["admin_id"],))
+        row = cur.fetchone()
+        hospital_id = row["hospital_id"] if row else None
+    else:
+        staff_id = session.get("staff_id")
+        cur.execute("""
+            SELECT a.hospital_id
+            FROM staff_members sm
+            INNER JOIN admins a ON sm.admin_id = a.id
+            WHERE sm.id = %s
+        """, (staff_id,))
+        row = cur.fetchone()
+        hospital_id = row["hospital_id"] if row else None
+
+    if not hospital_id:
+        con.close()
+        flash("Hospital not found.", "danger")
+        return redirect("/admin-dashboard" if "admin_id" in session else "/nurse-dashboard")
+
+    try:
+        cur.execute("""
+            UPDATE beds
+            SET is_occupied = 0, patient_id = NULL, updated_at = NOW()
+            WHERE id = %s AND hospital_id = %s AND is_occupied = 1
+        """, (bed_id, hospital_id))
+
+        if cur.rowcount > 0:
+            con.commit()
+            flash("Bed marked as available successfully!", "success")
+        else:
+            flash("Bed not found or already available.", "warning")
+
+    except Exception as e:
+        con.rollback()
+        flash(f"Error updating bed status: {str(e)}", "danger")
+
+    con.close()
+    return redirect(request.referrer or "/bed-management")
+
+
+        # Nurse interface
+@app.route("/scan-rfid", methods=["POST"])
+def scan_rfid():
+    data = request.get_json()
+    rfid_uid = data.get("rfid_uid")
+
+    if not rfid_uid:
+        return jsonify({"error": "No RFID UID received"}), 400
+
+    try:
+        con = get_db()
+        cur = con.cursor(dictionary=True)
+
+        # Query the patient table to get the patient data based on RFID UID
+        cur.execute("SELECT id, full_name, age, gender, email, phone, address, rfid_uid FROM patients WHERE rfid_uid = %s", (rfid_uid,))
+        patient = cur.fetchone()
+
+        if not patient:
+            return jsonify({"error": "Patient not registered with this RFID UID"}), 404
+
+        return jsonify({
+            "patient_id": patient["id"],
+            "patient_name": patient["full_name"],
+            "patient_age": patient["age"],
+            "patient_gender": patient["gender"],
+            "patient_email": patient["email"],
+            "patient_phone": patient["phone"],
+            "patient_address": patient["address"],
+            "rfid_uid": patient["rfid_uid"]  # Include UID in response
+        })
+
+    except Exception as e:
+        print("Error during RFID scan:", e)
+        return jsonify({"error": "Server error"}), 500
+
+@app.route("/add-vitals", methods=["POST"])
+def add_vitals():
+    if "staff_id" not in session:
+        flash("Please log in first.", "danger")
+        return redirect("/")
+
+    staff_id = session["staff_id"]
+
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    # Get current user's role
+    cur.execute("SELECT role FROM staff_members WHERE id = %s", (staff_id,))
+    staff = cur.fetchone()
+    if not staff or staff["role"].lower() != "nurse":
+        flash("Only a nurse can record patient vitals.", "danger")
+        cur.close()
+        con.close()
+        return redirect(url_for('nurse_dashboard'))
+
+    # Collect form data
+    patient_id = request.form.get("patient_id")
+    temperature = request.form.get("temperature")
+    bp_systolic = request.form.get("bp_systolic")
+    bp_diastolic = request.form.get("bp_diastolic")
+    pulse = request.form.get("pulse")
+    respiratory_rate = request.form.get("respiratory_rate")
+    sp_o2 = request.form.get("sp_o2")
+    weight = request.form.get("weight")
+    height = request.form.get("height")
+    blood_sugar = request.form.get("blood_sugar")
+    pain_score = request.form.get("pain_score")
+    additional_notes = request.form.get("additional_notes")
+
+    # Now include the staff_id for recorded_by_staff_id
+    cur = con.cursor()
+    cur.execute(""" 
+        INSERT INTO patient_vitals 
+        (patient_id, temperature, bp_systolic, bp_diastolic, pulse, respiratory_rate, sp_o2, 
+         weight, height, blood_sugar, pain_score, additional_notes, recorded_by_staff_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """, (patient_id, temperature, bp_systolic, bp_diastolic, pulse, respiratory_rate, sp_o2, 
+          weight, height, blood_sugar, pain_score, additional_notes, staff_id))
+    con.commit()
+    cur.close()
+    con.close()
+
+    flash("Vitals saved successfully.", "success")
+    return redirect(url_for('nurse_dashboard'))
+
+@app.route('/save-vitals', methods=['POST'])
+def save_vitals():
+    try:
+        # Debug: Print session contents
+        print("Session contents:", dict(session))
+        
+        # Check if any staff is logged in (check all possible session keys)
+        staff_id = None
+        if "staff_id" in session:
+            staff_id = session["staff_id"]
+        elif "doctor_id" in session:
+            staff_id = session["doctor_id"]
+        elif "nurse_id" in session:
+            staff_id = session["nurse_id"]
+        elif "receptionist_id" in session:
+            staff_id = session["receptionist_id"]
+        elif "admin_id" in session:
+            staff_id = session["admin_id"]
+        
+        print(f"Found staff_id: {staff_id}")
+        
+        if not staff_id:
+            return jsonify({'success': False, 'error': 'No staff logged in'}), 401
+
+        data = request.get_json()
+        print("Request data:", data)
+
+        # Retrieve form data
+        patient_id = data.get('patient_id')
+        if not patient_id or not patient_id.isdigit():
+            raise ValueError("Invalid Patient ID")
+        
+        temperature = data.get('temperature')
+        bp_systolic = data.get('bp_systolic')
+        bp_diastolic = data.get('bp_diastolic')
+        pulse = data.get('pulse')
+        respiratory_rate = data.get('respiratory_rate')
+        sp_o2 = data.get('sp_o2')
+        weight = data.get('weight')
+        height = data.get('height')
+        blood_sugar = data.get('blood_sugar')
+        pain_score = data.get('pain_score')
+        additional_notes = data.get('additional_notes')
+
+        # Connect to the database and insert the vitals data
+        con = get_db()
+        cur = con.cursor()
+        
+        print(f"Inserting vitals for patient_id: {patient_id}, recorded_by_staff_id: {staff_id}")
+        
+        cur.execute("""
+            INSERT INTO patient_vitals (
+                patient_id, recorded_by_staff_id, temperature, bp_systolic, bp_diastolic, 
+                pulse, respiratory_rate, sp_o2, weight, height, blood_sugar, pain_score, 
+                additional_notes
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (patient_id, staff_id, temperature, bp_systolic, bp_diastolic, 
+              pulse, respiratory_rate, sp_o2, weight, height, blood_sugar, pain_score, 
+              additional_notes))
+
+        con.commit()
+        con.close()
+
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"Error saving vitals: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route("/nurse/vitals/<int:patient_id>")
+def vitals_list(patient_id):
+    con = get_db()
+    cur = con.cursor(dictionary=True)
+
+    cur.execute("""
+        SELECT * FROM patient_vitals
+        WHERE patient_id = %s
+        ORDER BY created_at DESC
+    """, (patient_id,))
+    patient_vitals = cur.fetchall()
+
+    return render_template("nurse_dashboard.html", patient_vitals=patient_vitals)
+
+
+    #edit vitals
+@app.route('/edit-patient/<int:patient_id>', methods=['GET', 'POST'])
+def edit_patient(patient_id):
+    con = None
+    cur = None
+    
+    try:
+        # Connect to the database
+        con = mysql.connector.connect(**Config.DB_CONFIG)
+        cur = con.cursor(dictionary=True)
+
+        # Fetch the patient's details and vitals using patient_id
+        cur.execute("""
+            SELECT 
+                p.id AS patient_id, 
+                p.full_name, 
+                p.age, 
+                p.gender, 
+                p.email, 
+                p.phone, 
+                p.address, 
+                pv.temperature, 
+                pv.bp_systolic, 
+                pv.bp_diastolic, 
+                pv.pulse, 
+                pv.respiratory_rate, 
+                pv.sp_o2, 
+                pv.weight, 
+                pv.height, 
+                pv.blood_sugar, 
+                pv.pain_score, 
+                pv.additional_notes
+            FROM 
+                patients p
+            LEFT JOIN 
+                patient_vitals pv ON p.id = pv.patient_id
+            WHERE 
+                p.id = %s
+        """, (patient_id,))
+
+        patient = cur.fetchone()
+        
+        # Consume any remaining results to prevent "Unread result found" error
+        try:
+            cur.fetchall()
+        except:
+            pass
+
+        if not patient:
+            flash("Patient not found", "danger")
+            return redirect(url_for('view_patients'))
+
+        if request.method == 'POST':
+            # Handle form submission: update vitals only
+            updated_temperature = request.form.get('temperature')
+            updated_bp_systolic = request.form.get('bp_systolic')
+            updated_bp_diastolic = request.form.get('bp_diastolic')
+            updated_pulse = request.form.get('pulse')
+            updated_respiratory_rate = request.form.get('respiratory_rate')
+            updated_sp_o2 = request.form.get('sp_o2')
+            updated_weight = request.form.get('weight')
+            updated_height = request.form.get('height')
+            updated_blood_sugar = request.form.get('blood_sugar')
+            updated_pain_score = request.form.get('pain_score')
+            updated_additional_notes = request.form.get('additional_notes', '')
+
+            # Check if vitals record exists for this patient
+            cur.execute("SELECT id FROM patient_vitals WHERE patient_id = %s", (patient_id,))
+            existing_vital = cur.fetchone()
+            
+            # Consume remaining results
+            try:
+                cur.fetchall()
+            except:
+                pass
+
+            if existing_vital:
+                # Update existing vitals record
+                cur.execute("""
+                    UPDATE patient_vitals
+                    SET temperature = %s, bp_systolic = %s, bp_diastolic = %s, pulse = %s, 
+                        respiratory_rate = %s, sp_o2 = %s, weight = %s, height = %s, 
+                        blood_sugar = %s, pain_score = %s, additional_notes = %s,
+                        updated_at = NOW()
+                    WHERE patient_id = %s
+                """, (
+                    updated_temperature, updated_bp_systolic, updated_bp_diastolic, updated_pulse,
+                    updated_respiratory_rate, updated_sp_o2, updated_weight, updated_height,
+                    updated_blood_sugar, updated_pain_score, updated_additional_notes, patient_id
+                ))
+            else:
+                # Insert new vitals record if none exists
+                staff_id = session.get('staff_id', 1)  # Default to 1 if no staff_id in session
+                
+                cur.execute("""
+                    INSERT INTO patient_vitals 
+                    (patient_id, recorded_by_staff_id, temperature, bp_systolic, bp_diastolic, 
+                     pulse, respiratory_rate, sp_o2, weight, height, blood_sugar, pain_score, 
+                     additional_notes, created_at, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+                """, (
+                    patient_id, staff_id, updated_temperature, updated_bp_systolic,
+                    updated_bp_diastolic, updated_pulse, updated_respiratory_rate,
+                    updated_sp_o2, updated_weight, updated_height, updated_blood_sugar,
+                    updated_pain_score, updated_additional_notes
+                ))
+
+            # Commit changes to the database
+            con.commit()
+            flash("Vitals updated successfully", "success")
+            return redirect(url_for('view_patients'))
+
+        return render_template('edit_patient.html', patient=patient)
+
+    except mysql.connector.Error as db_error:
+        if con:
+            con.rollback()
+        flash(f"Database error: {str(db_error)}", "danger")
+        print(f"Database error in edit_patient: {db_error}")
+        return redirect(url_for('view_patients'))
+    
+    except Exception as e:
+        if con:
+            con.rollback()
+        flash(f"An error occurred: {str(e)}", "danger")
+        print(f"Error in edit_patient: {e}")
+        return redirect(url_for('view_patients'))
+    
+    finally:
+        # Properly close cursor and connection
+        if cur:
+            try:
+                cur.close()
+            except:
+                pass
+        if con:
+            try:
+                con.close()
+            except:
+                pass
+
+
+@app.route('/delete-nurse-vitals/<int:patient_id>', methods=['POST'])
+def delete_nurse_vitals(patient_id):
+    nurse_id = session.get('staff_id')  # use correct session key
+
+    con = get_db()
+    cur = con.cursor()
+    cur.execute("""
+        DELETE FROM patient_vitals 
+        WHERE patient_id = %s AND recorded_by_staff_id = %s
+    """, (patient_id, nurse_id))
+    con.commit()
+    cur.close()
+    con.close()
+    flash("Your vitals for this patient have been deleted.", "success")
+    return redirect(url_for('view_patients'))
+
+@app.route("/view-patients")
+def view_patients():
+    if "staff_id" not in session:
+        return redirect("/")
+
+    con = mysql.connector.connect(**Config.DB_CONFIG)
+    cur = con.cursor(dictionary=True)
+
+    # First, get the hospital_id of the logged-in staff member
+    cur.execute("""
+        SELECT a.hospital_id 
+        FROM staff_members s 
+        JOIN admins a ON a.id = s.admin_id 
+        WHERE s.id = %s
+    """, (session["staff_id"],))
+    
+    staff_hospital = cur.fetchone()
+    if not staff_hospital:
+        cur.close()
+        con.close()
+        return "Staff member not found or not associated with a hospital", 404
+
+    hospital_id = staff_hospital['hospital_id']
+
+    # Now get patients and their latest vitals for this hospital
+    cur.execute("""
+        SELECT 
+            p.id AS patient_id,
+            p.full_name AS patient_name,
+            p.age,
+            p.gender,
+            p.phone,
+            p.email,
+            p.address,
+            p.created_at,
+
+            pv.temperature,
+            pv.bp_systolic,
+            pv.bp_diastolic,
+            pv.pulse,
+            pv.respiratory_rate,
+            pv.sp_o2,
+            pv.weight,
+            pv.height,
+            pv.blood_sugar,
+            pv.pain_score,
+            pv.additional_notes,
+            DATE_FORMAT(pv.created_at, '%%d-%%m-%%Y %%H:%%i') AS vitals_time,
+
+            rec.full_name AS recorded_by_staff,
+            rec.role AS staff_role
+
+        FROM patients p
+        
+        LEFT JOIN (
+            SELECT pv1.*
+            FROM patient_vitals pv1
+            WHERE pv1.created_at = (
+                SELECT MAX(pv2.created_at)
+                FROM patient_vitals pv2
+                WHERE pv2.patient_id = pv1.patient_id
+            )
+        ) pv ON pv.patient_id = p.id
+
+        LEFT JOIN staff_members rec ON rec.id = pv.recorded_by_staff_id
+
+        WHERE p.hospital_id = %s AND p.is_active = 1
+        ORDER BY p.created_at DESC
+    """, (hospital_id,))
+
+    patients = cur.fetchall()
+    cur.close()
+    con.close()
+
+    return render_template("view_patients.html", patients=patients)
+@app.route('/admin/patient-tracking')
+def admin_patient_tracking():
+    if 'admin_id' not in session:
+        return redirect(url_for('admin_login'))
+    
+    admin_hospital = session['admin_hospital_name']
+    
+    try:
+        connection = mysql.connector.connect(**Config.DB_CONFIG)
+        cursor = connection.cursor(dictionary=True)
+        
+        query = """
+        SELECT 
+            p.id as patient_id,
+            p.full_name,
+            p.age,
+            p.gender,
+            p.phone,
+            p.email,
+            p.rfid_uid,
+            p.created_at,
+            s.full_name as added_by_staff,
+            s.role as added_by_role,
+            d.department_name as staff_department,
+            s.is_active as staff_is_active,
+            a.admin_name as admin_name,
+
+            -- Count vitals
+            (SELECT COUNT(*) FROM patient_vitals pv WHERE pv.patient_id = p.id) as vitals_count,
+
+            -- Count consultations
+            (SELECT COUNT(*) FROM consultancy_records cr WHERE cr.patient_id = p.id) as consultation_count,
+
+            -- Latest vitals info
+            (SELECT s2.full_name FROM patient_vitals pv2 
+                LEFT JOIN staff_members s2 ON pv2.recorded_by_staff_id = s2.id 
+                WHERE pv2.patient_id = p.id 
+                ORDER BY pv2.created_at DESC LIMIT 1) as last_vitals_by,
+
+            (SELECT s2.role FROM patient_vitals pv2 
+                LEFT JOIN staff_members s2 ON pv2.recorded_by_staff_id = s2.id 
+                WHERE pv2.patient_id = p.id 
+                ORDER BY pv2.created_at DESC LIMIT 1) as last_vitals_by_role,
+
+            (SELECT pv2.created_at FROM patient_vitals pv2 
+                WHERE pv2.patient_id = p.id 
+                ORDER BY pv2.created_at DESC LIMIT 1) as last_vitals_date,
+
+            -- Latest nurse Online/Offline status for vitals
+            (SELECT s2.is_active FROM patient_vitals pv2
+                LEFT JOIN staff_members s2 ON pv2.recorded_by_staff_id = s2.id
+                WHERE pv2.patient_id = p.id
+                ORDER BY pv2.created_at DESC LIMIT 1) AS last_vitals_staff_is_active,
+
+            -- Latest consultation info
+            (SELECT s3.full_name FROM consultancy_records cr2 
+                LEFT JOIN staff_members s3 ON cr2.doctor_id = s3.id 
+                WHERE cr2.patient_id = p.id 
+                ORDER BY cr2.created_at DESC LIMIT 1) as last_consultation_by,
+
+            (SELECT d3.department_name FROM consultancy_records cr2 
+                LEFT JOIN staff_members s3 ON cr2.doctor_id = s3.id 
+                LEFT JOIN departments d3 ON s3.department_id = d3.id
+                WHERE cr2.patient_id = p.id 
+                ORDER BY cr2.created_at DESC LIMIT 1) as last_consultation_dept,
+
+            (SELECT cr2.created_at FROM consultancy_records cr2 
+                WHERE cr2.patient_id = p.id 
+                ORDER BY cr2.created_at DESC LIMIT 1) as last_consultation_date,
+
+            -- Latest doctor Online/Offline status for consult
+            (SELECT s3.is_active FROM consultancy_records cr2
+                LEFT JOIN staff_members s3 ON cr2.doctor_id = s3.id
+                WHERE cr2.patient_id = p.id
+                ORDER BY cr2.created_at DESC LIMIT 1) AS last_consultation_doctor_is_active
+
+        FROM patients p
+        LEFT JOIN staff_members s ON p.created_by_staff_id = s.id
+        LEFT JOIN departments d ON s.department_id = d.id
+        LEFT JOIN admins a ON s.admin_id = a.id
+        LEFT JOIN hospitals h ON p.hospital_id = h.id
+        WHERE h.hospital_name = %s
+        ORDER BY p.created_at DESC
+        """
+        
+        cursor.execute(query, (admin_hospital,))
+        patients = cursor.fetchall()
+        
+        for patient in patients:
+            patient['vitals_count'] = int(patient.get('vitals_count', 0) or 0)
+            patient['consultation_count'] = int(patient.get('consultation_count', 0) or 0)
+            patient['last_vitals_staff_is_active'] = int(patient.get('last_vitals_staff_is_active', 0) or 0)
+            patient['last_consultation_doctor_is_active'] = int(patient.get('last_consultation_doctor_is_active', 0) or 0)
+
+        cursor.close()
+        connection.close()
+        
+        return render_template('admin_patient_tracking.html', patients=patients)
+        
+    except Exception as e:
+        print(f"Error in admin_patient_tracking: {e}")
+        return f"Database error: {e}", 500
+
+
+
+
+
+# @app.route('/admin/patient-tracking')
+# def admin_patient_tracking():
+#     if 'admin_id' not in session:
+#         return redirect(url_for('admin_login'))
+    
+#     admin_hospital = session['admin_hospital_name']
+    
+#     try:
+#         connection = mysql.connector.connect(**Config.DB_CONFIG)
+#         cursor = connection.cursor(dictionary=True)
+        
+#         query = """
+#         SELECT 
+#             p.id as patient_id,
+#             p.full_name,
+#             p.age,
+#             p.gender,
+#             p.phone,
+#             p.email,
+#             p.rfid_uid,
+#             p.created_at,
+#             s.full_name as added_by_staff,
+#             s.role as added_by_role,
+#             s.department as staff_department,
+#             s.is_active as staff_is_active,
+#             a.admin_name as admin_name,
+
+#             -- Count vitals
+#             (SELECT COUNT(*) FROM patient_vitals pv WHERE pv.patient_id = p.id) as vitals_count,
+
+#             -- Count consultations
+#             (SELECT COUNT(*) FROM consultancy_records cr WHERE cr.patient_id = p.id) as consultation_count,
+
+#             -- Latest vitals info
+#             (SELECT s2.full_name FROM patient_vitals pv2 
+#                 LEFT JOIN staff_members s2 ON pv2.recorded_by_staff_id = s2.id 
+#                 WHERE pv2.patient_id = p.id 
+#                 ORDER BY pv2.created_at DESC LIMIT 1) as last_vitals_by,
+
+#             (SELECT s2.role FROM patient_vitals pv2 
+#                 LEFT JOIN staff_members s2 ON pv2.recorded_by_staff_id = s2.id 
+#                 WHERE pv2.patient_id = p.id 
+#                 ORDER BY pv2.created_at DESC LIMIT 1) as last_vitals_by_role,
+
+#             (SELECT pv2.created_at FROM patient_vitals pv2 
+#                 WHERE pv2.patient_id = p.id 
+#                 ORDER BY pv2.created_at DESC LIMIT 1) as last_vitals_date,
+
+#             -- Add this: Latest nurse Online/Offline status for vitals
+#             (SELECT s2.is_active FROM patient_vitals pv2
+#                 LEFT JOIN staff_members s2 ON pv2.recorded_by_staff_id = s2.id
+#                 WHERE pv2.patient_id = p.id
+#                 ORDER BY pv2.created_at DESC LIMIT 1) AS last_vitals_staff_is_active,
+
+#             -- Latest consultation info
+#             (SELECT s3.full_name FROM consultancy_records cr2 
+#                 LEFT JOIN staff_members s3 ON cr2.doctor_id = s3.id 
+#                 WHERE cr2.patient_id = p.id 
+#                 ORDER BY cr2.created_at DESC LIMIT 1) as last_consultation_by,
+
+#             (SELECT s3.department FROM consultancy_records cr2 
+#                 LEFT JOIN staff_members s3 ON cr2.doctor_id = s3.id 
+#                 WHERE cr2.patient_id = p.id 
+#                 ORDER BY cr2.created_at DESC LIMIT 1) as last_consultation_dept,
+
+#             (SELECT cr2.created_at FROM consultancy_records cr2 
+#                 WHERE cr2.patient_id = p.id 
+#                 ORDER BY cr2.created_at DESC LIMIT 1) as last_consultation_date,
+
+#             -- Add this: Latest doctor Online/Offline status for consult
+#             (SELECT s3.is_active FROM consultancy_records cr2
+#                 LEFT JOIN staff_members s3 ON cr2.doctor_id = s3.id
+#                 WHERE cr2.patient_id = p.id
+#                 ORDER BY cr2.created_at DESC LIMIT 1) AS last_consultation_doctor_is_active
+
+#         FROM patients p
+#         LEFT JOIN staff_members s ON p.created_by_staff_id = s.id
+#         LEFT JOIN admins a ON s.admin_id = a.id
+#         WHERE p.hospital_id = %s
+#         ORDER BY p.created_at DESC
+#         """
+        
+#         cursor.execute(query, (admin_hospital,))
+#         patients = cursor.fetchall()
+        
+#         for patient in patients:
+#             patient['vitals_count'] = int(patient.get('vitals_count', 0) or 0)
+#             patient['consultation_count'] = int(patient.get('consultation_count', 0) or 0)
+#             # Optionally ensure Online/Offline fields are 0/1 integers or use as-is for template
+#             patient['last_vitals_staff_is_active'] = int(patient.get('last_vitals_staff_is_active', 0) or 0)
+#             patient['last_consultation_doctor_is_active'] = int(patient.get('last_consultation_doctor_is_active', 0) or 0)
+
+#         cursor.close()
+#         connection.close()
+        
+#         return render_template('admin_patient_tracking.html', patients=patients)
+        
+#     except Exception as e:
+#         print(f"Error in admin_patient_tracking: {e}")
+#         return f"Database error: {e}", 500
+
+@app.route('/admin/api/scan-rfid/<rfid>')
+def admin_api_scan_rfid(rfid):
+    if 'admin_id' not in session:
+        return jsonify({'success': False, 'message': 'Not authorized'})
+    
+    try:
+        connection = mysql.connector.connect(**Config.DB_CONFIG)
+        cursor = connection.cursor(dictionary=True)
+        
+        # Get patient basic info (updated table names)
+        cursor.execute("""
+            SELECT p.*, s.full_name as added_by_staff, s.role as added_by_role, 
+                   s.department as staff_department, a.admin_name as admin_name
+            FROM patients p
+            LEFT JOIN staff_members s ON p.created_by_staff_id = s.id
+            LEFT JOIN admins a ON s.admin_id = a.id
+            WHERE p.rfid_uid = %s AND p.hospital_name = %s
+        """, (rfid, session['admin_hospital_name']))
+        
+        patient = cursor.fetchone()
+        
+        if not patient:
+            cursor.close()
+            connection.close()
+            return jsonify({'success': False, 'message': 'Patient not found'})
+        
+        # Get vitals history (updated table names)
+        cursor.execute("""
+            SELECT pv.*, s.full_name as nurse_name, s.role as nurse_role
+            FROM patient_vitals pv
+            LEFT JOIN staff_members s ON pv.recorded_by_staff_id = s.id
+            WHERE pv.patient_id = %s
+            ORDER BY pv.created_at DESC
+        """, (patient['id'],))
+        vitals_history = cursor.fetchall()
+        
+        # Get consultations (updated table names)
+        cursor.execute("""
+            SELECT cr.*, s.full_name as doctor_name, s.department as doctor_department
+            FROM consultancy_records cr
+            LEFT JOIN staff_members s ON cr.doctor_id = s.id
+            WHERE cr.patient_id = %s
+            ORDER BY cr.created_at DESC
+        """, (patient['id'],))
+        consultations = cursor.fetchall()
+        
+        cursor.close()
+        connection.close()
+        
+        additional_data = {
+            'nurse': {
+                'vitals_count': len(vitals_history),
+                'vitals_history': vitals_history
+            },
+            'doctor': {
+                'consultation_count': len(consultations),
+                'consultations': consultations
+            },
+            'receptionist': {
+                'staff_info': {
+                    'name': patient['added_by_staff'] or 'Unknown',
+                    'role': patient['added_by_role'] or 'Unknown',
+                    'department': patient['staff_department'] or 'Not specified',
+                    'email': 'N/A',
+                    'phone': 'N/A'
+                },
+                'registration_details': {
+                    'hospital': patient['hospital_name'],
+                    'admin': patient['admin_name'] or 'Unknown',
+                    'registered_on': patient['created_at'].isoformat() if patient['created_at'] else None,
+                    'rfid_assigned': patient['rfid_uid']
+                }
+            }
+        }
+        
+        return jsonify({
+            'success': True,
+            'patient': patient,
+            'additional_data': additional_data
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/admin/api/patient-timeline/<int:patient_id>')
+def admin_api_patient_timeline(patient_id):
+    if 'admin_id' not in session:
+        return jsonify({'success': False, 'message': 'Not authorized'})
+    
+    try:
+        connection = mysql.connector.connect(**Config.DB_CONFIG)
+        cursor = connection.cursor(dictionary=True)
+        
+        # Updated timeline query with correct table names
+        timeline_query = """
+        SELECT 'Registration' as event_type, p.created_at as event_time,
+               CONCAT('Patient registered by ', COALESCE(s.full_name, 'Unknown Staff')) as details,
+               COALESCE(s.full_name, 'Unknown') as staff_name, 
+               COALESCE(s.role, 'Unknown') as staff_role, 
+               COALESCE(s.department, 'Unknown') as department
+        FROM patients p
+        LEFT JOIN staff_members s ON p.created_by_staff_id = s.id
+        WHERE p.id = %s
+        
+        UNION ALL
+        
+        SELECT 'Vitals Recorded' as event_type, pv.created_at as event_time,
+               CONCAT('Vital signs recorded - Temp: ', COALESCE(pv.temperature, 'N/A'), 
+                      '°F, BP: ', COALESCE(CONCAT(pv.bp_systolic, '/', pv.bp_diastolic), 'N/A'),
+                      ', Pulse: ', COALESCE(pv.pulse, 'N/A'), ' bpm') as details,
+               COALESCE(s.full_name, 'Unknown') as staff_name, 
+               COALESCE(s.role, 'Unknown') as staff_role, 
+               COALESCE(s.department, 'Unknown') as department
+        FROM patient_vitals pv
+        LEFT JOIN staff_members s ON pv.recorded_by_staff_id = s.id
+        WHERE pv.patient_id = %s
+        
+        UNION ALL
+        
+        SELECT 'Consultation' as event_type, cr.created_at as event_time,
+               CONCAT('Medical consultation - Complaint: ', COALESCE(cr.chief_complaint, 'Not specified'),
+                      ', Diagnosis: ', COALESCE(cr.diagnosis, 'Pending')) as details,
+               COALESCE(s.full_name, 'Unknown') as staff_name, 
+               COALESCE(s.role, 'Unknown') as staff_role, 
+               COALESCE(s.department, 'Unknown') as department
+        FROM consultancy_records cr
+        LEFT JOIN staff_members s ON cr.doctor_id = s.id
+        WHERE cr.patient_id = %s
+        
+        ORDER BY event_time DESC
+        """
+        
+        cursor.execute(timeline_query, (patient_id, patient_id, patient_id))
+        timeline = cursor.fetchall()
+        
+        cursor.close()
+        connection.close()
+        
+        return jsonify({'success': True, 'timeline': timeline})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/admin/api/add-quick-vitals', methods=['POST'])
+def admin_api_add_quick_vitals():
+    if 'staff_id' not in session:
+        return jsonify({'success': False, 'message': 'Not authorized'})
+    
+    try:
+        patient_id = request.form['patient_id']
+        staff_id = session['staff_id']
+        
+        connection = mysql.connector.connect(**Config.DB_CONFIG)
+        cursor = connection.cursor()
+        
+        # Insert vitals (table name is correct)
+        cursor.execute("""
+            INSERT INTO patient_vitals 
+            (patient_id, recorded_by_staff_id, temperature, bp_systolic, bp_diastolic, 
+             pulse, respiratory_rate, sp_o2, weight, height, blood_sugar, pain_score, additional_notes)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            patient_id, staff_id,
+            request.form.get('temperature') or None,
+            request.form.get('bp_systolic') or None,
+            request.form.get('bp_diastolic') or None,
+            request.form.get('pulse') or None,
+            request.form.get('respiratory_rate') or None,
+            request.form.get('sp_o2') or None,
+            request.form.get('weight') or None,
+            request.form.get('height') or None,
+            request.form.get('blood_sugar') or None,
+            request.form.get('pain_score') or None,
+            request.form.get('additional_notes') or None
+        ))
+        
+        connection.commit()
+        cursor.close()
+        connection.close()
+        
+        return jsonify({'success': True, 'message': 'Vitals saved successfully'})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+
+@app.route('/api/rfid-reader/poll')
+def rfid_reader_poll():
+    try:
+        if random.random() < 0.3:  # 30% chance
+            conn = mysql.connector.connect(**Config.DB_CONFIG)
+            cursor = conn.cursor(dictionary=True)
+            
+            cursor.execute("""
+                SELECT rfid_uid FROM patients 
+                WHERE rfid_uid IS NOT NULL 
+                AND rfid_uid != '' 
+                ORDER BY RAND() 
+                LIMIT 1
+            """)
+            
+            result = cursor.fetchone()
+            cursor.close()
+            conn.close()
+            
+            if result:
+                return jsonify({
+                    'success': True,
+                    'rfid_uid': result['rfid_uid'].strip(),
+                    'timestamp': time.time()
+                })
+        
+        return jsonify({
+            'success': False,
+            'error': 'No card present',
+            'timestamp': time.time()
+        })
+        
+    except Exception as e:
+        print(f"RFID polling error: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'RFID reader error: {str(e)}',
+            'timestamp': time.time()
+        }), 500
+    
+
+
+@app.route('/api/patient_by_rfid/<rfid_uid>')
+def get_patient_by_rfid(rfid_uid):
+    try:
+        conn = mysql.connector.connect(**Config.DB_CONFIG)
+        cursor = conn.cursor(dictionary=True)
+        
+        rfid_uid = rfid_uid.strip()
+        print(f"Looking up RFID: '{rfid_uid}'")
+        
+        # Get patient info with NULL handling - FIXED: JOIN with departments table
+        cursor.execute("""
+            SELECT p.*, 
+                COALESCE(h.hospital_name, 'Unknown Hospital') AS hospital_name,
+                COALESCE(s.full_name, 'Unknown Staff') as added_by_staff_name,
+                COALESCE(s.role, 'Unknown') as added_by_staff_role,
+                COALESCE(s.email, 'No Email') as added_by_staff_email,
+                COALESCE(d.department_name, 'Unknown Department') as added_by_staff_department
+            FROM patients p
+            LEFT JOIN hospitals h ON p.hospital_id = h.id
+            LEFT JOIN staff_members s ON p.created_by_staff_id = s.id
+            LEFT JOIN departments d ON s.department_id = d.id
+            WHERE TRIM(p.rfid_uid) = %s
+        """, (rfid_uid,))
+        
+        patient = cursor.fetchone()
+        print(f"Patient found: {patient}")
+        
+        if not patient:
+            cursor.close()
+            conn.close()
+            return jsonify({'error': f'No patient found with RFID: {rfid_uid}'}), 404
+        
+        # Get vitals with NULL handling - FIXED: JOIN with departments table
+        cursor.execute("""
+            SELECT pv.id, pv.temperature, pv.bp_systolic, pv.bp_diastolic, 
+                   pv.pulse, pv.respiratory_rate, pv.sp_o2, pv.weight, pv.height,
+                   pv.blood_sugar, pv.pain_score, pv.additional_notes, 
+                   pv.created_at, pv.updated_at, pv.recorded_by_staff_id,
+                   COALESCE(s.full_name, 'Unknown Nurse') as recorded_by_staff_name,
+                   COALESCE(s.role, 'Unknown') as recorded_by_staff_role,
+                   COALESCE(s.email, 'No Email') as recorded_by_staff_email,
+                   COALESCE(d.department_name, 'Unknown Department') as recorded_by_staff_department
+            FROM patient_vitals pv
+            LEFT JOIN staff_members s ON pv.recorded_by_staff_id = s.id
+            LEFT JOIN departments d ON s.department_id = d.id
+            WHERE pv.patient_id = %s
+            ORDER BY pv.created_at DESC
+            LIMIT 10
+        """, (patient['id'],))
+        
+        vitals = cursor.fetchall()
+        print(f"Vitals found: {len(vitals)}")
+        
+        # Get consultations with NULL handling - FIXED: JOIN with departments table
+        cursor.execute("""
+            SELECT cr.id, cr.chief_complaint, cr.diagnosis, cr.prescription, 
+                   cr.additional_notes, cr.appointment_datetime, cr.created_at, cr.doctor_id,
+                   COALESCE(doc.full_name, 'Unknown Doctor') as doctor_name,
+                   COALESCE(doc.email, 'No Email') as doctor_email,
+                   COALESCE(d.department_name, 'Unknown Department') as doctor_department,
+                   COALESCE(doc.phone, 'No Phone') as doctor_phone
+            FROM consultancy_records cr
+            LEFT JOIN staff_members doc ON cr.doctor_id = doc.id
+            LEFT JOIN departments d ON doc.department_id = d.id
+            WHERE cr.patient_id = %s
+            ORDER BY cr.created_at DESC
+            LIMIT 10
+        """, (patient['id'],))
+        
+        consultations = cursor.fetchall()
+        print(f"Consultations found: {len(consultations)}")
+        
+        cursor.close()
+        conn.close()
+        
+        # Format response with proper NULL handling
+        response_data = {
+            'patient': {
+                'id': patient['id'],
+                'full_name': patient['full_name'],
+                'age': patient['age'],
+                'gender': patient['gender'],
+                'email': patient['email'] or 'No Email',
+                'phone': patient['phone'],
+                'address': patient['address'],
+                'rfid_uid': patient['rfid_uid'],
+                'hospital_name': patient['hospital_name'],
+                'is_active': patient['is_active'],
+                'created_at': patient['created_at'].strftime('%Y-%m-%d %H:%M:%S') if patient['created_at'] else None,
+                'added_by': {
+                    'staff_name': patient['added_by_staff_name'],
+                    'staff_role': patient['added_by_staff_role'],
+                    'staff_email': patient['added_by_staff_email'],
+                    'staff_department': patient['added_by_staff_department']
+                }
+            },
+            'vitals': [
+                {
+                    'id': vital['id'],
+                    'temperature': vital['temperature'],
+                    'blood_pressure': f"{vital['bp_systolic'] or 0}/{vital['bp_diastolic'] or 0}" if vital['bp_systolic'] or vital['bp_diastolic'] else 'Not recorded',
+                    'bp_systolic': vital['bp_systolic'],
+                    'bp_diastolic': vital['bp_diastolic'],
+                    'pulse': vital['pulse'],
+                    'respiratory_rate': vital['respiratory_rate'],
+                    'sp_o2': vital['sp_o2'],
+                    'weight': vital['weight'],
+                    'height': vital['height'],
+                    'blood_sugar': vital['blood_sugar'],
+                    'pain_score': vital['pain_score'],
+                    'additional_notes': vital['additional_notes'] or 'No notes',
+                    'recorded_time': vital['created_at'].strftime('%Y-%m-%d %H:%M:%S') if vital['created_at'] else 'Unknown time',
+                    'updated_time': vital['updated_at'].strftime('%Y-%m-%d %H:%M:%S') if vital['updated_at'] else 'Never updated',
+                    'recorded_by': {
+                        'staff_name': vital['recorded_by_staff_name'],
+                        'staff_role': vital['recorded_by_staff_role'],
+                        'staff_email': vital['recorded_by_staff_email'],
+                        'staff_department': vital['recorded_by_staff_department']
+                    }
+                } for vital in vitals
+            ],
+            'consultations': [
+                {
+                    'id': consultation['id'],
+                    'chief_complaint': consultation['chief_complaint'] or 'No complaint recorded',
+                    'diagnosis': consultation['diagnosis'] or 'No diagnosis',
+                    'prescription': consultation['prescription'] or 'No prescription',
+                    'additional_notes': consultation['additional_notes'] or 'No additional notes',
+                    'appointment_time': consultation['appointment_datetime'].strftime('%Y-%m-%d %H:%M:%S') if consultation['appointment_datetime'] else 'No appointment time',
+                    'consultation_time': consultation['created_at'].strftime('%Y-%m-%d %H:%M:%S') if consultation['created_at'] else 'Unknown time',
+                    'doctor': {
+                        'name': consultation['doctor_name'],
+                        'email': consultation['doctor_email'],
+                        'department': consultation['doctor_department'],
+                        'phone': consultation['doctor_phone']
+                    }
+                } for consultation in consultations
+            ],
+            'summary': {
+                'total_vitals_records': len(vitals),
+                'total_consultations': len(consultations),
+                'last_vitals_date': vitals[0]['created_at'].strftime('%Y-%m-%d %H:%M:%S') if vitals and vitals[0]['created_at'] else 'No vitals recorded',
+                'last_consultation_date': consultations[0]['created_at'].strftime('%Y-%m-%d %H:%M:%S') if consultations and consultations[0]['created_at'] else 'No consultations'
+            }
+        }
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        print(f"Error fetching patient by RFID {rfid_uid}: {e}")
+        return jsonify({'error': f'Database error: {str(e)}'}), 500    
+
+
+    # Add these to your Flask app
+
+
+
+# Global variable to store the latest RFID scan
+latest_rfid_scan = {
+    'rfid_uid': None,
+    'timestamp': None
+}
+
+
+
+# New endpoint for polling (no UID parameter)
+@app.route('/api/latest_rfid_scan', methods=['GET'])
+def get_latest_rfid_scan():
+    global latest_rfid_scan
+    
+    try:
+        # Check if we have a recent scan (within last 10 seconds)
+        if (latest_rfid_scan['rfid_uid'] and 
+            latest_rfid_scan['timestamp'] and 
+            (datetime.now() - latest_rfid_scan['timestamp']).seconds < 10):
+            
+            # Return the scan and clear it so it's only returned once
+            rfid_uid = latest_rfid_scan['rfid_uid']
+            latest_rfid_scan = {'rfid_uid': None, 'timestamp': None}
+            
+            return jsonify({
+                'success': True,
+                'rfid_uid': rfid_uid
+            })
+        else:
+            # No recent scan
+            return jsonify({
+                'success': True,
+                'rfid_uid': None
+            })
+            
+    except Exception as e:
+        print(f"Error getting latest RFID scan: {e}")
+        return jsonify({'success': False, 'message': 'Server error'}), 500
+
+
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=5000,use_reloader=False)

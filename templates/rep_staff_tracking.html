@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Staff Tracking - {{ hospital_name }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .status-indicator {
+            font-size: 0.8rem;
+            margin-right: 5px;
+        }
+        .status-online { color: #28a745; }
+        .status-away { color: #ffc107; }
+        .status-offline { color: #dc3545; }
+        .status-never { color: #6c757d; }
+        
+        .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .table-hover tbody tr:hover {
+            background-color: rgba(0,0,0,.02);
+        }
+        
+        .badge-role {
+            font-size: 0.75rem;
+            padding: 0.35rem 0.5rem;
+        }
+        
+        .last-activity {
+            font-size: 0.85rem;
+            color: #666;
+        }
+        
+        .refresh-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <div class="container-fluid py-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow">
+                    <div class="card-header">
+                        <div class="row align-items-center">
+                            <div class="col">
+                                <h4 class="mb-0">
+                                    <i class="fas fa-users-cog me-2"></i>
+                                    Staff Activity Tracking - {{ hospital_name }}
+                                </h4>
+                                <small class="opacity-75">Real-time status monitoring of all staff members</small>
+                            </div>
+                            <div class="col-auto">
+                                <button class="btn btn-light btn-sm" onclick="location.reload()">
+                                    <i class="fas fa-sync-alt me-1"></i> Refresh
+                                </button>
+                                <a href="/rep-dashboard" class="btn btn-outline-light btn-sm ms-2">
+                                    <i class="fas fa-arrow-left me-1"></i> Back to Dashboard
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card-body p-0">
+                        {% if staff_data %}
+                        <!-- Status Summary Cards -->
+                        <div class="row g-0 border-bottom">
+                            {% set online_count = staff_data | selectattr('current_status', 'equalto', 'online') | list | length %}
+                            {% set away_count = staff_data | selectattr('current_status', 'equalto', 'away') | list | length %}
+                            {% set offline_count = staff_data | selectattr('current_status', 'equalto', 'offline') | list | length %}
+                            {% set never_count = staff_data | selectattr('current_status', 'equalto', 'never_logged_in') | list | length %}
+                            
+                            <div class="col-md-3 col-6 p-3 border-end">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-shrink-0">
+                                        <i class="fas fa-circle text-success fa-2x"></i>
+                                    </div>
+                                    <div class="flex-grow-1 ms-3">
+                                        <div class="fw-bold fs-4 text-success">{{ online_count }}</div>
+                                        <div class="text-muted small">Online Now</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-3 col-6 p-3 border-end">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-shrink-0">
+                                        <i class="fas fa-clock text-warning fa-2x"></i>
+                                    </div>
+                                    <div class="flex-grow-1 ms-3">
+                                        <div class="fw-bold fs-4 text-warning">{{ away_count }}</div>
+                                        <div class="text-muted small">Away</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-3 col-6 p-3 border-end">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-shrink-0">
+                                        <i class="fas fa-circle text-danger fa-2x"></i>
+                                    </div>
+                                    <div class="flex-grow-1 ms-3">
+                                        <div class="fw-bold fs-4 text-danger">{{ offline_count }}</div>
+                                        <div class="text-muted small">Offline</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-3 col-6 p-3">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-shrink-0">
+                                        <i class="fas fa-minus-circle text-secondary fa-2x"></i>
+                                    </div>
+                                    <div class="flex-grow-1 ms-3">
+                                        <div class="fw-bold fs-4 text-secondary">{{ never_count }}</div>
+                                        <div class="text-muted small">Never Logged In</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Staff Table -->
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Status</th>
+                                        <th>Staff Member</th>
+                                        <th>Role & Department</th>
+                                        <th>Contact</th>
+                                        <th>Last Activity</th>
+                                        <th>Created By</th>
+                                        <th>Account Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for staff in staff_data %}
+                                    <tr>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                {% if staff.current_status == 'online' %}
+                                                    <i class="fas fa-circle status-online status-indicator"></i>
+                                                    <span class="badge bg-success">Online</span>
+                                                {% elif staff.current_status == 'away' %}
+                                                    <i class="fas fa-clock status-away status-indicator"></i>                                                    <span class="badge bg-warning">Away</span>
+                                                {% elif staff.current_status == 'offline' %}
+                                                    <i class="fas fa-circle status-offline status-indicator"></i>
+                                                    <span class="badge bg-danger">Offline</span>
+                                                {% else %}
+                                                    <i class="fas fa-minus-circle status-never status-indicator"></i>
+                                                    <span class="badge bg-secondary">Never Logged In</span>
+                                                {% endif %}
+                                                
+                                                {% if staff.active_sessions > 0 %}
+                                                    <small class="text-muted ms-2">({{ staff.active_sessions }} session{{ 's' if staff.active_sessions != 1 }})</small>
+                                                {% endif %}
+                                            </div>
+                                        </td>
+                                        
+                                        <td>
+                                            <div class="d-flex flex-column">
+                                                <div class="fw-bold">{{ staff.staff_name }}</div>
+                                                <small class="text-muted">ID: {{ staff.staff_id }}</small>
+                                                <small class="text-muted">{{ staff.staff_gender }}</small>
+                                            </div>
+                                        </td>
+                                        
+                                        <td>
+                                            <div class="d-flex flex-column">
+                                                <span class="badge bg-primary badge-role mb-1">{{ staff.staff_role }}</span>
+                                                <small class="text-muted">{{ staff.department_name or 'N/A' }}</small>
+                                            </div>
+                                        </td>
+                                        
+                                        <td>
+                                            <div class="d-flex flex-column">
+                                                <small><i class="fas fa-envelope me-1"></i>{{ staff.staff_email or 'N/A' }}</small>
+                                                <small><i class="fas fa-phone me-1"></i>{{ staff.staff_phone or 'N/A' }}</small>
+                                            </div>
+                                        </td>
+                                        
+                                        <td>
+                                            <div class="d-flex flex-column last-activity">
+                                                {% if staff.staff_last_login %}
+                                                    <small><strong>Last Login:</strong></small>
+                                                    <small>{{ staff.staff_last_login.strftime('%d/%m/%Y %H:%M') }}</small>
+                                                {% endif %}
+                                                {% if staff.staff_last_logout %}
+                                                    <small><strong>Last Logout:</strong></small>
+                                                    <small>{{ staff.staff_last_logout.strftime('%d/%m/%Y %H:%M') }}</small>
+                                                {% endif %}
+                                                {% if not staff.staff_last_login %}
+                                                    <small class="text-muted">Never logged in</small>
+                                                {% endif %}
+                                            </div>
+                                        </td>
+                                        
+                                        <td>
+                                            <div class="d-flex flex-column">
+                                                <small><strong>Admin:</strong> {{ staff.created_by_admin or 'N/A' }}</small>
+                                                <small><strong>HR:</strong> {{ staff.created_by_hr or 'N/A' }}</small>
+                                                <small><strong>Rep:</strong> {{ staff.created_by_rep or 'N/A' }}</small>
+                                            </div>
+                                        </td>
+                                        
+                                        <td>
+                                            <div class="d-flex flex-column">
+                                                {% if staff.staff_is_active %}
+                                                    <span class="badge bg-success mb-1">Active</span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary mb-1">Inactive</span>
+                                                {% endif %}
+                                                
+                                                {% if staff.admin_is_active %}
+                                                    <small class="text-success">Admin: Active</small>
+                                                {% else %}
+                                                    <small class="text-danger">Admin: Inactive</small>
+                                                {% endif %}
+                                                
+                                                {% if staff.hr_is_active %}
+                                                    <small class="text-success">HR: Active</small>
+                                                {% else %}
+                                                    <small class="text-danger">HR: Inactive</small>
+                                                {% endif %}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">No Staff Members Found</h5>
+                            <p class="text-muted">No staff members have been created in your hospital yet.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auto-refresh button -->
+    <button class="btn btn-primary refresh-btn rounded-circle" onclick="location.reload()" title="Refresh Data">
+        <i class="fas fa-sync-alt"></i>
+    </button>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Auto-refresh every 30 seconds -->
+    <script>
+        // Auto refresh every 30 seconds
+        setInterval(function() {
+            location.reload();
+        }, 30000);
+        
+        // Add loading spinner when refreshing
+        document.addEventListener('DOMContentLoaded', function() {
+            const refreshButtons = document.querySelectorAll('[onclick="location.reload()"]');
+            refreshButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                });
+            });
+        });
+    </script>
+</body>
+</html>

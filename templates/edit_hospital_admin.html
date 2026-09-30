@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Edit Admin - Hospital Admins</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+  <style>
+    body { 
+      background: #eaf7f5; 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      min-height: 100vh;
+      padding: 20px 0;
+    }
+
+    .main-container {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .content-wrapper {
+      width: 100%;
+      max-width: 700px;
+    }
+
+    .btn-teal { 
+      background: #00796b; 
+      color: #fff; 
+      border: none;
+    }
+
+    .btn-teal:hover {
+      background: #005d52;
+      color: #fff;
+    }
+
+    .card { 
+      border-radius: 10px; 
+      box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+      border: none;
+    }
+
+    .form-control, .form-select {
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      padding: 10px 12px;
+    }
+
+    .form-control:focus, .form-select:focus {
+      border-color: #00796b;
+      box-shadow: 0 0 0 0.2rem rgba(0, 121, 107, 0.25);
+    }
+
+    .btn {
+      border-radius: 8px;
+      padding: 10px 20px;
+      font-weight: 500;
+    }
+
+    h3 {
+      color: #00796b;
+      font-weight: 700;
+      font-size: 1.8rem;
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .form-label {
+      color: #00796b;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .required {
+      color: #dc3545;
+    }
+
+    .alert {
+      background-color: #d1ecf1;
+      border: 1px solid #00796b;
+      border-radius: 8px;
+      color: #0c5460;
+    }
+
+    .password-note {
+      background-color: #e8f5e8;
+      border: 1px solid #00796b;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 20px;
+      color: #155724;
+      font-size: 14px;
+    }
+
+    .back-link {
+      color: #00796b;
+      text-decoration: none;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .back-link:hover {
+      color: #005d52;
+      text-decoration: underline;
+    }
+
+    .btn-secondary {
+      background-color: #6c757d;
+      border-color: #6c757d;
+    }
+
+    .btn-secondary:hover {
+      background-color: #5a6268;
+      border-color: #545b62;
+    }
+  </style>
+</head>
+<body>
+
+<div class="main-container">
+  <div class="content-wrapper">
+    
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show" role="alert">
+            <i class="fas fa-{{ 'exclamation-circle' if category == 'error' else 'check-circle' }} me-2"></i>
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <!-- Back Link -->
+    <a href="/rep-admins" class="back-link">
+      <i class="fas fa-arrow-left me-2"></i>Back to Admin Management
+    </a>
+
+    <h3><i class="fas fa-user-edit me-2"></i>Edit Admin Details</h3>
+
+    <div class="card p-4">
+
+      <div class="password-note">
+        <i class="fas fa-info-circle me-2"></i>
+        <strong>Note:</strong> Leave the password field empty if you don't want to change the current password.
+      </div>
+
+      <form method="POST">
+
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Admin Name <span class="required">*</span></label>
+            <input type="text" class="form-control" name="name" 
+                   value="{{ admin.admin_name if admin else '' }}" required>
+          </div>
+
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Gender <span class="required">*</span></label>
+            <select class="form-select" name="gender" required>
+              <option value="">Select Gender</option>
+              <option value="Male" {{ 'selected' if admin and admin.admin_gender == 'Male' else '' }}>Male</option>
+              <option value="Female" {{ 'selected' if admin and admin.admin_gender == 'Female' else '' }}>Female</option>
+              <option value="Other" {{ 'selected' if admin and admin.admin_gender == 'Other' else '' }}>Other</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Department</label>
+            <input type="text" class="form-control" name="department" 
+                   value="{{ admin.department if admin and admin.department else '' }}" 
+                   placeholder="e.g., OPD, ICU, Emergency">
+          </div>
+
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Email <span class="required">*</span></label>
+            <input type="email" class="form-control" name="email" 
+                   value="{{ admin.admin_email if admin else '' }}" required>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Phone <span class="required">*</span></label>
+            <input type="tel" class="form-control" name="phone" 
+                   value="{{ admin.admin_phone if admin else '' }}" required>
+          </div>
+
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Username <span class="required">*</span></label>
+            <input type="text" class="form-control" name="username" 
+                   value="{{ admin.admin_username if admin else '' }}" required>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Address <span class="required">*</span></label>
+          <textarea class="form-control" name="address" rows="3" required>{{ admin.admin_address if admin else '' }}</textarea>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Password (leave blank to keep current)</label>
+          <input type="password" class="form-control" name="password" 
+                 placeholder="Enter new password or leave empty">
+          <small class="form-text text-muted mt-1">
+            <i class="fas fa-lock me-1"></i>
+            Only fill this field if you want to change the password
+          </small>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center">
+          <a href="/rep-admins" class="btn btn-secondary">
+            <i class="fas fa-times me-2"></i>Cancel
+          </a>
+          <button class="btn btn-teal" type="submit">
+            <i class="fas fa-save me-2"></i>Save Changes
+          </button>
+        </div>
+
+      </form>
+
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  // Form validation
+  document.querySelector('form').addEventListener('submit', function(e) {
+    const requiredFields = this.querySelectorAll('[required]');
+    let isValid = true;
+    
+    requiredFields.forEach(field => {
+      if (!field.value.trim()) {
+        field.classList.add('is-invalid');
+        isValid = false;
+      } else {
+        field.classList.remove('is-invalid');
+      }
+    });
+    
+    if (!isValid) {
+      e.preventDefault();
+      alert('Please fill in all required fields.');
+    }
+  });
+
+  // Remove validation styling on input
+  document.querySelectorAll('.form-control, .form-select').forEach(field => {
+    field.addEventListener('input', function() {
+      this.classList.remove('is-invalid');
+    });
+  });
+
+  // Auto-dismiss alerts
+  setTimeout(function() {
+    const alerts = document.querySelectorAll('.alert');
+    alerts.forEach(alert => {
+      if (alert.querySelector('.btn-close')) {
+        const bsAlert = new bootstrap.Alert(alert);
+        bsAlert.close();
+      }
+    });
+  }, 5000);
+</script>
+
+</body>
+</html>

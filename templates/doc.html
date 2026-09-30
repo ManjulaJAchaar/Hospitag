@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="login-nonce" content="{{ session.get('login_nonce', '') }}">
+
+  <title>Doctor Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body {
+      background: white;
+      min-height: 100vh;
+      font-family: 'Segoe UI', Arial, sans-serif;
+    }
+
+    .main-card {
+      background: white;
+      border-radius: 1rem;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.10);
+      padding: 2rem;
+      margin-top: 3rem;
+    }
+
+    .dashboard-header {
+      background: #20b2aa;
+      color: #fff;
+      border-radius: 16px;
+      box-shadow: 0 4px 12px rgba(32, 178, 170, 0.2);
+      padding: 18px 28px 16px 28px;
+      margin-bottom: 22px;
+    }
+
+    .dashboard-header h3 {
+      color: #fff;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .profile-photo {
+      width: 32px;
+      height: 32px;
+      object-fit: cover;
+      border-radius: 50%;
+      border: 2px solid #fff;
+    }
+
+    .form-label {
+      font-weight: 600;
+      color: #20b2aa;
+    }
+
+    .consultancy-card {
+      display: none;
+      margin-top: 2rem;
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 2rem;
+      box-shadow: 0 2px 6px rgba(32, 178, 170, 0.1);
+    }
+
+    h2,
+    h3 {
+      color: #20b2aa;
+      font-weight: 700;
+    }
+
+    .btn-warning {
+      background-color: #20b2aa;
+      border-color: #20b2aa;
+      color: white;
+    }
+
+    .btn-warning:hover {
+      background-color: #1a9b96;
+      border-color: #1a9b96;
+      color: white;
+    }
+
+    /* RFID Scanning Modal Styles */
+    .modal-content {
+      border-radius: 15px;
+      border: none;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .modal-header {
+      border-radius: 15px 15px 0 0;
+      border-bottom: none;
+      background-color: #20b2aa;
+      color: white;
+    }
+
+    .rfid-scan-animation {
+      font-size: 5em;
+      color: #20b2aa;
+      position: relative;
+      display: inline-block;
+    }
+
+    .rfid-scan-animation .bi-wifi {
+      animation: pulse 1.5s infinite ease-in-out;
+    }
+
+    .spinner-border.text-secondary {
+      color: #20b2aa !important;
+    }
+
+    @keyframes pulse {
+      0% {
+        transform: scale(0.9);
+        opacity: 0.7;
+      }
+
+      50% {
+        transform: scale(1.1);
+        opacity: 1;
+      }
+
+      100% {
+        transform: scale(0.9);
+        opacity: 0.7;
+      }
+    }
+
+    @media print {
+      body * {
+        visibility: hidden !important;
+      }
+
+      #prescriptionLetter,
+      #prescriptionLetter * {
+        visibility: visible !important;
+      }
+
+      #prescriptionLetter {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        min-width: 700px;
+        padding: 24px;
+        background: white;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container my-4">
+    <!-- HEADER -->
+    <div class="dashboard-header d-flex justify-content-between align-items-center">
+      <div>
+        <h3>Doctor Dashboard</h3>
+        <p>Welcome, <strong id="doctorName">{{ staff.full_name or 'Doctor' }}</strong> |
+          Hospital: <strong id="hospitalName">{{ staff.hospital_name or 'N/A' }}</strong></p>
+      </div>
+      <div class="d-flex align-items-center gap-3">
+        <a href="{{ url_for('consultancy_records') }}" class="btn btn-light text-dark fw-bold">
+          <i class="bi bi-table"></i> Consultancy Records
+        </a>
+        <div class="dropdown">
+          <button class="btn d-flex align-items-center" data-bs-toggle="dropdown">
+            <img
+              src="{{ url_for('static', filename=staff.profile_photo if staff.profile_photo else 'images/default_doctor_avatar.png') }}"
+              alt="Profile" class="profile-photo">
+            <span class="ms-2">{{ staff.full_name or 'Profile' }}</span>
+            <i class="bi bi-caret-down-fill ms-1"></i>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item" href="{{ url_for('staff_profile') }}"><i class="bi bi-person"></i> Profile</a>
+            </li>
+            <li>
+              <hr class="dropdown-divider">
+            </li>
+            <li><a class="dropdown-item text-danger" href="{{ url_for('doctor_logout') }}"><i
+                  class="bi bi-box-arrow-right"></i> Logout</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTENT -->
+    <div class="main-card">
+      <div class="text-center mb-4">
+        <button id="scanRfidBtn" class="btn btn-warning"><i class="bi bi-upc-scan me-2"></i>Scan RFID</button>
+      </div>
+
+      <h2 class="text-center">Patient Details</h2>
+      <div id="patient-details" style="display:none;">
+        <div class="table-responsive">
+          <table class="table table-bordered table-striped align-middle">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Age</th>
+                <th>Gender</th>
+                <th>Email</th>
+                <th>BP</th>
+                <th>Pulse</th>
+                <th>SpO2</th>
+                <th>Weight</th>
+                <th>Height</th>
+                <th>Blood Sugar</th>
+                <th>Pain Score</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr id="patient-row"></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ENHANCED CONSULTANCY FORM -->
+      <div class="consultancy-card" id="consultancyFormSection">
+        <h3 class="text-center">Doctor Consultancy Form</h3>
+
+        <!-- Patient Medication History -->
+        <div class="card mb-3" id="medicationHistoryCard" style="display: none;">
+          <div class="card-header">
+            <h6 class="mb-0"><i class="bi bi-clock-history"></i> Recent Prescriptions</h6>
+          </div>
+          <div class="card-body">
+            <div id="medicationHistoryContent">Loading...</div>
+          </div>
+        </div>
+
+        <form id="consultancyForm" class="row g-3 mb-4">
+          <input type="hidden" id="patientId">
+          <input type="hidden" id="patientEmail">
+          <input type="hidden" id="doctorId" value="{{ session.get('staff_id',0) }}">
+
+          <div class="col-md-6">
+            <label class="form-label">Chief Complaint</label>
+            <textarea id="chiefComplaint" class="form-control" rows="2" required></textarea>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Diagnosis</label>
+            <textarea id="diagnosis" class="form-control" rows="2" required></textarea>
+          </div>
+
+          <!-- ENHANCED PRESCRIPTION SECTION -->
+          <div class="col-12">
+            <label class="form-label">Prescription</label>
+            <div class="card">
+              <div class="card-header d-flex justify-content-between">
+                <span><i class="bi bi-prescription2"></i> Prescription Details</span>
+                <button type="button" class="btn btn-sm btn-success" onclick="addMedicationRow()">
+                  <i class="bi bi-plus"></i> Add Medication
+                </button>
+              </div>
+              <div class="card-body">
+                <div id="medicationRows">
+                  <!-- Medication rows will be added here -->
+                </div>
+
+                <!-- Traditional text area for additional notes -->
+                <div class="mt-3">
+                  <label class="form-label">Additional Prescription Notes</label>
+                  <textarea id="prescriptionNotes" class="form-control" rows="2"
+                    placeholder="Additional instructions, lifestyle advice, etc."></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Additional Notes</label>
+            <textarea id="additionalNotes" class="form-control" rows="2"></textarea>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Next Appointment Date and Time</label>
+            <input type="datetime-local" id="appointmentDateTime" class="form-control">
+          </div>
+
+          <div class="col-12 text-center">
+            <button type="button" class="btn btn-success me-2" onclick="saveConsultancy()">
+              <i class="bi bi-save"></i> Save & Email Patient
+            </button>
+            <button type="button" class="btn btn-primary me-2" onclick="printConsultancyLetter()">
+              <i class="bi bi-printer"></i> Print Report
+            </button>
+            <button type="button" class="btn btn-info" onclick="sendToPharmacy()" id="sendToPharmacyBtn"
+              style="display: none;">
+              <i class="bi bi-capsule"></i> Send to Pharmacy
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- MEDICATION ROW TEMPLATE (Hidden) -->
+      <template id="medicationRowTemplate">
+        <div class="row medication-row mb-3 p-3 border rounded">
+          <div class="col-md-4">
+            <label class="form-label">Medicine</label>
+            <input type="text" class="form-control medicine-search" placeholder="Search medicine..."
+              onkeyup="searchMedicine(this)" autocomplete="off">
+            <div class="medicine-suggestions" style="display: none;"></div>
+            <input type="hidden" class="selected-medicine-id">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Dosage</label>
+            <input type="text" class="form-control dosage" placeholder="e.g., 500mg">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Frequency</label>
+            <select class="form-control frequency">
+              <option value="">Select</option>
+              <option value="Once daily">Once daily</option>
+              <option value="Twice daily">Twice daily</option>
+              <option value="Thrice daily">Thrice daily</option>
+              <option value="Four times daily">Four times daily</option>
+              <option value="As needed">As needed</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Duration</label>
+            <input type="text" class="form-control duration" placeholder="e.g., 7 days">
+          </div>
+          <div class="col-md-1">
+            <label class="form-label">Qty</label>
+            <input type="number" class="form-control quantity" min="1" placeholder="10">
+          </div>
+          <div class="col-md-1 d-flex align-items-end">
+            <button type="button" class="btn btn-danger btn-sm" onclick="removeMedicationRow(this)">
+              <i class="bi bi-trash"></i>
+            </button>
+          </div>
+          <div class="col-12 mt-2">
+            <div class="stock-info" style="display: none;"></div>
+          </div>
+        </div>
+      </template>
+
+
+
+
+
+
+
+
+
+      <!-- LETTERHEAD -->
+      <div id="prescriptionLetter" style="display:none; background:#fff; padding:32px; min-width:700px;">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div><img src="/static/images/hospital_logo.png" alt="Hospital Logo" style="height:60px;"></div>
+          <div style="text-align:right;">
+            <h2 style="color:#20b2aa; margin-bottom:0;" id="plHospital"></h2>
+            <p style="margin:0;">Doctor: <strong id="plDoctor"></strong></p>
+          </div>
+        </div>
+        <hr>
+        <div style="margin-bottom:20px;">
+          <span><strong>Patient Name:</strong> <span id="plPatientName"></span></span> |
+          <span><strong>Age:</strong> <span id="plPatientAge"></span></span> |
+          <span><strong>Gender:</strong> <span id="plPatientGender"></span></span> |
+          <span><strong>Email:</strong> <span id="plPatientEmailPrint"></span></span> |
+          <span><strong>Date:</strong> <span id="plDate"></span></span>
+        </div>
+        <div style="margin-bottom:12px;"><strong>Chief Complaint:</strong>
+          <div id="plChiefComplaint" style="margin-left:12px;"></div>
+        </div>
+        <div style="margin-bottom:12px;"><strong>Diagnosis:</strong>
+          <div id="plDiagnosis" style="margin-left:12px;"></div>
+        </div>
+        <div style="margin-bottom:12px;"><strong>Prescription:</strong>
+          <div id="plPrescription" style="margin-left:12px;"></div>
+        </div>
+        <div style="margin-bottom:12px;"><strong>Additional Notes:</strong>
+          <div id="plAdditionalNotes" style="margin-left:12px;"></div>
+        </div>
+        <div style="margin-bottom:12px;"><strong>Appointment Date & Time:</strong> <span id="plAppointmentDate"></span>
+        </div>
+        <br><br>
+        <div style="text-align:right; margin-top:32px;">
+          <span>______________________</span><br><span><strong>Doctor Signature</strong></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RFID Scanning Modal -->
+    <div class="modal fade" id="rfidScanModal" tabindex="-1" aria-labelledby="rfidScanModalLabel" aria-hidden="true"
+      data-bs-backdrop="static" data-bs-keyboard="false">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="rfidScanModalLabel">
+              <i class="bi bi-upc-scan me-2"></i>RFID Scanner
+            </h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body text-center">
+            <div class="rfid-scan-animation mb-3">
+              <i class="bi bi-wifi"></i>
+            </div>
+            <h5 class="mb-3">Scanning for RFID Tag</h5>
+            <p id="scanStatus" class="text-muted">RFID scanning enabled - Present your tag now...</p>
+            <div class="spinner-border text-secondary mt-3" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- SERIAL PORT SELECTION MODAL -->
+    <!-- SERIAL PORT SELECTION MODAL (match Nurse UI) -->
+    <div class="modal fade" id="serialPortModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header" style="background:#20b2aa;color:#fff;border-bottom:none;">
+            <h5 class="modal-title">
+              <i class="bi bi-usb-symbol"></i> Select RFID Serial Port
+            </h5>
+          </div>
+          <div class="modal-body">
+            <p class="text-muted mb-3">
+              Click <b>Connect</b> and select your RFID device from the browser popup.
+              <br><small>(Chrome / Edge only)</small>
+            </p>
+
+            <button class="btn btn-success w-100" id="connectSerialBtn">
+              Connect
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/serial-init.js') }}"></script>
+
+    <script>
+      let currentPatientId = null;
+      let lastPatientObj = null;
+
+      // RFID Modal (Web Serial)
+      const rfidScanModal = new bootstrap.Modal(document.getElementById('rfidScanModal'));
+      let scanInterval = null;
+
+      function stopModalRfidScan() {
+        if (scanInterval) {
+          clearInterval(scanInterval);
+          scanInterval = null;
+        }
+      }
+
+      function startModalRfidScan() {
+        const statusEl = document.getElementById('scanStatus');
+        statusEl.textContent = 'Present your tag now...';
+        rfidScanModal.show();
+
+        let attempts = 0;
+        const maxAttempts = 50; // ~15 sec @ 300ms
+
+        stopModalRfidScan();
+
+        scanInterval = setInterval(async () => {
+          attempts++;
+
+          const uid = window.__latestUid; // ✅ set by serial-init.js
+          if (uid) {
+            statusEl.textContent = 'Tag found! Loading patient data...';
+
+            window.__latestUid = null; // prevent same UID re-trigger
+            stopModalRfidScan();
+
+            setTimeout(async () => {
+              rfidScanModal.hide();
+              await fetchPatientDataByRFID(uid);
+              statusEl.textContent = 'Listening for RFID tags...';
+            }, 600);
+
+            return;
+          }
+
+          if (attempts >= maxAttempts) {
+            statusEl.textContent = 'No tag detected. Please try again.';
+            stopModalRfidScan();
+            setTimeout(() => rfidScanModal.hide(), 900);
+          }
+        }, 300);
+      }
+
+      // Stop scanning if modal closed
+      document.getElementById('rfidScanModal').addEventListener('hidden.bs.modal', () => {
+        stopModalRfidScan();
+        document.getElementById('scanStatus').textContent = 'Listening for RFID tags...';
+      });
+
+      async function fetchPatientDataByRFID(rfidUid) {
+        try {
+          const response = await fetch(`/doctor-view-patient/${rfidUid}`);
+          const res = await response.json();
+          const p = res.patient;
+
+          document.getElementById("patient-details").style.display = 'block';
+
+          if (!p) {
+            document.getElementById("patient-row").innerHTML = "<td colspan='13'>No patient found.</td>";
+            document.getElementById("consultancyFormSection").style.display = "none";
+            return;
+          }
+
+          document.getElementById("consultancyFormSection").style.display = "block";
+          currentPatientId = p.patient_id;
+          lastPatientObj = p;
+
+          document.getElementById("patientId").value = currentPatientId;
+          document.getElementById("patientEmail").value = p.email || '';
+
+          const safe = (v) => (v === null || v === undefined || v === '' ? '-' : v);
+
+          const bp =
+            (p.bp_systolic !== null && p.bp_diastolic !== null)
+              ? `${p.bp_systolic}/${p.bp_diastolic}`
+              : '-';
+
+          document.getElementById("patient-row").innerHTML =
+            `<td>${safe(p.patient_id)}</td>
+         <td>${safe(p.patient_name)}</td>
+         <td>${safe(p.age)}</td>
+         <td>${safe(p.gender)}</td>
+         <td>${p.email || ''}</td>
+         <td>${bp}</td>
+         <td>${safe(p.pulse)}</td>
+         <td>${safe(p.sp_o2)}</td>
+         <td>${safe(p.weight)}</td>
+         <td>${safe(p.height)}</td>
+         <td>${safe(p.blood_sugar)}</td>
+         <td>${safe(p.pain_score)}</td>
+         <td>${safe(p.additional_notes)}</td>`;
+
+        } catch (error) {
+          console.error('Error fetching patient data:', error);
+          alert('Error fetching patient data.');
+        }
+      }
+
+      // ✅ Scan button: Web Serial only
+      document.getElementById('scanRfidBtn').addEventListener('click', () => {
+        if (!window.__serialPortOpen) {
+          const modalEl = document.getElementById("serialPortModal");
+          if (modalEl) new bootstrap.Modal(modalEl).show();
+          else alert("Serial port not connected. Please connect RFID serial port.");
+          return;
+        }
+        startModalRfidScan();
+      });
+
+      function saveConsultancy() {
+        const f = {
+          patient_id: parseInt(document.getElementById('patientId').value),
+          doctor_id: parseInt(document.getElementById('doctorId').value),
+          chief_complaint: document.getElementById('chiefComplaint').value,
+          diagnosis: document.getElementById('diagnosis').value,
+          prescription: document.getElementById('prescription').value,
+          additional_notes: document.getElementById('additionalNotes').value,
+          appointment_datetime: document.getElementById('appointmentDateTime').value,
+          patient_email: document.getElementById('patientEmail').value
+        };
+
+        fetch('/save-consultancy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(f)
+        })
+          .then(r => { if (!r.ok) throw new Error('Save failed'); return r.json(); })
+          .then(data => {
+            if (data.success) {
+              alert('Consultancy saved successfully!');
+              document.getElementById('consultancyForm').reset();
+            } else {
+              alert('Error: ' + (data.error || 'Unknown'));
+            }
+          })
+          .catch(e => { console.error(e); alert('Save failed. Please try again.'); });
+      }
+
+      function printConsultancyLetter() {
+        if (!lastPatientObj) { alert("No patient data."); return; }
+        document.getElementById('plDoctor').innerText = document.getElementById('doctorName').innerText;
+        document.getElementById('plHospital').innerText = document.getElementById('hospitalName').innerText;
+        document.getElementById('plDate').innerText = new Date().toLocaleDateString();
+        document.getElementById('plPatientName').innerText = lastPatientObj.patient_name || '';
+        document.getElementById('plPatientAge').innerText = lastPatientObj.age || '';
+        document.getElementById('plPatientGender').innerText = lastPatientObj.gender || '';
+        document.getElementById('plPatientEmailPrint').innerText = lastPatientObj.email || '';
+
+        const form = document.getElementById('consultancyForm');
+        document.getElementById("plChiefComplaint").innerText = form.querySelector('#chiefComplaint').value;
+        document.getElementById("plDiagnosis").innerText = form.querySelector('#diagnosis').value;
+        document.getElementById("plPrescription").innerText = form.querySelector('#prescription').value;
+        document.getElementById("plAdditionalNotes").innerText = form.querySelector('#additionalNotes').value;
+        document.getElementById("plAppointmentDate").innerText =
+          form.querySelector('#appointmentDateTime').value.replace("T", " ");
+
+        document.getElementById("prescriptionLetter").style.display = "block";
+        window.print();
+        document.getElementById("prescriptionLetter").style.display = "none";
+      }
+      // Available medicines from backend
+const availableMedicines = {{ available_medicines|tojson if available_medicines else '[]' }};
+
+let medicationRowCount = 0;
+
+// Add medication row
+function addMedicationRow() {
+  const template = document.getElementById('medicationRowTemplate');
+  const clone = template.content.cloneNode(true);
+  
+  // Add unique IDs
+  medicationRowCount++;
+  const row = clone.querySelector('.medication-row');
+  row.setAttribute('data-row-id', medicationRowCount);
+  
+  document.getElementById('medicationRows').appendChild(clone);
+  updateSendToPharmacyButton();
+}
+
+// Remove medication row
+function removeMedicationRow(button) {
+  button.closest('.medication-row').remove();
+  updateSendToPharmacyButton();
+}
+
+// Search medicine with stock info
+function searchMedicine(input) {
+  const query = input.value.toLowerCase();
+  const suggestionsDiv = input.parentElement.querySelector('.medicine-suggestions');
+  
+  if (query.length < 2) {
+    suggestionsDiv.style.display = 'none';
+    return;
+  }
+  
+  const matches = availableMedicines.filter(med => 
+    med.product_name.toLowerCase().includes(query) ||
+    (med.generic_name && med.generic_name.toLowerCase().includes(query)) ||
+    (med.brand_name && med.brand_name.toLowerCase().includes(query))
+  );
+  
+  if (matches.length === 0) {
+    suggestionsDiv.innerHTML = '<div class="p-2 text-muted">No medicines found in stock</div>';
+    suggestionsDiv.style.display = 'block';
+    return;
+  }
+  
+  let html = '';
+  matches.slice(0, 5).forEach(med => {
+    const stockClass = med.available_qty > 0 ? 'text-success' : 'text-danger';
+    const stockText = med.available_qty > 0 ? `${med.available_qty} in stock` : 'Out of stock';
+    const priceText = med.min_price ? `₹${med.min_price}` : '';
+    
+    html += `
+      <div class="suggestion-item p-2 border-bottom" style="cursor: pointer;" 
+           onclick="selectMedicine(this, ${med.id}, '${med.product_name}', ${med.available_qty}, ${med.min_price || 0})">
+        <div class="d-flex justify-content-between">
+          <div>
+            <strong>${med.product_name}</strong>
+            ${med.generic_name ? `<br><small class="text-muted">${med.generic_name}</small>` : ''}
+          </div>
+          <div class="text-end">
+            <small class="${stockClass}">${stockText}</small>
+            ${priceText ? `<br><small class="text-info">${priceText}</small>` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+  });
+  
+  suggestionsDiv.innerHTML = html;
+  suggestionsDiv.style.display = 'block';
+}
+
+// Select medicine
+function selectMedicine(element, medicineId, medicineName, availableQty, price) {
+  const row = element.closest('.medication-row');
+  const input = row.querySelector('.medicine-search');
+  const hiddenId = row.querySelector('.selected-medicine-id');
+  const stockInfo = row.querySelector('.stock-info');
+  
+  input.value = medicineName;
+  hiddenId.value = medicineId;
+  
+  // Show stock information
+  const stockClass = availableQty > 0 ? 'alert-success' : 'alert-danger';
+  const stockText = availableQty > 0 ? 
+    `✓ ${availableQty} units available in stock` : 
+    '⚠️ Out of stock - Will need to order';
+  
+  stockInfo.innerHTML = `
+    <div class="alert ${stockClass} py-2 mb-0">
+      <small>${stockText} ${price > 0 ? `| Price: ₹${price}` : ''}</small>
+    </div>
+  `;
+  stockInfo.style.display = 'block';
+  
+  // Hide suggestions
+  row.querySelector('.medicine-suggestions').style.display = 'none';
+  
+  updateSendToPharmacyButton();
+}
+
+// Update send to pharmacy button visibility
+function updateSendToPharmacyButton() {
+  const medicationRows = document.querySelectorAll('.medication-row');
+  const sendBtn = document.getElementById('sendToPharmacyBtn');
+  
+  if (medicationRows.length > 0) {
+    sendBtn.style.display = 'inline-block';
+  } else {
+    sendBtn.style.display = 'none';
+  }
+}
+
+// Get patient medication history
+async function getPatientMedicationHistory(patientId) {
+  try {
+    const response = await fetch(`/patient-medication-history/${patientId}`);
+    const data = await response.json();
+    
+    if (data.history && data.history.length > 0) {
+      let html = '<div class="row">';
+      data.history.slice(0, 3).forEach(record => {
+        html += `
+          <div class="col-md-4 mb-2">
+            <div class="card card-body py-2">
+              <small class="text-muted">${record.consultation_date}</small>
+              <div style="font-size: 0.9em;">${record.prescription_summary}</div>
+            </div>
+          </div>
+        `;
+      });
+      html += '</div>';
+      
+      document.getElementById('medicationHistoryContent').innerHTML = html;
+      document.getElementById('medicationHistoryCard').style.display = 'block';
+    } else {
+      document.getElementById('medicationHistoryCard').style.display = 'none';
+    }
+  } catch (error) {
+    console.error('Error fetching medication history:', error);
+  }
+}
+
+// Send prescription to pharmacy
+// Send prescription to pharmacy (continued)
+function sendToPharmacy() {
+  const medicationRows = document.querySelectorAll('.medication-row');
+  const medications = [];
+  
+  medicationRows.forEach(row => {
+    const medicineId = row.querySelector('.selected-medicine-id').value;
+    const medicineName = row.querySelector('.medicine-search').value;
+    const dosage = row.querySelector('.dosage').value;
+    const frequency = row.querySelector('.frequency').value;
+    const duration = row.querySelector('.duration').value;
+    const quantity = row.querySelector('.quantity').value;
+    
+    if (medicineId && quantity) {
+      medications.push({
+        medicine_id: medicineId,
+        medicine_name: medicineName,
+        dosage: dosage,
+        frequency: frequency,
+        duration: duration,
+        quantity: parseInt(quantity)
+      });
+    }
+  });
+  
+  if (medications.length === 0) {
+    alert('Please add at least one medication with quantity.');
+    return;
+  }
+  
+  const prescriptionData = {
+    patient_id: parseInt(document.getElementById('patientId').value),
+    doctor_id: parseInt(document.getElementById('doctorId').value),
+    medications: medications,
+    prescription_notes: document.getElementById('prescriptionNotes').value,
+    consultation_notes: document.getElementById('chiefComplaint').value + ' | ' + document.getElementById('diagnosis').value
+  };
+  
+  fetch('/send-prescription-to-pharmacy', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(prescriptionData)
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      alert(`Prescription sent to pharmacy successfully!\nPrescription ID: ${data.prescription_id}`);
+    } else {
+      alert('Error sending to pharmacy: ' + (data.error || 'Unknown error'));
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    alert('Error sending prescription to pharmacy.');
+  });
+}
+
+// Enhanced save consultancy function
+function saveConsultancy() {
+  // Get structured medication data
+  const medicationRows = document.querySelectorAll('.medication-row');
+  const medications = [];
+  let prescriptionText = '';
+  
+  medicationRows.forEach((row, index) => {
+    const medicineName = row.querySelector('.medicine-search').value;
+    const dosage = row.querySelector('.dosage').value;
+    const frequency = row.querySelector('.frequency').value;
+    const duration = row.querySelector('.duration').value;
+    const quantity = row.querySelector('.quantity').value;
+    
+    if (medicineName) {
+      const medicineId = row.querySelector('.selected-medicine-id').value;
+      
+      medications.push({
+        medicine_id: medicineId || null,
+        medicine_name: medicineName,
+        dosage: dosage,
+        frequency: frequency,
+        duration: duration,
+        quantity: quantity ? parseInt(quantity) : null
+      });
+      
+      // Build text version for traditional prescription field
+      prescriptionText += `${index + 1}. ${medicineName}`;
+      if (dosage) prescriptionText += ` - ${dosage}`;
+      if (frequency) prescriptionText += ` - ${frequency}`;
+      if (duration) prescriptionText += ` for ${duration}`;
+      if (quantity) prescriptionText += ` (Qty: ${quantity})`;
+      prescriptionText += '\n';
+    }
+  });
+  
+  // Add prescription notes
+  const prescriptionNotes = document.getElementById('prescriptionNotes').value;
+  if (prescriptionNotes) {
+    prescriptionText += '\nAdditional Instructions:\n' + prescriptionNotes;
+  }
+  
+  const consultancyData = {
+    patient_id: parseInt(document.getElementById('patientId').value),
+    doctor_id: parseInt(document.getElementById('doctorId').value),
+    chief_complaint: document.getElementById('chiefComplaint').value,
+    diagnosis: document.getElementById('diagnosis').value,
+    prescription: prescriptionText, // Traditional text field
+    structured_medications: medications, // New structured data
+    additional_notes: document.getElementById('additionalNotes').value,
+    appointment_datetime: document.getElementById('appointmentDateTime').value,
+    patient_email: document.getElementById('patientEmail').value
+  };
+
+  fetch('/save-consultancy', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(consultancyData)
+  })
+  .then(response => {
+    if (!response.ok) throw new Error('Save failed');
+    return response.json();
+  })
+  .then(data => {
+    if (data.success) {
+      alert('Consultancy saved successfully!');
+      document.getElementById('consultancyForm').reset();
+      document.getElementById('medicationRows').innerHTML = ''; // Clear medication rows
+      updateSendToPharmacyButton();
+    } else {
+      alert('Error: ' + (data.error || 'Unknown'));
+    }
+  })
+  .catch(error => {
+    console.error(error);
+    alert('Save failed. Please try again.');
+  });
+}
+
+// Enhanced patient data fetch function
+async function fetchPatientDataByRFID(rfidUid) {
+  try {
+    const response = await fetch(`/doctor-view-patient/${rfidUid}`);
+    const res = await response.json();
+    const p = res.patient;
+
+    document.getElementById("patient-details").style.display = 'block';
+
+    if (!p) {
+      document.getElementById("patient-row").innerHTML = "<td colspan='13'>No patient found.</td>";
+      document.getElementById("consultancyFormSection").style.display = "none";
+      return;
+    }
+
+    document.getElementById("consultancyFormSection").style.display = "block";
+    currentPatientId = p.patient_id;
+    lastPatientObj = p;
+
+    document.getElementById("patientId").value = currentPatientId;
+    document.getElementById("patientEmail").value = p.email || '';
+
+    // Get patient medication history
+    await getPatientMedicationHistory(currentPatientId);
+
+    const safe = (v) => (v === null || v === undefined || v === '' ? '-' : v);
+
+    const bp = (p.bp_systolic !== null && p.bp_diastolic !== null) 
+      ? `${p.bp_systolic}/${p.bp_diastolic}` : '-';
+
+    document.getElementById("patient-row").innerHTML =
+      `<td>${safe(p.patient_id)}</td>
+       <td>${safe(p.patient_name)}</td>
+       <td>${safe(p.age)}</td>
+       <td>${safe(p.gender)}</td>
+       <td>${p.email || ''}</td>
+       <td>${bp}</td>
+       <td>${safe(p.pulse)}</td>
+       <td>${safe(p.sp_o2)}</td>
+       <td>${safe(p.weight)}</td>
+       <td>${safe(p.height)}</td>
+       <td>${safe(p.blood_sugar)}</td>
+       <td>${safe(p.pain_score)}</td>
+       <td>${safe(p.additional_notes)}</td>`;
+
+    // Add first medication row automatically
+    if (document.querySelectorAll('.medication-row').length === 0) {
+      addMedicationRow();
+    }
+
+  } catch (error) {
+    console.error('Error fetching patient data:', error);
+    alert('Error fetching patient data.');
+  }
+}
+
+// Hide medicine suggestions when clicking outside
+document.addEventListener('click', function(event) {
+  if (!event.target.closest('.medicine-search')) {
+    document.querySelectorAll('.medicine-suggestions').forEach(div => {
+      div.style.display = 'none';
+    });
+  }
+});
+
+// Enhanced print function to include structured medications
+function printConsultancyLetter() {
+  if (!lastPatientObj) { 
+    alert("No patient data."); 
+    return; 
+  }
+  
+  // Set basic patient and doctor info
+  document.getElementById('plDoctor').innerText = document.getElementById('doctorName').innerText;
+  document.getElementById('plHospital').innerText = document.getElementById('hospitalName').innerText;
+  document.getElementById('plDate').innerText = new Date().toLocaleDateString();
+  document.getElementById('plPatientName').innerText = lastPatientObj.patient_name || '';
+  document.getElementById('plPatientAge').innerText = lastPatientObj.age || '';
+  document.getElementById('plPatientGender').innerText = lastPatientObj.gender || '';
+  document.getElementById('plPatientEmailPrint').innerText = lastPatientObj.email || '';
+
+  // Set consultancy details
+  document.getElementById("plChiefComplaint").innerText = 
+    document.getElementById('chiefComplaint').value;
+  document.getElementById("plDiagnosis").innerText = 
+    document.getElementById('diagnosis').value;
+  
+  // Build structured prescription for print
+  let prescriptionHtml = '';
+  const medicationRows = document.querySelectorAll('.medication-row');
+  
+  if (medicationRows.length > 0) {
+    prescriptionHtml += '<table style="width:100%; border-collapse: collapse; margin-bottom: 10px;">';
+    prescriptionHtml += '<tr style="border-bottom: 1px solid #ccc;"><th style="text-align:left; padding: 5px;">Medicine</th><th style="text-align:left; padding: 5px;">Dosage</th><th style="text-align:left; padding: 5px;">Frequency</th><th style="text-align:left; padding: 5px;">Duration</th><th style="text-align:left; padding: 5px;">Qty</th></tr>';
+    
+    medicationRows.forEach((row, index) => {
+      const medicine = row.querySelector('.medicine-search').value;
+      const dosage = row.querySelector('.dosage').value;
+      const frequency = row.querySelector('.frequency').value;
+      const duration = row.querySelector('.duration').value;
+      const quantity = row.querySelector('.quantity').value;
+      
+      if (medicine) {
+        prescriptionHtml += `<tr style="border-bottom: 1px solid #eee;">
+          <td style="padding: 5px;">${medicine}</td>
+          <td style="padding: 5px;">${dosage || '-'}</td>
+          <td style="padding: 5px;">${frequency || '-'}</td>
+          <td style="padding: 5px;">${duration || '-'}</td>
+          <td style="padding: 5px;">${quantity || '-'}</td>
+        </tr>`;
+      }
+    });
+    
+    prescriptionHtml += '</table>';
+  }
+  
+  // Add prescription notes if any
+  const prescriptionNotes = document.getElementById('prescriptionNotes').value;
+  if (prescriptionNotes) {
+    prescriptionHtml += `<div style="margin-top: 10px;"><strong>Instructions:</strong><br>${prescriptionNotes.replace(/\n/g, '<br>')}</div>`;
+  }
+  
+  document.getElementById("plPrescription").innerHTML = prescriptionHtml;
+  
+  document.getElementById("plAdditionalNotes").innerText = 
+    document.getElementById('additionalNotes').value;
+  document.getElementById("plAppointmentDate").innerText =
+    document.getElementById('appointmentDateTime').value.replace("T", " ");
+
+  // Show and print
+  document.getElementById("prescriptionLetter").style.display = "block";
+  window.print();
+  document.getElementById("prescriptionLetter").style.display = "none";
+}
+    </script>
+
+</body>
+
+</html>

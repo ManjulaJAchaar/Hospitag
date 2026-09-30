@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>View All Admins</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --teal: #009688;
+            --teal-light: #e0f7fa;
+            --teal-dark: #00796b;
+            --teal-card: #26a69a;
+            --gray-bg: #f7f9fc;
+            --shadow: 0 4px 12px rgba(0, 150, 136, 0.12);
+            --border-radius: 14px;
+        }
+
+        body {
+            background: var(--gray-bg);
+            color: #1a242f;
+        }
+
+        .card {
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            background: #fff;
+            border: none;
+        }
+
+        .dashboard-header {
+            background: linear-gradient(90deg, var(--teal) 65%, var(--teal-light) 100%);
+            color: #fff;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            padding: 22px 30px 16px 30px;
+            margin-bottom: 24px;
+        }
+
+        .dashboard-header h3 {
+            color: #fff;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .dashboard-header p {
+            color: #ecfeff;
+        }
+
+        .navbar {
+            background: var(--teal) !important;
+            /* no gradient */
+            border-radius: 0 0 var(--border-radius) var(--border-radius);
+            box-shadow: var(--shadow);
+        }
+
+
+        .btn-outline-light {
+            border-color: rgba(255, 255, 255, 0.3);
+            color: #fff;
+        }
+
+        .btn-outline-light:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: #fff;
+        }
+
+        .dashboard-card {
+            transition: transform 0.2s;
+            border: none;
+            box-shadow: var(--shadow);
+        }
+
+        .dashboard-card:hover {
+            transform: translateY(-5px);
+        }
+
+
+        .stat-card-dept {
+            background: var(--teal);
+            color: white;
+        }
+
+        .stat-card-pharmacy {
+            background: var(--teal-card);
+            /* still teal family */
+            color: white;
+        }
+
+
+        /* .card-header.bg-pharmacy {
+            background: var(--teal-card) !important;
+            color: white;
+            border-radius: var(--border-radius) var(--border-radius) 0 0;
+        } */
+
+
+        .card-header.bg-pharmacy {
+            background: var(--teal-card) !important;
+            color: white;
+            border-radius: var(--border-radius) var(--border-radius) 0 0;
+        }
+
+        .table thead {
+            background: var(--teal-light);
+            color: var(--teal-dark);
+        }
+
+        .table th {
+            font-weight: 600;
+            font-size: 0.9rem;
+            border: none;
+        }
+
+        .table td {
+            border: none;
+            vertical-align: middle;
+            padding: 1rem 0.75rem;
+        }
+
+        .table-striped>tbody>tr:nth-of-type(odd)>td {
+            background-color: rgba(0, 150, 136, 0.05);
+        }
+
+        .badge.bg-info {
+            background: var(--teal) !important;
+        }
+
+        .badge.bg-success {
+            background: var(--teal-card) !important;
+        }
+
+        .badge.bg-danger {
+            background: #f5576c !important;
+        }
+
+        .btn-group .btn {
+            border-radius: 6px;
+            margin: 0 1px;
+        }
+
+        .btn-outline-primary {
+            border-color: var(--teal);
+            color: var(--teal);
+        }
+
+        .btn-outline-primary:hover {
+            background: var(--teal);
+            border-color: var(--teal);
+        }
+
+        .btn-outline-warning {
+            border-color: #ffc107;
+            color: #ffc107;
+        }
+
+        .btn-outline-warning:hover {
+            background: #ffc107;
+            border-color: #ffc107;
+        }
+
+        .alert {
+            border-radius: 8px;
+            box-shadow: 0 1px 5px rgba(0, 150, 136, 0.12);
+            border: none;
+            border-left: 4px solid;
+        }
+
+        .alert-success {
+            border-left-color: var(--teal);
+            background-color: rgba(0, 150, 136, 0.1);
+            color: var(--teal-dark);
+        }
+
+        .alert-danger {
+            border-left-color: #dc3545;
+        }
+
+        .alert-warning {
+            border-left-color: #ffc107;
+        }
+
+        .avatar-sm {
+            width: 35px;
+            height: 35px;
+        }
+
+        code {
+            background: rgba(0, 150, 136, 0.1) !important;
+            color: var(--teal-dark) !important;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.875rem;
+        }
+
+        .quick-actions-card {
+            background: linear-gradient(135deg, var(--teal-light) 0%, #ffffff 100%);
+        }
+
+        .btn-teal {
+            background: var(--teal);
+            border-color: var(--teal);
+            color: white;
+        }
+
+        .btn-teal:hover {
+            background: var(--teal-dark);
+            border-color: var(--teal-dark);
+            color: white;
+        }
+
+        .btn-pharmacy {
+            background: var(--teal-card);
+            border: none;
+            color: white;
+        }
+
+        .btn-pharmacy:hover {
+            background: var(--teal-dark);
+            color: white;
+        }
+
+
+        .empty-state {
+            padding: 4rem 2rem;
+        }
+
+        .empty-state i {
+            font-size: 4rem;
+            opacity: 0.5;
+            color: var(--teal);
+        }
+
+        /* Pagination Styles */
+        .pagination .page-link {
+            border-color: var(--teal);
+            color: var(--teal);
+        }
+
+        .pagination .page-link:hover {
+            background-color: var(--teal-light);
+            border-color: var(--teal);
+            color: var(--teal-dark);
+        }
+
+        .pagination .page-item.active .page-link {
+            background-color: var(--teal);
+            border-color: var(--teal);
+            color: white;
+        }
+
+        .pagination .page-item.disabled .page-link {
+            color: #6c757d;
+            background-color: #fff;
+            border-color: #dee2e6;
+        }
+
+        .nav-pills .nav-link {
+            color: var(--teal);
+        }
+
+        .nav-pills .nav-link.active {
+            background-color: var(--teal) !important;
+            border-color: var(--teal) !important;
+            color: white !important;
+        }
+
+        .nav-pills .nav-link:hover {
+            background-color: var(--teal-light);
+            color: var(--teal-dark);
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-header {
+                padding: 18px 18px 12px 18px;
+            }
+
+            .btn-group {
+                flex-direction: column;
+                width: 100%;
+            }
+
+            .btn-group .btn {
+                border-radius: 0.25rem !important;
+                margin: 1px 0;
+            }
+
+            .table-responsive {
+                font-size: 0.8rem;
+            }
+
+            .nav-pills {
+                flex-direction: column;
+            }
+
+            .nav-pills .nav-item {
+                margin-bottom: 0.5rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-user-shield"></i> All Admins Overview
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="btn btn-outline-light btn-sm" href="{{ url_for('hr_dashboard') }}">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div
+            class="alert alert-{{ 'danger' if category == 'error' else 'warning' if category == 'warning' else 'success' }} alert-dismissible fade show">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <!-- Summary Cards -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card dashboard-card stat-card-dept">
+                    <div class="card-body text-center">
+                        <i class="bi bi-people-fill fa-3x mb-2"></i>
+                        <h2>{{ total_dept_admins if total_dept_admins is defined else dept_admins|length }}</h2>
+                        <p class="mb-0">Department Admins</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card dashboard-card stat-card-pharmacy">
+                    <div class="card-body text-center">
+                        <i class="bi bi-capsule fa-3x mb-2"></i>
+                        <h2>{{ total_pharmacy_admins if total_pharmacy_admins is defined else pharmacy_admins|length }}
+                        </h2>
+                        <p class="mb-0">Pharmacy Admins</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter Tabs -->
+        <div class="card dashboard-card shadow mb-4">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <ul class="nav nav-pills">
+                            <li class="nav-item">
+                                <a class="nav-link {{ 'active' if admin_type == 'all' else '' }}"
+                                    href="?type=all&page=1&per_page={{ dept_pagination.per_page if dept_pagination else pharmacy_pagination.per_page if pharmacy_pagination else 10 }}">
+                                    <i class="bi bi-people me-2"></i>All Admins
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {{ 'active' if admin_type == 'dept' else '' }}"
+                                    href="?type=dept&page=1&per_page={{ dept_pagination.per_page if dept_pagination else 10 }}">
+                                    <i class="bi bi-people-fill me-2"></i>Department Only
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {{ 'active' if admin_type == 'pharmacy' else '' }}"
+                                    href="?type=pharmacy&page=1&per_page={{ pharmacy_pagination.per_page if pharmacy_pagination else 10 }}">
+                                    <i class="bi bi-capsule me-2"></i>Pharmacy Only
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        {% if dept_pagination or pharmacy_pagination %}
+                        <div class="d-flex align-items-center justify-content-end">
+                            <label class="me-2 mb-0">Show per page:</label>
+                            <select class="form-select form-select-sm" style="width: auto;"
+                                onchange="changePageSize(this.value)">
+                                <option value="5" {{ 'selected' if (dept_pagination.per_page if dept_pagination else
+                                    pharmacy_pagination.per_page)==5 }}>5</option>
+                                <option value="10" {{ 'selected' if (dept_pagination.per_page if dept_pagination else
+                                    pharmacy_pagination.per_page)==10 }}>10</option>
+                                <option value="25" {{ 'selected' if (dept_pagination.per_page if dept_pagination else
+                                    pharmacy_pagination.per_page)==25 }}>25</option>
+                                <option value="50" {{ 'selected' if (dept_pagination.per_page if dept_pagination else
+                                    pharmacy_pagination.per_page)==50 }}>50</option>
+                            </select>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card dashboard-card shadow mb-4">
+            <div class="card-body">
+                <form method="GET" class="row g-2 align-items-center">
+                    <input type="hidden" name="type" value="{{ admin_type }}">
+                    <input type="hidden" name="page" value="1">
+                    <input type="hidden" name="per_page"
+                        value="{{ dept_pagination.per_page if dept_pagination else pharmacy_pagination.per_page if pharmacy_pagination else 10 }}">
+
+                    <div class="col-md-9">
+                        <input type="text" class="form-control" name="q"
+                            placeholder="Search by name / email / phone / username / department..."
+                            value="{{ q or '' }}">
+                    </div>
+
+                    <div class="col-md-3 d-grid">
+                        <button class="btn btn-teal" type="submit">
+                            <i class="bi bi-search me-1"></i> Search
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <!-- Department Admins Section -->
+        {% if admin_type in ['all', 'dept'] %}
+        <div class="card dashboard-card shadow mb-4">
+            <div class="card-header bg-teal d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">
+                    <i class="bi bi-people-fill me-2"></i>Department Admins
+                    {% if admin_type == 'dept' and dept_pagination %}
+                    <span class="badge bg-light text-dark ms-2">{{ dept_pagination.total_records }} Total</span>
+                    {% elif admin_type == 'all' %}
+                    <span class="badge bg-light text-dark ms-2">{{ total_dept_admins if total_dept_admins is defined
+                        else dept_admins|length }} Total</span>
+                    {% endif %}
+                </h4>
+                {% if admin_type == 'all' and (total_dept_admins if total_dept_admins is defined else
+                dept_admins|length) > (dept_admins|length) %}
+                <a href="?type=dept&page=1&per_page=10" class="btn btn-light btn-sm">
+                    <i class="bi bi-eye me-1"></i>View All ({{ total_dept_admins if total_dept_admins is defined else
+                    dept_admins|length }})
+                </a>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if dept_admins %}
+
+                <!-- Pagination Info for Department Admins -->
+                {% if dept_pagination %}
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="pagination-info text-muted">
+                        Showing {{ dept_pagination.start_record }} to {{ dept_pagination.end_record }}
+                        of {{ dept_pagination.total_records }} department admins
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                {% if dept_pagination %}<th>Sl.No</th>{% endif %}
+                                <th>Name</th>
+                                <th>Department</th>
+                                <th>Email</th>
+                                <th>Phone</th>
+                                <th>Gender</th>
+                                <th>Username</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for admin in dept_admins %}
+                            <tr>
+                                {% if dept_pagination %}
+                                <td class="text-center">
+                                    {{ loop.index + dept_pagination.start_record - 1 }}
+                                </td>
+                                {% endif %}
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div
+                                            class="avatar-sm bg-teal text-white rounded-circle me-2 d-flex align-items-center justify-content-center">
+                                            <i class="bi bi-person-fill"></i>
+                                        </div>
+                                        <strong>{{ admin.admin_name }}</strong>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="badge bg-info">{{ admin.department_name }}</span>
+                                </td>
+                                <td>{{ admin.admin_email }}</td>
+                                <td>{{ admin.admin_phone }}</td>
+                                <td>{{ admin.admin_gender }}</td>
+                                <td><code>{{ admin.admin_username }}</code></td>
+                                <td>
+                                    <small>{{ admin.created_on.strftime('%Y-%m-%d') if admin.created_on else 'N/A'
+                                        }}</small>
+                                </td>
+                                <td>
+
+                                    <div class="btn-group btn-group-sm">
+                                        <a class="btn btn-outline-primary btn-sm"
+                                            href="{{ url_for('hr_view_dept_admin', id=admin.id) }}"
+                                            title="View Details">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+
+                                        <a class="btn btn-outline-warning btn-sm"
+                                            href="{{ url_for('hr_edit_dept_admin', id=admin.id) }}" title="Edit">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+
+                                        <form method="POST" action="{{ url_for('hr_delete_dept_admin', id=admin.id) }}"
+                                            onsubmit="return confirm('Delete this Department Admin?');"
+                                            style="display:inline;">
+                                            <button class="btn btn-outline-danger btn-sm no-loading" title="Delete"
+                                                type="submit">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+
+                                    </div>
+
+                                </td>
+                            </tr>
+
+
+
+
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Department Admins Pagination -->
+                {% if dept_pagination and dept_pagination.total_pages > 1 %}
+                <nav aria-label="Department Admins pagination" class="mt-4">
+                    <ul class="pagination justify-content-center">
+                        <!-- Previous Button -->
+                        <li class="page-item {{ 'disabled' if dept_pagination.current_page == 1 }}">
+                            <a class="page-link"
+                                href="?type=dept&page={{ dept_pagination.current_page - 1 }}&per_page={{ dept_pagination.per_page }}">
+                                <i class="fas fa-chevron-left"></i> Previous
+                            </a>
+                        </li>
+
+                        <!-- Page Numbers -->
+                        {% for page_num in dept_pagination.page_range %}
+                        {% if page_num == '...' %}
+                        <li class="page-item disabled">
+                            <span class="page-link">...</span>
+                        </li>
+                        {% else %}
+                        <li class="page-item {{ 'active' if page_num == dept_pagination.current_page }}">
+                            <a class="page-link"
+                                href="?type=dept&page={{ page_num }}&per_page={{ dept_pagination.per_page }}">
+                                {{ page_num }}
+                            </a>
+                        </li>
+                        {% endif %}
+                        {% endfor %}
+
+                        <!-- Next Button -->
+                        <li
+                            class="page-item {{ 'disabled' if dept_pagination.current_page == dept_pagination.total_pages }}">
+                            <a class="page-link"
+                                href="?type=dept&page={{ dept_pagination.current_page + 1 }}&per_page={{ dept_pagination.per_page }}">
+                                Next <i class="fas fa-chevron-right"></i>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+
+                <!-- Pagination Summary -->
+                <div class="text-center mt-3">
+                    <small class="text-muted">
+                        Page {{ dept_pagination.current_page }} of {{ dept_pagination.total_pages }}
+                    </small>
+                </div>
+                {% endif %}
+
+                {% else %}
+                <div class="text-center empty-state">
+                    <i class="bi bi-people"></i>
+                    <h5 class="mt-3">No Department Admins Yet</h5>
+                    <p class="text-muted">No department admins have been created yet.</p>
+                    <a href="{{ url_for('hr_add_dept_admin') }}" class="btn btn-teal">
+                        <i class="bi bi-plus-lg"></i> Add First Department Admin
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Pharmacy Admins Section -->
+        {% if admin_type in ['all', 'pharmacy'] %}
+        <div class="card dashboard-card shadow mb-4">
+            <div class="card-header bg-pharmacy d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">
+                    <i class="bi bi-capsule me-2"></i>Pharmacy Admins
+                    {% if admin_type == 'pharmacy' and pharmacy_pagination %}
+                    <span class="badge bg-light text-dark ms-2">{{ pharmacy_pagination.total_records }} Total</span>
+                    {% elif admin_type == 'all' %}
+                    <span class="badge bg-light text-dark ms-2">{{ total_pharmacy_admins if total_pharmacy_admins is
+                        defined else pharmacy_admins|length }} Total</span>
+                    {% endif %}
+                </h4>
+                {% if admin_type == 'all' and (total_pharmacy_admins if total_pharmacy_admins is defined else
+                pharmacy_admins|length) > (pharmacy_admins|length) %}
+                <a href="?type=pharmacy&page=1&per_page=10" class="btn btn-light btn-sm">
+                    <i class="bi bi-eye me-1"></i>View All ({{ total_pharmacy_admins if total_pharmacy_admins is defined
+                    else pharmacy_admins|length }})
+                </a>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if pharmacy_admins %}
+
+                <!-- Pagination Info for Pharmacy Admins -->
+                {% if pharmacy_pagination %}
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="pagination-info text-muted">
+                        Showing {{ pharmacy_pagination.start_record }} to {{ pharmacy_pagination.end_record }}
+                        of {{ pharmacy_pagination.total_records }} pharmacy admins
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                {% if pharmacy_pagination %}<th>Sl.No</th>{% endif %}
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Phone</th>
+                                <th>Gender</th>
+                                <th>Username</th>
+                                <th>Status</th>
+                                <th>Created</th>
+                                <th>Last Login</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for admin in pharmacy_admins %}
+                            <tr>
+                                {% if pharmacy_pagination %}
+                                <td class="text-center">
+                                    {{ loop.index + pharmacy_pagination.start_record - 1 }}
+                                </td>
+                                {% endif %}
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="avatar-sm text-white rounded-circle me-2 d-flex align-items-center justify-content-center"
+                                            style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                                            <i class="bi bi-capsule"></i>
+                                        </div>
+                                        <strong>{{ admin.pharmacy_admin_name }}</strong>
+                                    </div>
+                                </td>
+                                <td>{{ admin.pharmacy_admin_email }}</td>
+                                <td>{{ admin.pharmacy_admin_phone }}</td>
+                                <td>{{ admin.pharmacy_admin_gender }}</td>
+                                <td><code>{{ admin.pharmacy_admin_username }}</code></td>
+                                <td>
+                                    <span class="badge bg-{{ 'success' if admin.is_active else 'danger' }}">
+                                        {{ 'Active' if admin.is_active else 'Inactive' }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <small>{{ admin.created_on.strftime('%Y-%m-%d') if admin.created_on else 'N/A'
+                                        }}</small>
+                                </td>
+                                <td>
+                                    <small>{{ admin.last_login.strftime('%Y-%m-%d %H:%M') if admin.last_login else
+                                        'Never' }}</small>
+                                </td>
+                                <td>
+
+
+                                    <div class="btn-group btn-group-sm">
+                                        <a class="btn btn-outline-primary btn-sm"
+                                            href="{{ url_for('hr_view_pharmacy_admins', id=admin.id) }}"
+                                            title="View Details">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+
+                                        <a class="btn btn-outline-warning btn-sm"
+                                            href="{{ url_for('hr_edit_pharmacy_admin', id=admin.id) }}" title="Edit">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+
+                                        <form method="POST"
+                                            action="{{ url_for('hr_delete_pharmacy_admin', id=admin.id) }}"
+                                            onsubmit="return confirm('Delete this Pharmacy Admin?');"
+                                            style="display:inline;">
+                                            <button class="btn btn-outline-danger btn-sm no-loading" title="Delete"
+                                                type="submit">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+
+
+
+
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pharmacy Admins Pagination -->
+                {% if pharmacy_pagination and pharmacy_pagination.total_pages > 1 %}
+                <nav aria-label="Pharmacy Admins pagination" class="mt-4">
+                    <ul class="pagination justify-content-center">
+                        <!-- Previous Button -->
+                        <li class="page-item {{ 'disabled' if pharmacy_pagination.current_page == 1 }}">
+                            <a class="page-link"
+                                href="?type=pharmacy&page={{ pharmacy_pagination.current_page - 1 }}&per_page={{ pharmacy_pagination.per_page }}">
+                                <i class="fas fa-chevron-left"></i> Previous
+                            </a>
+                        </li>
+
+                        <!-- Page Numbers -->
+                        {% for page_num in pharmacy_pagination.page_range %}
+                        {% if page_num == '...' %}
+                        <li class="page-item disabled">
+                            <span class="page-link">...</span>
+                        </li>
+                        {% else %}
+                        <li class="page-item {{ 'active' if page_num == pharmacy_pagination.current_page }}">
+                            <a class="page-link"
+                                href="?type=pharmacy&page={{ page_num }}&per_page={{ pharmacy_pagination.per_page }}">
+                                {{ page_num }}
+                            </a>
+                        </li>
+                        {% endif %}
+                        {% endfor %}
+
+                        <!-- Next Button -->
+                        <li
+                            class="page-item {{ 'disabled' if pharmacy_pagination.current_page == pharmacy_pagination.total_pages }}">
+                            <a class="page-link"
+                                href="?type=pharmacy&page={{ pharmacy_pagination.current_page + 1 }}&per_page={{ pharmacy_pagination.per_page }}">
+                                Next <i class="fas fa-chevron-right"></i>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+
+                <!-- Pagination Summary -->
+                <div class="text-center mt-3">
+                    <small class="text-muted">
+                        Page {{ pharmacy_pagination.current_page }} of {{ pharmacy_pagination.total_pages }}
+                    </small>
+                </div>
+                {% endif %}
+
+                {% else %}
+                <div class="text-center empty-state">
+                    <i class="bi bi-capsule"></i>
+                    <h5 class="mt-3">No Pharmacy Admins Yet</h5>
+                    <p class="text-muted">No pharmacy admins have been created yet.</p>
+                    <a href="{{ url_for('hr_add_pharmacy_admin') }}" class="btn btn-pharmacy">
+                        <i class="bi bi-plus-lg"></i> Add First Pharmacy Admin
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Quick Actions Card -->
+        <div class="card dashboard-card quick-actions-card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-lightning-charge"></i> Quick Actions
+                </h5>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <a href="{{ url_for('hr_add_dept_admin') }}" class="btn btn-teal w-100">
+                            <i class="bi bi-person-plus-fill me-2"></i>
+                            Add Department Admin
+                        </a>
+                    </div>
+                    <div class="col-md-4">
+                        <a href="{{ url_for('hr_add_pharmacy_admin') }}" class="btn btn-pharmacy w-100">
+                            <i class="bi bi-capsule me-2"></i>
+                            Add Pharmacy Admin
+                        </a>
+                    </div>
+                    <div class="col-md-4">
+                        <a href="{{ url_for('hr_dashboard') }}" class="btn btn-outline-secondary w-100">
+                            <i class="bi bi-house-door me-2"></i>
+                            Back to Dashboard
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Summary Statistics Footer -->
+        <!-- Summary Statistics Footer -->
+        <div class="row mt-4 mb-4">
+            <div class="col-12">
+                <div class="card dashboard-card">
+                    <div class="card-body text-center">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <h4 style="color: var(--teal);">
+                                    {{ (total_dept_admins if total_dept_admins is defined else dept_admins|length) +
+                                    (total_pharmacy_admins if total_pharmacy_admins is defined else
+                                    pharmacy_admins|length) }}
+                                </h4>
+                                <p class="text-muted mb-0">Total Admins</p>
+                            </div>
+                            <div class="col-md-3">
+                                <h4 style="color: var(--teal);">{{ total_dept_admins if total_dept_admins is defined
+                                    else dept_admins|length }}</h4>
+                                <p class="text-muted mb-0">Department Admins</p>
+                            </div>
+                            <div class="col-md-3">
+                                <h4 style="color: #f5576c;">{{ total_pharmacy_admins if total_pharmacy_admins is defined
+                                    else pharmacy_admins|length }}</h4>
+                                <p class="text-muted mb-0">Pharmacy Admins</p>
+                            </div>
+                            <div class="col-md-3">
+                                <h4 style="color: var(--teal);">
+                                    {{ pharmacy_admins|selectattr('is_active')|list|length if pharmacy_admins else 0 }}
+                                </h4>
+                                <p class="text-muted mb-0">Active Users</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // Add smooth scrolling to internal links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        // Auto dismiss alerts after 5 seconds
+        setTimeout(() => {
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(alert => {
+                const bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            });
+        }, 5000);
+
+        // Add loading state to buttons
+        document.querySelectorAll('a.btn, button').forEach(btn => {
+            btn.addEventListener('click', function () {
+                if (!this.classList.contains('btn-close') && !this.classList.contains('page-link')) {
+                    this.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + this.innerHTML;
+                    this.disabled = true;
+                }
+            });
+        });
+
+        // Initialize tooltips
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+
+        // Page size change function
+        function changePageSize(newSize) {
+            const urlParams = new URLSearchParams(window.location.search);
+            const currentType = urlParams.get('type') || 'all';
+            window.location.href = `?type=${currentType}&page=1&per_page=${newSize}`;
+        }
+
+        // Pagination smooth scroll
+        document.querySelectorAll('.page-link').forEach(link => {
+            link.addEventListener('click', function (e) {
+                // Add loading state for pagination links
+                if (!this.closest('.page-item').classList.contains('disabled') &&
+                    !this.closest('.page-item').classList.contains('active')) {
+                    const originalText = this.innerHTML;
+                    this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+                    // Restore text after a short delay if navigation fails
+                    setTimeout(() => {
+                        this.innerHTML = originalText;
+                    }, 3000);
+                }
+            });
+        });
+
+        // Search functionality (if you want to add it later)
+        function searchAdmins() {
+            const searchInput = document.getElementById('adminSearch');
+            if (searchInput) {
+                const filter = searchInput.value.toLowerCase();
+                const tables = document.querySelectorAll('tbody');
+
+                tables.forEach(tbody => {
+                    const rows = tbody.getElementsByTagName('tr');
+                    for (let i = 0; i < rows.length; i++) {
+                        const cells = rows[i].getElementsByTagName('td');
+                        let found = false;
+                        for (let j = 0; j < cells.length; j++) {
+                            if (cells[j].textContent.toLowerCase().indexOf(filter) > -1) {
+                                found = true;
+                                break;
+                            }
+                        }
+                        rows[i].style.display = found ? '' : 'none';
+                    }
+                });
+            }
+        }
+
+        // Add search input if needed
+        function addSearchInput() {
+            const navbar = document.querySelector('.navbar .container');
+            if (navbar) {
+                const searchDiv = document.createElement('div');
+                searchDiv.innerHTML = `
+                    <input type="text" id="adminSearch" class="form-control form-control-sm" 
+                           placeholder="Search admins..." onkeyup="searchAdmins()" 
+                           style="width: 200px;">
+                `;
+                navbar.appendChild(searchDiv);
+            }
+        }
+
+        // Jump to page function
+        function jumpToPage() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const currentType = urlParams.get('type') || 'all';
+            const currentPerPage = urlParams.get('per_page') || '10';
+
+            const pageNumber = prompt('Enter page number:');
+            if (pageNumber && !isNaN(pageNumber) && pageNumber > 0) {
+                window.location.href = `?type=${currentType}&page=${pageNumber}&per_page=${currentPerPage}`;
+            }
+        }
+
+        // Keyboard navigation for pagination
+        document.addEventListener('keydown', function (e) {
+            const urlParams = new URLSearchParams(window.location.search);
+            const currentPage = parseInt(urlParams.get('page')) || 1;
+            const currentType = urlParams.get('type') || 'all';
+            const currentPerPage = urlParams.get('per_page') || '10';
+
+            // Left arrow key - previous page
+            if (e.altKey && e.key === 'ArrowLeft') {
+                e.preventDefault();
+                if (currentPage > 1) {
+                    window.location.href = `?type=${currentType}&page=${currentPage - 1}&per_page=${currentPerPage}`;
+                }
+            }
+
+            // Right arrow key - next page
+            if (e.altKey && e.key === 'ArrowRight') {
+                e.preventDefault();
+                const totalPages = document.querySelector('.pagination .page-item:last-child:not(.disabled)');
+                if (totalPages) {
+                    window.location.href = `?type=${currentType}&page=${currentPage + 1}&per_page=${currentPerPage}`;
+                }
+            }
+        });
+
+        // Uncomment the line below if you want search functionality
+        // addSearchInput();
+
+        // Add pagination info to URL for better UX
+        function updateURLWithPaginationInfo() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const currentType = urlParams.get('type') || 'all';
+            const currentPage = urlParams.get('page') || '1';
+            const currentPerPage = urlParams.get('per_page') || '10';
+
+            // Update browser title with pagination info
+            const baseTitle = 'View All Admins';
+            if (currentPage !== '1') {
+                document.title = `${baseTitle} - Page ${currentPage}`;
+            } else {
+                document.title = baseTitle;
+            }
+        }
+
+        // Call on page load
+        updateURLWithPaginationInfo();
+    </script>
+
+    <style>
+        /* Additional animations */
+        .dashboard-card {
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeInUp 0.6s ease forwards;
+        }
+
+        .dashboard-card:nth-child(1) {
+            animation-delay: 0.1s;
+        }
+
+        .dashboard-card:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .dashboard-card:nth-child(3) {
+            animation-delay: 0.3s;
+        }
+
+        .dashboard-card:nth-child(4) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes fadeInUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Hover effects for table rows */
+        .table tbody tr:hover {
+            background-color: rgba(0, 150, 136, 0.1) !important;
+            transform: scale(1.01);
+            transition: all 0.2s ease;
+        }
+
+        /* Loading button animation */
+        .spinner-border-sm {
+            width: 0.875rem;
+            height: 0.875rem;
+        }
+
+        /* Custom scrollbar for tables */
+        .table-responsive::-webkit-scrollbar {
+            height: 8px;
+        }
+
+        .table-responsive::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        .table-responsive::-webkit-scrollbar-thumb {
+            background: var(--teal);
+            border-radius: 4px;
+        }
+
+        .table-responsive::-webkit-scrollbar-thumb:hover {
+            background: var(--teal-dark);
+        }
+
+        /* Pagination animation effects */
+        .pagination .page-item {
+            transition: all 0.3s ease;
+        }
+
+        .pagination .page-item:hover {
+            transform: translateY(-2px);
+        }
+
+        .pagination .page-link {
+            transition: all 0.3s ease;
+            border-radius: 6px !important;
+            margin: 0 2px;
+        }
+
+        /* Pagination info styling */
+        .pagination-info {
+            font-size: 0.9rem;
+            background: rgba(0, 150, 136, 0.05);
+            padding: 8px 12px;
+            border-radius: 6px;
+            border-left: 3px solid var(--teal);
+        }
+
+        /* Serial number column styling */
+        .table tbody tr td:first-child {
+            font-weight: 600;
+            color: var(--teal-dark);
+            background: rgba(0, 150, 136, 0.05);
+            text-align: center;
+        }
+
+        /* Loading state for pagination */
+        .pagination .page-link .spinner-border-sm {
+            width: 16px;
+            height: 16px;
+        }
+
+        /* Mobile pagination adjustments */
+        @media (max-width: 768px) {
+            .pagination {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            .pagination .page-item {
+                margin: 2px;
+            }
+
+            .pagination .page-link {
+                padding: 0.375rem 0.75rem;
+                font-size: 0.875rem;
+            }
+
+            .pagination-info {
+                text-align: center;
+                margin-bottom: 1rem;
+            }
+        }
+
+        /* Enhanced empty state styling */
+        .empty-state {
+            background: rgba(0, 150, 136, 0.02);
+            border-radius: var(--border-radius);
+            border: 2px dashed rgba(0, 150, 136, 0.2);
+        }
+
+        /* Table header enhancement for pagination */
+        .table thead th {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: var(--teal-light) !important;
+        }
+    </style>
+</body>
+
+</html>

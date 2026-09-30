@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Nurse - Bed Management</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background: #fafdff; }
+        .text-teal { color: #20b2aa !important; }
+        .bg-teal { background: #20b2aa !important; color: #fff !important; }
+        .bg-light-teal { background: #e6f7f7 !important; color: #20b2aa !important; }
+        .border-teal { border-color: #20b2aa !important; }
+        .table thead { background: #20b2aa !important; color: #fff; }
+        .btn-teal { background: #20b2aa; color: #fff; border: none; }
+        .btn-teal:hover { background: #1a9591; color: #fff; }
+        .btn-outline-teal { 
+            color: #20b2aa; 
+            border-color: #20b2aa; 
+            background: transparent;
+        }
+        .btn-outline-teal:hover { 
+            color: #fff; 
+            background: #20b2aa; 
+            border-color: #20b2aa; 
+        }
+        .badge-free { background:#20c997; color:#fff; font-weight:400; }
+        .badge-occupied { background:#dc3545; color:#fff; font-weight:400; }
+        .card, .form-control, .form-select { border-radius: 0.45rem; }
+        .card-header { background: #20b2aa; color:#fff; }
+        .shadow-sm { box-shadow: 0 2px 6px rgba(32, 178, 170, 0.09);}
+        .pagination .active .page-link { background: #20b2aa; border-color:#20b2aa; }
+        .pagination .page-link { color: #20b2aa; }
+        .header-section {
+            background: #e6f7f7;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            border-left: 4px solid #20b2aa;
+        }
+    </style>
+</head>
+<body>
+<div class="container py-4">
+    <!-- Header with Back Button -->
+    <div class="header-section">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2 class="text-teal mb-0">
+                <i class="fas fa-bed me-2"></i>Bed Status Management
+            </h2>
+            <a href="/nurse-dashboard" class="btn btn-outline-teal">
+                <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+            </a>
+        </div>
+        <p class="text-muted mb-0 mt-2">Update bed occupancy status for patients</p>
+    </div>
+
+    <!-- Flash message -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{category}} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    <!-- Bed Statistics -->
+    {% if beds %}
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card text-center border-teal">
+                <div class="card-body bg-light-teal">
+                    <h5 class="text-teal">{{ beds|length }}</h5>
+                    <p class="text-teal mb-0">Total Beds</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center border-teal">
+                <div class="card-body" style="background: #d1ecf1; color: #0c5460;">
+                    <h5>{{ beds|selectattr('is_occupied', 'equalto', 0)|list|length }}</h5>
+                    <p class="mb-0">Available Beds</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center border-teal">
+                <div class="card-body" style="background: #f8d7da; color: #721c24;">
+                    <h5>{{ beds|selectattr('is_occupied', 'equalto', 1)|list|length }}</h5>
+                    <p class="mb-0">Occupied Beds</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Department Filter -->
+    <div class="card mb-4 shadow-sm border-teal">
+        <div class="card-header">
+            <i class="fas fa-filter me-2"></i>Filter by Department
+        </div>
+        <div class="card-body">
+            <form method="GET">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-6">
+                        <label class="form-label">Department</label>
+                        <select name="department_id" class="form-select" onchange="this.form.submit()">
+                            <option value="">All Departments</option>
+                            {% for dept in departments %}
+                            <option value="{{ dept.id }}" {% if request.args.get('department_id') == dept.id|string %}selected{% endif %}>
+                                {{ dept.department_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <a href="{{ url_for('nurse_bed_management') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times me-1"></i>Clear Filter
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Bed Table -->
+    <div class="card shadow-sm border-teal">
+        <div class="card-header">
+            <i class="fas fa-list me-2"></i>Bed Status List
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-bordered table-striped align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>SL No</th>
+                            <th>Bed Number</th>
+                            <th>Department</th>
+                            <th>Floor</th>
+                            <th>Room</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for bed in beds %}
+                        <tr>
+                            <td>{{ (page-1)*records_per_page + loop.index }}</td>
+                            <td><strong>{{ bed.bed_number }}</strong></td>
+                            <td>
+                                <span class="badge" style="background: #b3e0e0; color: #20b2aa;">
+                                    {{ bed.department_name }}
+                                </span>
+                            </td>
+                            <td>Floor {{ bed.floor_number }}</td>
+                            <td>{{ bed.room_number }}</td>
+                            <td>
+                                {% if bed.is_occupied == 0 %}
+                                    <span class="badge badge-free">
+                                        <i class="fas fa-check me-1"></i>Available
+                                    </span>
+                                {% else %}
+                                    <span class="badge badge-occupied">
+                                        <i class="fas fa-user me-1"></i>Occupied
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if bed.is_occupied == 0 %}
+                                    <a href="{{ url_for('mark_occupied', bed_id=bed.id) }}" 
+                                       class="btn btn-success btn-sm"
+                                       onclick="return confirm('Mark this bed as occupied?')">
+                                        <i class="fas fa-user-plus me-1"></i>Mark Occupied
+                                    </a>
+                                {% else %}
+                                    <a href="{{ url_for('mark_free', bed_id=bed.id) }}" 
+                                       class="btn btn-warning btn-sm"
+                                       onclick="return confirm('Mark this bed as available?')">
+                                        <i class="fas fa-user-minus me-1"></i>Mark Available
+                                    </a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-4">
+                                <i class="fas fa-bed fa-2x mb-2 d-block"></i>
+                                No beds found for the selected filter.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <nav aria-label="Bed Pagination" class="my-4">
+        <ul class="pagination justify-content-center">
+            <li class="page-item {% if page == 1 %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('nurse_bed_management', page=page-1, department_id=request.args.get('department_id', '')) }}">
+                    <i class="fas fa-chevron-left me-1"></i>Previous
+                </a>
+            </li>
+            {% for p in range(1, total_pages+1) %}
+            <li class="page-item {% if page == p %}active{% endif %}">
+                <a class="page-link" href="{{ url_for('nurse_bed_management', page=p, department_id=request.args.get('department_id', '')) }}">{{ p }}</a>
+            </li>
+            {% endfor %}
+            <li class="page-item {% if page == total_pages %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('nurse_bed_management', page=page+1, department_id=request.args.get('department_id', '')) }}">
+                    Next<i class="fas fa-chevron-right ms-1"></i>
+                </a>
+            </li>
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

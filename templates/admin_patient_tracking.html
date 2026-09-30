@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="login-nonce" content="{{ session.get('login_nonce', '') }}">
+  <title>Admin - Patient Comprehensive Tracking</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --light-teal: #48D1CC;
+      --steel-blue: #B0C4DE;
+      --dark-slate-gray: #526777;
+      --light-gray: #f8f9fa;
+      --white: #ffffff;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--light-gray);
+    }
+
+    .main-container {
+      background: var(--white);
+      border-radius: 15px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+      margin: 20px;
+      padding: 30px;
+    }
+
+    .page-header {
+      background: linear-gradient(135deg, var(--light-teal), var(--steel-blue));
+      color: var(--white);
+      padding: 20px;
+      border-radius: 10px;
+      margin-bottom: 30px;
+    }
+
+    .interaction-badge {
+      font-size: 0.75em;
+      margin: 2px;
+    }
+
+    .timeline-item {
+      border-left: 4px solid var(--steel-blue);
+      padding-left: 15px;
+      margin-bottom: 15px;
+      background: var(--light-gray);
+      padding: 10px 15px;
+      border-radius: 0 8px 8px 0;
+    }
+
+    .no-interactions {
+      color: #6c757d;
+      font-style: italic;
+      text-align: center;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      border: 2px dashed #dee2e6;
+    }
+
+    .patient-card {
+      border-radius: 10px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .patient-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    }
+
+    .stats-card {
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      border-radius: 15px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .vitals-indicator {
+      background: linear-gradient(45deg, #28a745, #20c997);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 20px;
+      font-size: 0.8em;
+      display: inline-block;
+      margin: 2px;
+    }
+
+    .consultation-indicator {
+      background: linear-gradient(45deg, #36A2EB, #4BC0C0);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 20px;
+      font-size: 0.8em;
+      display: inline-block;
+      margin: 2px;
+    }
+
+    .table-modern {
+      border-radius: 15px;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.07);
+    }
+
+    .table-modern thead {
+      background: linear-gradient(135deg, var(--light-teal), var(--steel-blue));
+      color: white;
+    }
+
+    .table-modern tbody tr:hover {
+      background-color: rgba(72, 209, 204, 0.1);
+      transform: scale(1.01);
+      transition: all 0.2s;
+    }
+
+    .action-btn {
+      border-radius: 20px;
+      padding: 8px 16px;
+      border: none;
+      font-weight: 500;
+      transition: all 0.3s;
+      margin: 2px;
+    }
+
+    .btn-light-teal {
+      background-color: var(--light-teal);
+      color: white;
+    }
+
+    .btn-light-teal:hover {
+      background-color: #3aa9a3;
+      color: white;
+    }
+
+    .action-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    .status-complete,
+    .status-partial,
+    .status-waiting {
+      color: white;
+      padding: 5px 15px;
+      border-radius: 20px;
+      font-size: 0.8em;
+      font-weight: bold;
+    }
+
+    .status-complete {
+      background: linear-gradient(45deg, #28a745, #20c997);
+    }
+
+    .status-partial {
+      background: linear-gradient(45deg, #ffc107, #fd7e14);
+    }
+
+    .status-waiting {
+      background: linear-gradient(45deg, #dc3545, #e83e8c);
+    }
+
+    .modal-content {
+      border-radius: 15px;
+      border: none;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .modal-header {
+      border-radius: 15px 15px 0 0;
+      border-bottom: none;
+      background-color: var(--steel-blue);
+    }
+
+    #rfidScanModal .modal-header,
+    #timelineModal .modal-header {
+      background: linear-gradient(135deg, var(--light-teal), var(--steel-blue));
+    }
+
+    .tab-content {
+      background: var(--light-gray);
+      border-radius: 0 0 10px 10px;
+      padding: 20px;
+    }
+
+    .nav-tabs .nav-link {
+      border-radius: 10px 10px 0 0;
+      margin-right: 5px;
+      border: none;
+      background: #e9ecef;
+      color: #495057;
+      font-weight: 500;
+    }
+
+    .nav-tabs .nav-link.active {
+      background: linear-gradient(135deg, var(--light-teal), var(--steel-blue));
+      color: white;
+    }
+
+    .search-box {
+      background: var(--white);
+      border-radius: 25px;
+      padding: 10px 20px;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+      border: 1px solid #ddd;
+      margin-bottom: 20px;
+    }
+
+    .search-box:focus {
+      outline: none;
+      box-shadow: 0 5px 25px rgba(72, 209, 204, 0.3);
+      border-color: var(--light-teal);
+    }
+
+    .rfid-scan-animation {
+      font-size: 5em;
+      color: var(--light-teal);
+      position: relative;
+      display: inline-block;
+    }
+
+    .rfid-scan-animation .fa-wifi {
+      animation: pulse 1.5s infinite ease-in-out;
+    }
+
+    @keyframes pulse {
+      0% {
+        transform: scale(0.9);
+        opacity: 0.7;
+      }
+
+      50% {
+        transform: scale(1.1);
+        opacity: 1;
+      }
+
+      100% {
+        transform: scale(0.9);
+        opacity: 0.7;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Main Container -->
+  <div class="main-container">
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="row align-items-center">
+        <div class="col-md-8">
+          <h2 class="mb-0">
+            <i class="fas fa-heartbeat"></i>
+            Comprehensive Patient Tracking & Monitoring System
+          </h2>
+          <p class="mb-0 mt-2">Track complete patient journey across all staff interactions</p>
+        </div>
+        <div class="col-md-4 text-end">
+          <div class="stats-card d-inline-block">
+            <h4 class="mb-0">{{ patients|length }}</h4>
+            <small>Total Patients</small>
+          </div>
+          <div id="header-buttons" class="mt-2">
+            <button id="scanRfidBtn" class="btn btn-outline-light">
+              <i class="fas fa-wifi"></i> Scan RFID
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Search and Filters -->
+    <div class="row mb-4">
+      <div class="col-md-6">
+        <input type="text" id="searchPatients" class="form-control search-box"
+          placeholder="🔍 Search patients by name, RFID, or staff...">
+      </div>
+      <div class="col-md-6">
+        <select id="filterStatus" class="form-control search-box">
+          <option value="">All Patients</option>
+          <option value="complete">Complete Care</option>
+          <option value="vitals-only">Vitals Only</option>
+          <option value="consultation-only">Consultation Only</option>
+          <option value="waiting">Waiting Care</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Patients Table -->
+    <div class="table-responsive">
+      <table class="table table-modern align-middle" id="patientsTable">
+        <thead>
+          <tr>
+            <th width="5%">Sl.No</th>
+            <th width="15%">Patient Info</th>
+            <th width="20%">Registration Details</th>
+            <th width="20%">Vitals Tracking</th>
+            <th width="20%">Consultation Tracking</th>
+            <th width="10%">Overall Status</th>
+            <th width="10%">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in patients %}
+          <tr class="patient-row" data-patient-name="{{ p.full_name|lower }}" data-rfid="{{ p.rfid_uid|lower }}"
+            data-staff="{{ p.added_by_staff|lower }}"
+            data-status="{% if p.vitals_count > 0 and p.consultation_count > 0 %}complete{% elif p.vitals_count > 0 %}vitals-only{% elif p.consultation_count > 0 %}consultation-only{% else %}waiting{% endif %}">
+            <td>
+              <div class="d-flex align-items-center justify-content-center"><span
+                  class="badge bg-secondary rounded-pill" style="font-size: 1em;">{{ loop.index }}</span></div>
+            </td>
+            <td>
+              <div class="patient-card border-0 p-3">
+                <div class="d-flex align-items-center">
+                  <div class="avatar me-3">
+                    {% if p.gender == 'Male' %}<i class="fas fa-user" style="font-size: 2em; color: #36A2EB;"></i>{%
+                    elif p.gender == 'Female' %}<i class="fas fa-user" style="font-size: 2em; color: #FF6384;"></i>{%
+                    else %}<i class="fas fa-user text-secondary" style="font-size: 2em;"></i>{% endif %}
+                  </div>
+                  <div>
+                    <h6 class="mb-1 fw-bold">{{ p.full_name }}</h6>
+                    <small class="text-muted"><i class="fas fa-birthday-cake"></i> {{ p.age }}y • <i
+                        class="fas fa-venus-mars"></i> {{ p.gender }}</small><br>
+                    <span class="badge" style="background-color: var(--steel-blue);"><i class="fas fa-id-card"></i> {{
+                      p.rfid_uid or 'No RFID' }}</span>
+                  </div>
+                </div>
+              </div>
+            </td>
+            <td>
+              <div class="timeline-item" style="border-left-color: #ffc107;">
+                <div class="d-flex align-items-center mb-2"><i
+                    class="fas fa-user-plus text-success me-2"></i><strong>Registered by:</strong></div>
+                <div class="mb-2">
+                  <span class="fw-bold">{{ p.added_by_staff }}</span>
+                  {% if p.staff_department %}
+                  <small class="text-muted d-block">{{ p.staff_department }} Dept</small>
+                  {% endif %}
+                  <!-- Online/Offline badge inserted right after staff name -->
+                  <span class="badge interaction-badge {{ 'bg-success' if p.staff_is_active else 'bg-secondary' }}">
+                    <i class="fas fa-circle"></i> {{ 'Online' if p.staff_is_active else 'Offline' }}
+                  </span>
+                </div>
+                <div class="mb-2"><span
+                    class="badge {% if p.added_by_role == 'Doctor' %}bg-primary{% elif p.added_by_role == 'Nurse' %}bg-info{% elif p.added_by_role == 'Receptionist' %}bg-warning text-dark{% else %}bg-secondary{% endif %} interaction-badge"><i
+                      class="fas {% if p.added_by_role == 'Doctor' %}fa-user-md{% elif p.added_by_role == 'Nurse' %}fa-user-nurse{% elif p.added_by_role == 'Receptionist' %}fa-user-tie{% else %}fa-user{% endif %}"></i>
+                    {{ p.added_by_role }}</span></div>
+                <div class="mb-2"><small class="text-muted"><i class="fas fa-calendar"></i> {{
+                    p.created_at.strftime('%d-%m-%y %H:%M') }}</small></div>
+              </div>
+            </td>
+            <td>
+              {% if p.vitals_count > 0 %}
+              <div class="timeline-item" style="border-left-color: #28a745;">
+                <div class="d-flex align-items-center mb-2"><i
+                    class="fas fa-heartbeat text-danger me-2"></i><strong>Vitals Monitored</strong></div>
+                <div class="vitals-indicator mb-2"><i class="fas fa-check-circle"></i> {{ p.vitals_count }} Record{{ 's'
+                  if p.vitals_count != 1 else '' }}</div>
+
+
+                <div class="mb-2">
+                  <strong>Last by:</strong> {{ p.last_vitals_by }}
+                  <br>{% if p.last_vitals_by_role
+                  %}
+                  <span class="badge bg-info interaction-badge">{{ p.last_vitals_by_role }}</span>{% endif %}
+
+                  <span
+                    class="badge interaction-badge {{ 'bg-success' if p.last_vitals_staff_is_active else 'bg-secondary' }}">
+                    <i class="fas fa-circle"></i> {{ 'Online' if p.last_vitals_staff_is_active else 'Offline' }}
+                  </span>
+                </div>
+                <div><small class="text-muted"><i class="fas fa-clock"></i> {{ p.last_vitals_date.strftime('%d-%m-%y
+                    %H:%M') if p.last_vitals_date else 'Never' }}</small></div>
+
+              </div>
+
+
+
+              {% else %}<div class="no-interactions"><i
+                  class="fas fa-exclamation-triangle text-warning mb-2"></i><br><strong>No vitals recorded</strong>
+              </div>{% endif %}
+            </td>
+            <td>
+              {% if p.consultation_count > 0 %}
+              <div class="timeline-item" style="border-left-color: #36A2EB;">
+                <div class="d-flex align-items-center mb-2"><i class="fas fa-stethoscope me-2"
+                    style="color: #36A2EB;"></i><strong>Consultations</strong></div>
+
+                <div class="consultation-indicator mb-2"><i class="fas fa-user-md"></i> {{ p.consultation_count }}
+                  Session{{ 's' if p.consultation_count != 1 else '' }}</div>
+
+                <div class="mb-2"><strong>Last by Dr:</strong> {{ p.last_consultation_by }}<br>{% if
+                  p.last_consultation_dept %}<span class="badge interaction-badge" style="background-color:#36A2EB;">{{
+                    p.last_consultation_dept }}</span>{% endif %}
+                  <span
+                    class="badge interaction-badge {{ 'bg-success' if p.last_consultation_doctor_is_active else 'bg-secondary' }}">
+                    <i class="fas fa-circle"></i> {{ 'Online' if p.last_consultation_doctor_is_active else 'Offline' }}
+                  </span>
+
+                </div>
+
+                <div><small class="text-muted"><i class="fas fa-clock"></i> {{
+                    p.last_consultation_date.strftime('%d-%m-%y %H:%M') if p.last_consultation_date else 'Never'
+                    }}</small></div>
+              </div>
+              {% else %}<div class="no-interactions"><i
+                  class="fas fa-exclamation-triangle text-warning mb-2"></i><br><strong>No consultations yet</strong>
+              </div>{% endif %}
+            </td>
+            <td>
+              <div class="text-center">
+                {% if p.vitals_count > 0 and p.consultation_count > 0 %}<div class="status-complete mb-2"><i
+                    class="fas fa-check-circle"></i><br>Complete</div>
+                {% elif p.vitals_count > 0 %}<div class="status-partial mb-2"><i class="fas fa-heartbeat"></i><br>Vitals
+                  Only</div>
+                {% elif p.consultation_count > 0 %}<div class="status-partial mb-2"
+                  style="background: linear-gradient(45deg, #17a2b8, #138496);"><i
+                    class="fas fa-stethoscope"></i><br>Consult Only</div>
+
+                {% else %}
+                <div class="status-waiting mb-2">
+                  <i class="fas fa-clock"></i><br>Waiting
+                </div>
+                {% endif %}
+
+
+                <small class="text-muted d-block mt-2"><i class="fas fa-hospital"></i> {{ p.admin_name }}</small>
+              </div>
+            </td>
+            <td>
+              <div class="d-flex flex-column gap-2">
+                {% if p.rfid_uid %}
+                <button onclick="fetchPatientDataByRFID('{{ p.rfid_uid }}')"
+                  class="btn btn-light-teal action-btn btn-sm"><i class="fas fa-search"></i> Report</button>
+                {% endif %}
+                <!-- <button onclick="viewTimeline({{ p.patient_id }})" class="btn btn-info action-btn btn-sm"><i
+                    class="fas fa-timeline"></i> Timeline</button> -->
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="7" class="text-center py-5">
+              <div class="no-interactions">
+                <i class="fas fa-info-circle mb-3" style="font-size: 3em;"></i><br>
+                <h5>No patients found</h5>
+                <p class="mb-0">No patients have been registered yet or none match your search criteria.</p>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Patient Details Modal and other modals/scripts remain unchanged below -->
+
+  <!-- Patient Details Modal -->
+  <div class="modal fade" id="patientModal" tabindex="-1" aria-labelledby="patientModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-content">
+        <div class="modal-header text-white">
+          <h5 class="modal-title" id="patientModalLabel"><i class="fas fa-user-circle"></i> Complete Patient Report</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-0">
+          <ul class="nav nav-tabs" id="patientTabs" role="tablist">
+            <li class="nav-item" role="presentation"><button class="nav-link active" id="overview-tab"
+                data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab"><i
+                  class="fas fa-info-circle"></i> Overview</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" id="registration-tab" data-bs-toggle="tab"
+                data-bs-target="#registration" type="button" role="tab"><i class="fas fa-user-plus"></i>
+                Registration</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" id="vitals-tab" data-bs-toggle="tab"
+                data-bs-target="#vitals" type="button" role="tab"><i class="fas fa-heartbeat"></i> Vitals
+                History</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" id="consultations-tab"
+                data-bs-toggle="tab" data-bs-target="#consultations" type="button" role="tab"><i
+                  class="fas fa-stethoscope"></i> Consultations</button></li>
+          </ul>
+          <div class="tab-content" id="patientTabsContent">
+            <div class="tab-pane fade show active" id="overview" role="tabpanel">
+              <div id="patient-overview"></div>
+            </div>
+            <div class="tab-pane fade" id="registration" role="tabpanel">
+              <div id="patient-registration"></div>
+            </div>
+            <div class="tab-pane fade" id="vitals" role="tabpanel">
+              <div id="patient-vitals"></div>
+            </div>
+            <div class="tab-pane fade" id="consultations" role="tabpanel">
+              <div id="patient-consultations"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Timeline Modal -->
+  <div class="modal fade" id="timelineModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header bg-info text-white">
+          <h5 class="modal-title"><i class="fas fa-timeline"></i> Patient Interaction Timeline</h5><button type="button"
+            class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div id="timeline-content">Loading timeline...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RFID Scan Modal -->
+  <div class="modal fade" id="rfidScanModal" tabindex="-1" aria-labelledby="rfidScanModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title text-white" id="rfidScanModalLabel">
+            <i class="fas fa-wifi"></i> RFID Scanner
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body text-center py-5">
+          <div class="rfid-scan-animation mb-4">
+            <i class="fas fa-wifi"></i>
+          </div>
+          <h4 class="text-muted">Scanning for RFID Tag...</h4>
+          <p class="text-muted">Please present the patient's RFID tag to the reader</p>
+          <div id="scanStatus"></div>
+          <div class="spinner-border text-info mt-3" role="status">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- SERIAL PORT SELECTION MODAL (Same as Nurse Dashboard) -->
+  <!-- SERIAL PORT SELECTION MODAL (Same as Nurse Dashboard) -->
+  <div class="modal fade" id="serialPortModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header" style="background:#48D1CC;color:#fff;border-bottom:none;">
+          <h5 class="modal-title">
+            <i class="fas fa-plug"></i> Select RFID Serial Port
+          </h5>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted mb-3">
+            Click <b>Connect</b> and select your RFID device (USB/COM) from the browser popup.
+            <br><small>(Works in Chrome / Edge only)</small>
+          </p>
+
+          <button class="btn btn-success w-100" id="connectSerialBtn">Connect</button>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="{{ url_for('static', filename='js/serial-init.js') }}"></script>
+
+  <script>
+    console.log('Loading RFID JavaScript...');
+
+    // Global variables
+    // Global variables
+    let scanningInterval = null;
+    const rfidScanModal = new bootstrap.Modal(document.getElementById('rfidScanModal'));
+    const patientModal = new bootstrap.Modal(document.getElementById('patientModal'));
+
+    document.getElementById('scanRfidBtn').addEventListener('click', startModalRfidScan);
+
+    function startModalRfidScan() {
+      rfidScanModal.show();
+
+      const statusElement = document.getElementById('scanStatus');
+      if (statusElement) statusElement.innerHTML = '<small class="text-info">Present tag now...</small>';
+
+      let attempts = 0;
+      const maxAttempts = 50; // ~15 seconds if 300ms interval
+
+      scanningInterval = setInterval(async () => {
+        attempts++;
+
+        const uid = window.__latestUid; // ✅ set by serial-init.js
+
+        if (uid) {
+          if (statusElement) {
+            statusElement.innerHTML = `
+          <div class="alert alert-success mt-2">
+            <i class="fas fa-check-circle"></i> RFID Found: ${uid}
+          </div>`;
+          }
+
+          // clear so it doesn't auto-trigger again
+          window.__latestUid = null;
+
+          clearInterval(scanningInterval);
+          scanningInterval = null;
+
+          setTimeout(async () => {
+            rfidScanModal.hide();
+            await fetchPatientDataByRFID(uid);
+          }, 800);
+
+          return;
+        }
+
+        if (attempts >= maxAttempts) {
+          if (statusElement) statusElement.innerHTML = '<small class="text-danger">No tag detected. Try again.</small>';
+          clearInterval(scanningInterval);
+          scanningInterval = null;
+          setTimeout(() => rfidScanModal.hide(), 1200);
+        }
+      }, 300);
+    }
+
+    // Stop polling when modal closed
+    document.getElementById('rfidScanModal').addEventListener('hidden.bs.modal', function () {
+      if (scanningInterval) {
+        clearInterval(scanningInterval);
+        scanningInterval = null;
+      }
+      const statusElement = document.getElementById('scanStatus');
+      if (statusElement) statusElement.innerHTML = '';
+    });
+
+    // Fetch patient data by RFID
+    async function fetchPatientDataByRFID(rfidUid) {
+      try {
+        console.log('Fetching patient data for RFID:', rfidUid);
+
+        const response = await fetch(`/api/patient_by_rfid/${encodeURIComponent(rfidUid)}`);
+        const data = await response.json();
+
+        console.log('Patient API response:', data);
+
+        if (response.ok && data.patient) {
+          console.log('Patient data received:', data.patient);
+          populatePatientModal(data);
+          patientModal.show();
+        } else {
+          console.log('Patient not found:', data);
+          alert(data.error || `No patient found with RFID: ${rfidUid}`);
+        }
+      } catch (error) {
+        console.error('Error fetching patient data:', error);
+        alert('Error fetching patient data: ' + error.message);
+      }
+    }
+
+    // Populate patient modal with data
+    function populatePatientModal(data) {
+      const patient = data.patient;
+      const vitals = data.vitals || [];
+      const consultations = data.consultations || [];
+      const summary = data.summary || {};
+
+      console.log('Populating modal with patient:', patient);
+
+      // Overview Tab
+      document.getElementById('patient-overview').innerHTML = `
+    <div class="row">
+      <div class="col-md-4">
+        <div class="text-center mb-4">
+          <div class="avatar mb-3">
+            ${patient.gender === 'Male' ? '<i class="fas fa-user" style="font-size: 5em; color: #36A2EB;"></i>' :
+          patient.gender === 'Female' ? '<i class="fas fa-user" style="font-size: 5em; color: #FF6384;"></i>' :
+            '<i class="fas fa-user text-secondary" style="font-size: 5em;"></i>'}
+          </div>
+          <h3>${patient.full_name}</h3>
+          <p class="text-muted">${patient.age} years old • ${patient.gender}</p>
+          <span class="badge bg-primary"><i class="fas fa-id-card"></i> ${patient.rfid_uid || 'No RFID'}</span>
+          <div class="mt-2">
+            <span class="badge ${patient.is_active ? 'bg-success' : 'bg-secondary'}">
+              <i class="fas fa-circle"></i> ${patient.is_active ? 'Active' : 'Inactive'}
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-8">
+        <div class="row">
+          <div class="col-md-6">
+            <div class="stats-card bg-success text-white mb-3">
+              <h4>${summary.total_vitals_records || 0}</h4>
+              <p class="mb-0">Vitals Records</p>
+              <small>${summary.last_vitals_date !== 'No vitals recorded' ? 'Last: ' + summary.last_vitals_date : 'No records yet'}</small>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="stats-card bg-info text-white mb-3">
+              <h4>${summary.total_consultations || 0}</h4>
+              <p class="mb-0">Consultations</p>
+              <small>${summary.last_consultation_date !== 'No consultations' ? 'Last: ' + summary.last_consultation_date : 'No consultations yet'}</small>
+            </div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <h6><i class="fas fa-hospital"></i> Contact Information</h6>
+          <div class="row">
+            <div class="col-md-6">
+              <p><strong>Hospital:</strong> ${patient.hospital_name || 'N/A'}</p>
+              <p><strong>Phone:</strong> ${patient.phone || 'N/A'}</p>
+            </div>
+            <div class="col-md-6">
+              <p><strong>Email:</strong> ${patient.email}</p>
+              <p><strong>Address:</strong> ${patient.address || 'N/A'}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+      // Registration Tab
+      document.getElementById('patient-registration').innerHTML = `
+    <div class="timeline-item">
+      <h5><i class="fas fa-user-plus text-success"></i> Registration Details</h5>
+      <div class="row">
+        <div class="col-md-6">
+          <p><strong>Registered by:</strong> ${patient.added_by.staff_name}</p>
+          <p><strong>Role:</strong> <span class="badge bg-primary">${patient.added_by.staff_role}</span></p>
+          <p><strong>Department:</strong> ${patient.added_by.staff_department}</p>
+          <p><strong>Staff Email:</strong> ${patient.added_by.staff_email}</p>
+        </div>
+        <div class="col-md-6">
+          <p><strong>Registration Date:</strong> ${patient.created_at || 'N/A'}</p>
+          <p><strong>Hospital:</strong> ${patient.hospital_name}</p>
+          <p><strong>Patient ID:</strong> <span class="badge bg-secondary">${patient.id}</span></p>
+          <p><strong>Status:</strong> 
+            <span class="badge ${patient.is_active ? 'bg-success' : 'bg-danger'}">
+              ${patient.is_active ? 'Active' : 'Inactive'}
+            </span>
+          </p>
+        </div>
+      </div>
+    </div>
+  `;
+
+      // Vitals Tab - Show detailed vitals
+      const vitalsHtml = vitals.length > 0 ?
+        vitals.map(vital => `
+      <div class="timeline-item mb-3">
+        <div class="d-flex justify-content-between align-items-start">
+          <div class="flex-grow-1">
+            <h6><i class="fas fa-heartbeat text-danger"></i> Vital Signs - ${vital.recorded_time}</h6>
+            <p><strong>Recorded by:</strong> ${vital.recorded_by.staff_name} (${vital.recorded_by.staff_role}) - ${vital.recorded_by.staff_department}</p>
+            
+            <div class="row mb-2">
+              <div class="col-md-3">
+                <div class="vitals-indicator">
+                  <strong>Temperature:</strong><br>${vital.temperature || 'N/A'}°F
+                </div>
+              </div>
+              <div class="col-md-3">
+                <div class="vitals-indicator">
+                  <strong>Blood Pressure:</strong><br>${vital.blood_pressure}
+                </div>
+              </div>
+              <div class="col-md-3">
+                <div class="vitals-indicator">
+                  <strong>Pulse:</strong><br>${vital.pulse || 'N/A'} bpm
+                </div>
+              </div>
+              <div class="col-md-3">
+                <div class="vitals-indicator">
+                  <strong>Weight:</strong><br>${vital.weight || 'N/A'} kg
+                </div>
+              </div>
+            </div>
+            
+            <div class="row mb-2">
+              <div class="col-md-3">
+                <div class="vitals-indicator">
+                  <strong>Height:</strong><br>${vital.height || 'N/A'} cm
+                </div>
+              </div>
+              <div class="col-md-3">
+                <div class="vitals-indicator">
+                  <strong>SpO2:</strong><br>${vital.sp_o2 || 'N/A'}%
+                </div>
+              </div>
+              <div class="col-md-3">
+                <div class="vitals-indicator">
+                  <strong>Respiratory:</strong><br>${vital.respiratory_rate || 'N/A'}/min
+                </div>
+              </div>
+              <div class="col-md-3">
+                <div class="vitals-indicator">
+                  <strong>Pain Score:</strong><br>${vital.pain_score || 'N/A'}/10
+                </div>
+              </div>
+            </div>
+            
+            ${vital.blood_sugar ? `
+              <div class="row mb-2">
+                <div class="col-md-3">
+                  <div class="vitals-indicator">
+                    <strong>Blood Sugar:</strong><br>${vital.blood_sugar} mg/dL
+                  </div>
+                </div>
+              </div>
+            ` : ''}
+            
+            ${vital.additional_notes !== 'No notes' ? `
+              <div class="mt-2 p-2 bg-light rounded">
+                <strong>Additional Notes:</strong><br>${vital.additional_notes}
+              </div>
+            ` : ''}
+            
+            <small class="text-muted mt-2 d-block">
+              <i class="fas fa-clock"></i> Last Updated: ${vital.updated_time}
+            </small>
+          </div>
+        </div>
+      </div>
+    `).join('') :
+        '<div class="alert alert-info">No vitals recorded yet for this patient.</div>';
+
+      document.getElementById('patient-vitals').innerHTML = vitalsHtml;
+
+      // Consultations Tab - Show detailed consultations
+      const consultationsHtml = consultations.length > 0 ?
+        consultations.map(consultation => `
+      <div class="timeline-item mb-3">
+        <div class="d-flex justify-content-between align-items-start">
+          <div class="flex-grow-1">
+            <h6><i class="fas fa-stethoscope text-primary"></i> Consultation - ${consultation.consultation_time}</h6>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <p class="mb-0"><strong>Dr. ${consultation.doctor.name}</strong> - ${consultation.doctor.department}</p>
+              ${consultation.appointment_time !== 'No appointment time' ?
+            `<small class="badge bg-info">Scheduled: ${consultation.appointment_time}</small>` : ''}
+                        </div>
+            
+            <div class="row">
+              <div class="col-md-12">
+                <div class="bg-light p-3 rounded mb-2">
+                  <div class="row">
+                    <div class="col-md-6">
+                      <p><strong><i class="fas fa-clipboard-list"></i> Chief Complaint:</strong></p>
+                      <p class="mb-3">${consultation.chief_complaint}</p>
+                    </div>
+                    <div class="col-md-6">
+                      <p><strong><i class="fas fa-diagnoses"></i> Diagnosis:</strong></p>
+                      <p class="mb-3">${consultation.diagnosis}</p>
+                    </div>
+                  </div>
+                  
+                  <div class="row">
+                    <div class="col-md-12">
+                      <p><strong><i class="fas fa-pills"></i> Prescription:</strong></p>
+                      <p class="mb-2">${consultation.prescription}</p>
+                    </div>
+                  </div>
+                  
+                  ${consultation.additional_notes !== 'No additional notes' ? `
+                    <div class="row mt-2">
+                      <div class="col-md-12">
+                        <p><strong><i class="fas fa-sticky-note"></i> Additional Notes:</strong></p>
+                        <p class="mb-0">${consultation.additional_notes}</p>
+                      </div>
+                    </div>
+                  ` : ''}
+                </div>
+                
+                <div class="d-flex justify-content-between align-items-center">
+                  <small class="text-muted">
+                    <i class="fas fa-envelope"></i> ${consultation.doctor.email} | 
+                    <i class="fas fa-phone"></i> ${consultation.doctor.phone}
+                  </small>
+                  <small class="text-muted">
+                    <i class="fas fa-clock"></i> Consultation ID: ${consultation.id}
+                  </small>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `).join('') :
+        '<div class="alert alert-info">No consultations recorded yet for this patient.</div>';
+
+      document.getElementById('patient-consultations').innerHTML = consultationsHtml;
+    }
+
+    // Timeline functionality
+    async function viewTimeline(patientId) {
+      try {
+        console.log('Fetching timeline for patient ID:', patientId);
+
+        // You can add a timeline endpoint later
+        const timelineModal = new bootstrap.Modal(document.getElementById('timelineModal'));
+        document.getElementById('timeline-content').innerHTML = `
+      <div class="alert alert-info">
+        <i class="fas fa-info-circle"></i> Timeline feature coming soon for Patient ID: ${patientId}
+      </div>
+    `;
+        timelineModal.show();
+
+      } catch (error) {
+        console.error('Error fetching timeline:', error);
+        alert('Error loading timeline: ' + error.message);
+      }
+    }
+
+    // Search and filter functionality
+    document.getElementById('searchPatients').addEventListener('input', function (e) {
+      const searchTerm = e.target.value.toLowerCase();
+      const rows = document.querySelectorAll('.patient-row');
+
+      rows.forEach(row => {
+        const name = row.getAttribute('data-patient-name') || '';
+        const rfid = row.getAttribute('data-rfid') || '';
+        const staff = row.getAttribute('data-staff') || '';
+
+        const matches = name.includes(searchTerm) ||
+          rfid.includes(searchTerm) ||
+          staff.includes(searchTerm);
+
+        row.style.display = matches ? '' : 'none';
+      });
+    });
+
+    document.getElementById('filterStatus').addEventListener('change', function (e) {
+      const filterValue = e.target.value;
+      const rows = document.querySelectorAll('.patient-row');
+
+      rows.forEach(row => {
+        const status = row.getAttribute('data-status') || '';
+
+        if (filterValue === '' || status === filterValue) {
+          row.style.display = '';
+        } else {
+          row.style.display = 'none';
+        }
+      });
+    });
+
+    // Test function for debugging (you can remove this in production)
+    function testWithExistingRFID() {
+      console.log('Testing with existing RFID');
+      // Replace with an actual RFID from your database
+      fetchPatientDataByRFID('D07ACC5F');
+    }
+
+    console.log('RFID scanning JavaScript loaded successfully!');
+
+    // Add this for debugging - you can call this from browser console
+    window.testRFID = testWithExistingRFID;
+    window.fetchPatientData = fetchPatientDataByRFID;
+
+
+
+  </script>
+</body>
+
+</html>

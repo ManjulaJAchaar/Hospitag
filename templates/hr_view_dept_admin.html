@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>View Department Admin</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+    <style>
+        :root {
+            --teal: #20b2aa;
+            --teal-dark: #1a9b96;
+            --teal-soft: #eaf8f7;
+            --bg: #f6f8fb;
+            --border: #e6edf2;
+            --text: #1f2937;
+            --muted: #6b7280;
+            --shadow: 0 10px 24px rgba(31, 41, 55, 0.08);
+            --radius: 14px;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        .dashboard-card {
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            background: #fff;
+        }
+
+        .card-header {
+            background: var(--teal);
+            color: #fff;
+            border-radius: var(--radius) var(--radius) 0 0;
+        }
+
+        .badge-teal {
+            background: var(--teal-soft);
+            color: var(--teal-dark);
+            border: 1px solid rgba(32,178,170,.4);
+        }
+
+        .btn-teal {
+            background: var(--teal);
+            color: #fff;
+            border: 1px solid var(--teal);
+        }
+
+        .btn-teal:hover {
+            background: var(--teal-dark);
+            border-color: var(--teal-dark);
+        }
+
+        .info-row {
+            padding: 10px 0;
+            border-bottom: 1px dashed var(--border);
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: var(--muted);
+        }
+
+        code {
+            background: var(--teal-soft);
+            color: var(--teal-dark);
+            padding: 4px 6px;
+            border-radius: 6px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container py-4">
+
+    <div class="card dashboard-card">
+
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="fas fa-user"></i> Admin Details
+            </h5>
+
+            <div class="d-flex gap-2">
+                <a class="btn btn-sm btn-light" href="/hr-edit-dept-admin/{{ admin.id }}">
+                    <i class="fas fa-edit"></i> Edit
+                </a>
+
+                <a class="btn btn-sm btn-outline-light" href="/hr-view-department-admins">
+                    <i class="fas fa-arrow-left"></i> Back
+                </a>
+            </div>
+        </div>
+
+        <div class="card-body">
+
+            <div class="row info-row">
+                <div class="col-md-4 info-label">Name</div>
+                <div class="col-md-8">{{ admin.admin_name }}</div>
+            </div>
+
+            <div class="row info-row">
+                <div class="col-md-4 info-label">Department</div>
+                <div class="col-md-8">
+                    <span class="badge badge-teal">{{ admin.department_name or 'N/A' }}</span>
+                </div>
+            </div>
+
+            <div class="row info-row">
+                <div class="col-md-4 info-label">Email</div>
+                <div class="col-md-8">{{ admin.admin_email }}</div>
+            </div>
+
+            <div class="row info-row">
+                <div class="col-md-4 info-label">Phone</div>
+                <div class="col-md-8">{{ admin.admin_phone }}</div>
+            </div>
+
+            <div class="row info-row">
+                <div class="col-md-4 info-label">Gender</div>
+                <div class="col-md-8">
+                    <span class="badge badge-teal">{{ admin.admin_gender }}</span>
+                </div>
+            </div>
+
+            <div class="row info-row">
+                <div class="col-md-4 info-label">Username</div>
+                <div class="col-md-8">
+                    <code>{{ admin.admin_username }}</code>
+                </div>
+            </div>
+
+            <div class="row info-row">
+                <div class="col-md-4 info-label">Created</div>
+                <div class="col-md-8">
+                    <small>
+                        {% if admin.created_at %}
+                            {{ admin.created_at if admin.created_at is string else admin.created_at.strftime('%Y-%m-%d') }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </small>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+</body>
+</html>

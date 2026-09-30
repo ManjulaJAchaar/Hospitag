@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta name="login-nonce" content="{{ session.get('login_nonce', '') }}">
+  <meta charset="UTF-8">
+  <title>Nurse Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body {
+      background: white;
+      min-height: 100vh;
+      font-family: 'Segoe UI', Arial, sans-serif;
+    }
+
+    .main-card {
+      background: #ffffffcc;
+      border-radius: 1rem;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.10);
+      padding: 2rem;
+    }
+
+    .dashboard-header {
+      background: #20b2aa;
+      color: #fff;
+      border-radius: 16px;
+      box-shadow: 0 4px 12px rgba(32, 178, 170, 0.08);
+      padding: 18px 28px 16px 28px;
+      margin-bottom: 22px;
+    }
+
+    .dashboard-header h3 {
+      color: #fff;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .profile-photo {
+      width: 32px;
+      height: 32px;
+      object-fit: cover;
+      border-radius: 50%;
+      border: 2px solid #fff;
+    }
+
+    .form-label {
+      font-weight: 600;
+      color: #20b2aa;
+    }
+
+    .main-card h2,
+    .main-card h3,
+    .main-card h5 {
+      color: #20b2aa;
+      font-weight: 700;
+    }
+
+    .sub-card {
+      margin-top: 2rem;
+      background: #e0f7fa;
+      border-radius: 12px;
+      padding: 2rem;
+      box-shadow: 0 2px 6px rgba(32, 178, 170, 0.08);
+    }
+
+    .profile-photo-lg {
+      width: 130px;
+      height: 130px;
+      object-fit: cover;
+      border-radius: 50%;
+      border: 3px solid #fff;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+      cursor: pointer;
+    }
+
+    .camera-overlay {
+      position: absolute;
+      right: 10px;
+      bottom: 10px;
+      background: #20b2aa;
+      color: #fff;
+      border-radius: 50%;
+      padding: 8px;
+      cursor: pointer;
+    }
+
+    .remove-overlay {
+      position: absolute;
+      left: 10px;
+      bottom: 10px;
+      background: #f44336;
+      color: #fff;
+      border-radius: 50%;
+      padding: 6px;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background-color: #20b2aa;
+      border-color: #20b2aa;
+    }
+
+    .btn-primary:hover {
+      background-color: #1a9591;
+      border-color: #1a9591;
+    }
+
+    .btn-success {
+      background-color: #20b2aa;
+      border-color: #20b2aa;
+    }
+
+    .btn-success:hover {
+      background-color: #1a9591;
+      border-color: #1a9591;
+    }
+
+    /* Uniform sizing for vital form fields */
+    #vitals-section .col-md-4 {
+      flex: 0 0 auto;
+      width: 33.333333%;
+    }
+
+    #vitals-section .form-control {
+      width: 100%;
+    }
+
+    /* RFID Scanning Modal Styles */
+    .modal-content {
+      border-radius: 15px;
+      border: none;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .modal-header {
+      border-radius: 15px 15px 0 0;
+      border-bottom: none;
+      background-color: #20b2aa;
+      color: white;
+    }
+
+    .rfid-scan-animation {
+      font-size: 5em;
+      color: #20b2aa;
+      position: relative;
+      display: inline-block;
+    }
+
+    .rfid-scan-animation .bi-wifi {
+      animation: pulse 1.5s infinite ease-in-out;
+    }
+
+    .spinner-border.text-secondary {
+      color: #20b2aa !important;
+    }
+
+    @keyframes pulse {
+      0% {
+        transform: scale(0.9);
+        opacity: 0.7;
+      }
+
+      50% {
+        transform: scale(1.1);
+        opacity: 1;
+      }
+
+      100% {
+        transform: scale(0.9);
+        opacity: 0.7;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container my-4">
+    <!-- HEADER -->
+    <div class="dashboard-header d-flex justify-content-between align-items-center">
+      <div>
+        <h3>Nurse Dashboard</h3>
+        <p>Welcome, <strong>{{ staff_name or 'Nurse' }}</strong> | Hospital: <strong>{{ hospital_name or 'N/A'
+            }}</strong></p>
+      </div>
+
+      <div class="d-flex align-items-center gap-3">
+        <a href="{{ url_for('view_patients') }}" class="btn btn-light text-dark fw-bold">
+          <i class="bi bi-people me-2"></i> View Patients
+        </a>
+        {% if is_enterprise %}
+        <a href="{{ url_for('nurse_bed_management') }}" class="btn btn-light text-dark fw-bold">
+          <i class="bi bi-bed me-2"></i> Manage Beds
+        </a>
+        {% endif %}
+        <div class="dropdown">
+          <button class="btn d-flex align-items-center" data-bs-toggle="dropdown">
+            <img src="{{ url_for('static', filename=staff_photo if staff_photo else 'images/default_avatar.png') }}"
+              alt="Profile" class="profile-photo">
+            <span class="ms-2">{{ staff_name or 'Profile' }}</span>
+            <i class="bi bi-caret-down-fill ms-1"></i>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item" href="#" id="edit-profile-btn"><i class="bi bi-person"></i> Edit Profile</a>
+            </li>
+            <li>
+              <hr class="dropdown-divider">
+            </li>
+            <li><a class="dropdown-item text-danger" href="{{ url_for('nurse_logout') }}"><i
+                  class="bi bi-box-arrow-right"></i> Logout</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN CONTENT CARD -->
+    <div class="main-card">
+      <!-- RFID SCANNER SECTION (DEFAULT VIEW) -->
+      <section id="rfid-section">
+        <div class="text-center mb-4">
+          <button id="scan-rfid-button" class="btn btn-primary"><i class="bi bi-upc-scan me-2"></i>Scan RFID</button>
+        </div>
+        <div id="patient-info" style="display:none;" class="text-center">
+          <h5><i class="bi bi-person-badge me-1"></i>Patient Information</h5>
+          <p id="patient-name"></p>
+          <p id="patient-age"></p>
+          <p id="patient-gender"></p>
+          <p id="patient-email"></p>
+          <p id="patient-phone"></p>
+          <p id="patient-address"></p>
+          <p id="patient-uid"></p>
+          <button id="check-vitals-button" class="btn btn-success mt-2" style="display:none;"><i
+              class="bi bi-heart-pulse me-1"></i>Check Vitals</button>
+        </div>
+      </section>
+
+      <!-- VITALS FORM (HIDDEN BY DEFAULT) -->
+      <section id="vitals-section" style="display:none;" class="sub-card">
+        <h5 class="card-title text-center"><i class="bi bi-clipboard-pulse me-1"></i>Enter Patient Vitals</h5>
+        <form id="vitals-form-data" class="row g-3">
+          <input type="hidden" id="patient-id" name="patient_id">
+          <div class="col-md-4"><label class="form-label">Temperature (°C)</label><input type="number" step="0.1"
+              class="form-control" id="temperature" name="temperature" required></div>
+          <div class="col-md-4"><label class="form-label">Systolic BP (mmHg)</label><input type="number"
+              class="form-control" id="bp_systolic" name="bp_systolic" required></div>
+          <div class="col-md-4"><label class="form-label">Diastolic BP (mmHg)</label><input type="number"
+              class="form-control" id="bp_diastolic" name="bp_diastolic" required></div>
+          <div class="col-md-4"><label class="form-label">Pulse (bpm)</label><input type="number" class="form-control"
+              id="pulse" name="pulse" required></div>
+          <div class="col-md-4"><label class="form-label">Respiratory Rate</label><input type="number"
+              class="form-control" id="respiratory_rate" name="respiratory_rate" required></div>
+          <div class="col-md-4"><label class="form-label">SpO₂ (%)</label><input type="number" step="0.1"
+              class="form-control" id="sp_o2" name="sp_o2" required></div>
+          <div class="col-md-4"><label class="form-label">Weight (kg)</label><input type="number" step="0.1"
+              class="form-control" id="weight" name="weight" required></div>
+          <div class="col-md-4"><label class="form-label">Height (cm)</label><input type="number" class="form-control"
+              id="height" name="height" required></div>
+          <div class="col-md-4"><label class="form-label">Blood Sugar (mg/dL)</label><input type="number"
+              class="form-control" id="blood_sugar" name="blood_sugar" required></div>
+          <div class="col-md-4"><label class="form-label">Pain Score (1-10)</label><input type="number" min="1" max="10"
+              class="form-control" id="pain_score" name="pain_score" required></div>
+          <div class="col-12"><label class="form-label">Additional Notes</label><textarea class="form-control"
+              id="additional_notes" name="additional_notes"></textarea></div>
+          <div class="col-12 text-center mt-3">
+            <button type="submit" class="btn btn-primary"><i class="bi bi-check-circle me-1"></i>Submit Vitals</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- PROFILE FORM (HIDDEN BY DEFAULT) -->
+      <section id="profile-form" style="display:none;" class="sub-card">
+        <h5 class="card-title text-center"><i class="bi bi-person-lines-fill me-1"></i>Edit Profile</h5>
+        <div class="row g-4">
+          <div class="col-md-4 text-center">
+            <div class="position-relative d-inline-block mb-2">
+              <img id="photoPreview"
+                src="{{ url_for('static', filename=staff_photo if staff_photo else 'images/default_avatar.png') }}"
+                class="profile-photo-lg" alt="Profile">
+              <span class="camera-overlay" id="cameraIcon" title="Change Photo"><i class="bi bi-camera-fill"></i></span>
+              <span class="remove-overlay" id="removePhotoBtn" title="Remove Photo"
+                style="display: {{ 'inline-block' if staff_photo else 'none' }};"><i class="bi bi-x-lg"></i></span>
+            </div>
+            <input type="file" id="profilePhotoInput" name="profile_photo" accept="image/*" class="d-none"
+              form="profileForm">
+            <input type="checkbox" id="removePhotoChk" name="remove_photo" form="profileForm" style="display:none;">
+          </div>
+          <div class="col-md-8">
+            <form id="profileForm" method="post" enctype="multipart/form-data">
+              <div class="row g-3">
+                <div class="col-md-6"><label class="form-label">Full Name *</label><input name="full_name"
+                    id="full_name" class="form-control" value="{{ staff.full_name if staff else staff_name }}" required>
+                </div>
+                <div class="col-md-6"><label class="form-label">Gender *</label><select name="gender" id="gender"
+                    class="form-select" required>
+                    <option value="">Select</option>
+                    <option value="Male" {{ 'selected' if staff and staff.gender=='Male' else '' }}>Male</option>
+                    <option value="Female" {{ 'selected' if staff and staff.gender=='Female' else '' }}>Female</option>
+                    <option value="Other" {{ 'selected' if staff and staff.gender=='Other' else '' }}>Other</option>
+                  </select></div>
+                <div class="col-md-6"><label class="form-label">Date of Birth</label><input type="date"
+                    name="date_of_birth" id="date_of_birth" class="form-control"
+                    value="{{ staff.date_of_birth if staff and staff.date_of_birth else '' }}"></div>
+                <div class="col-md-6"><label class="form-label">Email</label><input type="email" name="email" id="email"
+                    class="form-control" value="{{ staff.email if staff else staff_email }}"></div>
+                <div class="col-md-6"><label class="form-label">Phone *</label><input type="text" name="phone"
+                    id="phone" class="form-control" value="{{ staff.phone if staff else staff_phone }}" required></div>
+                <div class="col-md-6"><label class="form-label">Marital Status</label><select name="marital_status"
+                    id="marital_status" class="form-select">
+                    <option value="">Select</option>
+                    <option value="Single" {{ 'selected' if staff and staff.marital_status=='Single' else '' }}>Single
+                    </option>
+                    <option value="Married" {{ 'selected' if staff and staff.marital_status=='Married' else '' }}>
+                      Married</option>
+                    <option value="Other" {{ 'selected' if staff and staff.marital_status=='Other' else '' }}>Other
+                    </option>
+                  </select></div>
+                <div class="col-md-6"><label class="form-label">Qualification</label><input name="qualification"
+                    id="qualification" class="form-control" value="{{ staff.qualification if staff else '' }}"></div>
+                <div class="col-md-6"><label class="form-label">Department</label><input name="department"
+                    id="department" class="form-control" value="{{ staff.department if staff else '' }}"></div>
+                <div class="col-md-6"><label class="form-label">Father's Name</label><input name="father_name"
+                    id="father_name" class="form-control" value="{{ staff.father_name if staff else '' }}"></div>
+                <div class="col-md-6"><label class="form-label">Mother's Name</label><input name="mother_name"
+                    id="mother_name" class="form-control" value="{{ staff.mother_name if staff else '' }}"></div>
+                <div class="col-12"><label class="form-label">Address *</label><textarea name="address" id="address"
+                    rows="2" class="form-control" required>{{ staff.address if staff else '' }}</textarea></div>
+              </div>
+              <div class="mt-4 d-flex justify-content-between">
+                <button type="button" id="back-from-profile" class="btn btn-outline-secondary"><i
+                    class="bi bi-arrow-left me-1"></i>Back to Dashboard</button>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- RFID Scanning Modal -->
+  <div class="modal fade" id="rfidScanModal" tabindex="-1" aria-labelledby="rfidScanModalLabel" aria-hidden="true"
+    data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="rfidScanModalLabel">
+            <i class="bi bi-upc-scan me-2"></i>RFID Scanner
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body text-center">
+          <div class="rfid-scan-animation mb-3">
+            <i class="bi bi-wifi"></i>
+          </div>
+          <h5 class="mb-3">Scanning for RFID Tag</h5>
+          <p id="scanStatus" class="text-muted">Listening for RFID tags...</p>
+          <div class="spinner-border text-secondary mt-3" role="status">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- SERIAL PORT SELECTION MODAL -->
+  <div class="modal fade" id="serialPortModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header" style="background:#20b2aa;color:#fff;border-bottom:none;">
+          <h5 class="modal-title">
+            <i class="bi bi-usb-symbol"></i> Select RFID Serial Port
+          </h5>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted mb-3">
+            Click <b>Connect</b> and select your RFID device from the browser popup.
+            <br><small>(Chrome / Edge only)</small>
+          </p>
+
+          <button class="btn btn-success w-100" id="connectSerialBtn">
+            Connect
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="{{ url_for('static', filename='js/serial-init.js') }}"></script>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    const rfidSection = $('rfid-section');
+    const vitalsSection = $('vitals-section');
+    const profileSection = $('profile-form');
+
+    // RFID Modal (Web Serial)
+    const rfidScanModal = new bootstrap.Modal($('rfidScanModal'));
+    let scanInterval = null;
+
+    function stopModalRfidScan() {
+      if (scanInterval) {
+        clearInterval(scanInterval);
+        scanInterval = null;
+      }
+    }
+
+    function startModalRfidScan() {
+      const statusEl = $('scanStatus');
+      statusEl.textContent = 'Present your tag now...';
+      rfidScanModal.show();
+
+      let attempts = 0;
+      const maxAttempts = 50; // ~15 sec if interval=300ms
+
+      stopModalRfidScan(); // safety
+
+      scanInterval = setInterval(async () => {
+        attempts++;
+
+        const uid = window.__latestUid; // ✅ set by serial-init.js
+        if (uid) {
+          statusEl.textContent = 'Tag found! Loading patient data...';
+
+          // prevent repeat auto-fill
+          window.__latestUid = null;
+
+          stopModalRfidScan();
+
+          setTimeout(async () => {
+            rfidScanModal.hide();
+            await fetchPatientDataByRFID(uid);
+            statusEl.textContent = 'Listening for RFID tags...';
+          }, 600);
+
+          return;
+        }
+
+        if (attempts >= maxAttempts) {
+          statusEl.textContent = 'No tag detected. Please try again.';
+          stopModalRfidScan();
+          setTimeout(() => rfidScanModal.hide(), 900);
+        }
+      }, 300);
+    }
+
+    // Stop scanning if modal closed
+    $('rfidScanModal').addEventListener('hidden.bs.modal', () => {
+      stopModalRfidScan();
+      $('scanStatus').textContent = 'Listening for RFID tags...';
+    });
+
+    // Toggle profile form from dropdown
+    $('edit-profile-btn').addEventListener('click', (e) => {
+      e.preventDefault();
+      rfidSection.style.display = 'none';
+      vitalsSection.style.display = 'none';
+      profileSection.style.display = 'block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    // Photo preview and upload logic
+    const photoPreview = $('photoPreview');
+    const profilePhotoInput = $('profilePhotoInput');
+    const cameraIcon = $('cameraIcon');
+    const removeBtn = $('removePhotoBtn');
+    const removeChk = $('removePhotoChk');
+
+    function triggerFileInput() { profilePhotoInput.click(); }
+    if (photoPreview) photoPreview.addEventListener('click', triggerFileInput);
+    if (cameraIcon) cameraIcon.addEventListener('click', triggerFileInput);
+
+    profilePhotoInput.addEventListener('change', function (e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function (ev) {
+        if (photoPreview) photoPreview.src = ev.target.result;
+        if (removeChk) removeChk.checked = false;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    if (removeBtn) {
+      removeBtn.addEventListener('click', function () {
+        photoPreview.src = "{{ url_for('static', filename='images/default_avatar.png') }}";
+        removeChk.checked = true;
+        profilePhotoInput.value = '';
+      });
+    }
+
+    // ✅ RFID Scan Button Click Event (Web Serial)
+    $('scan-rfid-button').addEventListener('click', () => {
+      // If serial not connected, show serial modal
+      if (!window.__serialPortOpen) {
+        const modalEl = document.getElementById("serialPortModal");
+        if (modalEl) new bootstrap.Modal(modalEl).show();
+        else alert("Serial port not connected. Please connect RFID serial port.");
+        return;
+      }
+
+      // Start scanning via window.__latestUid
+      startModalRfidScan();
+    });
+
+    async function fetchPatientDataByRFID(rfidUid) {
+      try {
+        const response = await fetch('/scan-rfid', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rfid_uid: rfidUid })
+        });
+
+        const patientData = await response.json();
+
+        if (patientData && patientData.patient_id) {
+          $('patient-name').innerText = 'Name: ' + (patientData.patient_name || '');
+          $('patient-age').innerText = 'Age: ' + (patientData.patient_age || '');
+          $('patient-gender').innerText = 'Gender: ' + (patientData.patient_gender || '');
+          $('patient-email').innerText = 'Email: ' + (patientData.patient_email || '');
+          $('patient-phone').innerText = 'Phone: ' + (patientData.patient_phone || '');
+          $('patient-address').innerText = 'Address: ' + (patientData.patient_address || '');
+          $('patient-uid').innerText = 'RFID UID: ' + (patientData.rfid_uid || '');
+          $('patient-id').value = patientData.patient_id;
+
+          $('patient-info').style.display = 'block';
+          $('check-vitals-button').style.display = 'inline-block';
+        } else {
+          alert('Patient not found for this RFID tag.');
+        }
+      } catch (error) {
+        console.error('Error fetching patient data:', error);
+        alert('Error fetching patient data.');
+      }
+    }
+
+    // Vitals form display
+    $('check-vitals-button').addEventListener('click', function () {
+      vitalsSection.style.display = 'block';
+      window.scrollTo({ top: vitalsSection.offsetTop - 20, behavior: 'smooth' });
+    });
+
+    // Vitals form submission
+    $('vitals-form-data').addEventListener('submit', function (e) {
+      e.preventDefault();
+      const patientId = $('patient-id').value;
+      if (!patientId) { alert('Patient ID is missing.'); return; }
+
+      const fd = new FormData(this);
+      fd.append('patient_id', patientId);
+
+      const json = {};
+      fd.forEach((v, k) => json[k] = v);
+
+      fetch('/save-vitals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(json)
+      })
+        .then(r => r.json())
+        .then(res => {
+          if (res.success) {
+            alert('Vitals saved successfully!');
+            vitalsSection.style.display = 'none';
+            $('vitals-form-data').reset();
+          } else {
+            alert('Error saving vitals');
+          }
+        })
+        .catch(err => console.error('Save vitals error', err));
+    });
+
+    // Profile form submission
+    $('profileForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+      const formData = new FormData(this);
+
+      fetch('/staff-profile', { method: 'POST', body: formData })
+        .then(r => r.json())
+        .then(resp => {
+          if (resp.success) {
+            alert('Profile updated successfully!');
+            if (resp.profile_photo_url) {
+              document.querySelector('.profile-photo').src = resp.profile_photo_url;
+              $('photoPreview').src = resp.profile_photo_url;
+            }
+            profileSection.style.display = 'none';
+            rfidSection.style.display = 'block';
+          } else {
+            alert(resp.message || 'Error updating profile');
+          }
+        })
+        .catch(err => console.error('profile submit error', err));
+    });
+
+    // Back button from Edit Profile
+    $('back-from-profile').addEventListener('click', () => {
+      profileSection.style.display = 'none';
+      rfidSection.style.display = 'block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  </script>
+
+</body>
+
+</html>

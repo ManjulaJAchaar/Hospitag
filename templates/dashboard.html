@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Super Admin Dashboard</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+    /* Base Layout - Rock Solid */
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
+
+    body {
+        background: #e0f2f1; /* Light teal background */
+        min-height: 100vh;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        line-height: 1.6;
+        color: #2d4a47; /* Dark teal text */
+    }
+
+    /* Logout Button - Fixed Top Right */
+    .logout-btn {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        display: flex;
+        align-items: center;
+        padding: 0.5rem 0.8rem;
+        background: #6c757d; /* Neutral gray */
+        color: #ffffff;
+        text-decoration: none;
+        border: none;
+        border-radius: 6px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        transition: all 0.2s ease;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(108, 117, 125, 0.15);
+        z-index: 1000;
+    }
+
+    .logout-btn:hover {
+        background: #5a6268; /* Darker gray on hover */
+        color: #ffffff;
+        text-decoration: none;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(108, 117, 125, 0.2);
+    }
+
+    .logout-btn:focus {
+        outline: 2px solid #adb5bd;
+        outline-offset: 2px;
+    }
+
+    .logout-btn span {
+        margin-right: 0.4rem;
+        font-size: 0.9rem;
+    }
+
+    /* Main Container - Comprehensive Design */
+    .dashboard-container {
+        max-width: 520px;
+        margin: 80px auto 40px;
+        background: #ffffff;
+        border-radius: 20px;
+        box-shadow: 0 10px 40px rgba(0, 77, 64, 0.1), 
+                    0 4px 20px rgba(0, 77, 64, 0.05);
+        padding: 3rem 2.5rem 2.5rem;
+        position: relative;
+        border: 1px solid rgba(0, 77, 64, 0.1);
+    }
+
+    /* Header Styling - Professional */
+    .dashboard-header {
+        text-align: center;
+        margin-bottom: 2.5rem;
+        padding-bottom: 1.5rem;
+        border-bottom: 2px solid #b2dfdb; /* Light teal border */
+        position: relative;
+    }
+
+    .dashboard-header::after {
+        content: '';
+        position: absolute;
+        bottom: -2px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 60px;
+        height: 2px;
+        background: #4db6ac; /* Medium teal accent */
+    }
+
+    h2 {
+        font-size: 2.2rem;
+        font-weight: 700;
+        color: #00695c; /* Deep teal */
+        letter-spacing: 0.02em;
+        margin-bottom: 0.5rem;
+    }
+
+    .dashboard-subtitle {
+        color: #5f7c78;
+        font-size: 0.95rem;
+        font-weight: 500;
+    }
+
+    /* Navigation Menu - Comprehensive */
+    .dashboard-nav {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .nav-item {
+        margin-bottom: 1rem;
+    }
+
+    .nav-item:last-child {
+        margin-bottom: 0;
+    }
+
+    /* Button Styling - Production Ready */
+    .dashboard-btn {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        width: 100%;
+        padding: 1.2rem 1.5rem;
+        background: #26a69a; /* Teal background */
+        color: #ffffff;
+        text-decoration: none;
+        border: none;
+        border-radius: 12px;
+        font-size: 1.05rem;
+        font-weight: 600;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 4px 15px rgba(38, 166, 154, 0.2);
+    }
+
+    .dashboard-btn::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.1);
+        transition: left 0.5s ease;
+    }
+
+    .dashboard-btn:hover {
+        background: #00897b; /* Darker teal on hover */
+        color: #ffffff;
+        text-decoration: none;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0, 137, 123, 0.25);
+    }
+
+    .dashboard-btn:hover::before {
+        left: 100%;
+    }
+
+    .dashboard-btn:active {
+        transform: translateY(0);
+        transition: transform 0.1s ease;
+    }
+
+    .dashboard-btn:focus {
+        outline: 3px solid #80cbc4; /* Light teal focus */
+        outline-offset: 2px;
+    }
+
+    /* Icon Styling */
+    .btn-icon {
+        width: 50px;
+        height: 50px;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 1rem;
+        font-size: 1.4rem;
+        flex-shrink: 0;
+    }
+
+    .btn-content {
+        flex: 1;
+    }
+
+    .btn-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 0.2rem;
+        line-height: 1.3;
+    }
+
+    .btn-description {
+        font-size: 0.85rem;
+        opacity: 0.9;
+        line-height: 1.4;
+    }
+
+    /* Responsive Design - Mobile First */
+    @media (max-width: 768px) {
+        .logout-btn {
+            top: 15px;
+            right: 15px;
+            padding: 0.4rem 0.7rem;
+            font-size: 0.75rem;
+        }
+
+        .logout-btn span {
+            margin-right: 0.3rem;
+            font-size: 0.8rem;
+        }
+
+        .dashboard-container {
+            margin: 40px 1rem;
+            padding: 2rem 1.5rem;
+            max-width: none;
+        }
+
+        h2 {
+            font-size: 1.8rem;
+        }
+
+        .dashboard-btn {
+            padding: 1rem 1.2rem;
+            font-size: 1rem;
+        }
+
+        .btn-icon {
+            width: 45px;
+            height: 45px;
+            font-size: 1.2rem;
+        }
+
+        .btn-title {
+            font-size: 1rem;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .logout-btn {
+            top: 10px;
+            right: 10px;
+            padding: 0.3rem 0.6rem;
+            font-size: 0.7rem;
+        }
+
+        .logout-btn span {
+            margin-right: 0.2rem;
+            font-size: 0.7rem;
+        }
+
+        .dashboard-container {
+            margin: 20px 0.8rem;
+            padding: 1.5rem 1.2rem;
+            border-radius: 15px;
+        }
+
+        h2 {
+            font-size: 1.6rem;
+        }
+
+        .dashboard-btn {
+            padding: 0.9rem 1rem;
+            border-radius: 10px;
+        }
+
+        .btn-icon {
+            width: 40px;
+            height: 40px;
+            font-size: 1.1rem;
+            margin-right: 0.8rem;
+        }
+    }
+</style>
+</head>
+
+<body>
+    <!-- Fixed Logout Button - Top Right Corner -->
+    <a href="{{ url_for('logout') }}" class="logout-btn">
+        <span>🚪</span>
+        Logout
+    </a>
+
+    <div class="dashboard-container">
+        <div class="dashboard-header">
+            <h2>Super Admin Dashboard</h2>
+            <p class="dashboard-subtitle">Hospital Management System Control Panel</p>
+        </div>
+        <!-- Navigation Menu -->
+        <nav class="dashboard-nav">
+            <div class="nav-item">
+                <a href="{{ url_for('add_hospital_admin') }}" class="dashboard-btn">
+                    <div class="btn-icon">
+                        <span>➕</span>
+                    </div>
+                    <div class="btn-content">
+                        <div class="btn-title">Add Hospital + Representative</div>
+                        <div class="btn-description">Register new hospital and assign representative</div>
+                    </div>
+                </a>
+            </div>
+
+            <div class="nav-item">
+                <a href="{{ url_for('view_admins') }}" class="dashboard-btn">
+                    <div class="btn-icon">
+                        <span>📋</span>
+                    </div>
+                    <div class="btn-content">
+                        <div class="btn-title">View / Edit / Delete Representative</div>
+                        <div class="btn-description">Manage existing hospital representatives</div>
+                    </div>
+                </a>
+            </div>
+        </nav>
+    </div>
+
+<script>
+// JavaScript for error handling and click events
+(function() {
+    'use strict';
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        const buttons = document.querySelectorAll('.dashboard-btn, .logout-btn');
+        
+        buttons.forEach(function(button) {
+            button.addEventListener('click', function(e) {
+                // Add loading state to the button (optional)
+                this.classList.add('btn-loading');
+                
+                // Remove loading state after navigation (optional)
+                setTimeout(() => {
+                    this.classList.remove('btn-loading');
+                }, 2000);
+            });
+        });
+    });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Department Admins - HR Dashboard</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+    <style>
+        :root {
+            --teal: #20b2aa;
+            --teal-dark: #1a9b96;
+            --teal-soft: #eaf8f7;
+            --bg: #f6f8fb;
+            --border: #e6edf2;
+            --text: #1f2937;
+            --muted: #6b7280;
+            --shadow: 0 10px 24px rgba(31, 41, 55, 0.08);
+            --radius: 14px;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', 'Segoe UI', sans-serif;
+        }
+
+        /* Navbar */
+        .navbar {
+            background: var(--teal) !important;
+            box-shadow: var(--shadow);
+        }
+
+        .navbar-brand,
+        .navbar-text,
+        .navbar .btn {
+            color: #fff !important;
+        }
+
+        /* Cards */
+        .dashboard-card {
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            background: #fff;
+        }
+
+        .dashboard-card:hover {
+            transform: translateY(-2px);
+            transition: 0.2s ease;
+        }
+
+        /* Headers */
+        .card-header {
+            background: var(--teal);
+            color: #fff;
+            border-radius: var(--radius) var(--radius) 0 0;
+            border-bottom: none;
+        }
+
+        /* Table */
+        .table th {
+            background: var(--teal-soft);
+            color: var(--text);
+            font-weight: 600;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .table td {
+            vertical-align: middle;
+        }
+
+        .table-hover tbody tr:hover {
+            background: rgba(32, 178, 170, 0.05);
+        }
+
+        /* Avatar */
+        .avatar-sm {
+            width: 36px;
+            height: 36px;
+            background: var(--teal);
+            color: #fff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Badges */
+        .badge-department {
+            background: var(--teal);
+            color: #fff;
+            font-weight: 500;
+        }
+
+        .badge-teal {
+            background: var(--teal-soft);
+            color: var(--teal-dark);
+            border: 1px solid rgba(32, 178, 170, 0.4);
+        }
+
+        /* Buttons */
+        .btn-teal {
+            background: var(--teal);
+            border: 1px solid var(--teal);
+            color: #fff;
+        }
+
+        .btn-teal:hover {
+            background: var(--teal-dark);
+            border-color: var(--teal-dark);
+            color: #fff;
+        }
+
+        .btn-outline-teal {
+            border: 1px solid var(--teal);
+            color: var(--teal);
+            background: transparent;
+        }
+
+        .btn-outline-teal:hover {
+            background: var(--teal-soft);
+            color: var(--teal-dark);
+        }
+
+        /* Code */
+        code {
+            background: var(--teal-soft);
+            color: var(--teal-dark);
+            padding: 4px 6px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+        }
+
+        /* Muted */
+        .text-muted {
+            color: var(--muted) !important;
+            font-style: italic;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- NAVBAR -->
+    <nav class="navbar navbar-expand-lg">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-hospital"></i> HR Dashboard - {{ hr_data.hospital_name }}
+            </a>
+
+            <div class="navbar-nav ms-auto align-items-center">
+                <span class="navbar-text me-3">
+                    <i class="fas fa-user"></i> {{ hr_data.hr_name }}
+                </span>
+                <a class="btn btn-outline-light btn-sm me-2" href="{{ url_for('hr_dashboard') }}">
+                    <i class="fas fa-arrow-left"></i> Back
+                </a>
+                <a class="btn btn-outline-light btn-sm" href="{{ url_for('hr_logout') }}">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- CONTENT -->
+    <div class="container my-4">
+        <div class="card dashboard-card">
+
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-users-cog"></i>
+                    Department Admins ({{ dept_admins|length }})
+                </h5>
+                <a href="{{ url_for('hr_add_dept_admin') }}" class="btn btn-light btn-sm">
+                    <i class="fas fa-plus"></i> Add New Admin
+                </a>
+            </div>
+
+            <div class="card-body">
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                {% for category, message in messages %}
+                <div
+                    class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+                {% endfor %}
+                {% endif %}
+                {% endwith %}
+                <!-- Search Bar -->
+                <div class="row mb-3">
+                    <div class="col-md-4 ms-auto">
+                        <div class="input-group">
+                            <span class="input-group-text bg-white">
+                                <i class="fas fa-search text-muted"></i>
+                            </span>
+                            <input type="text" id="adminSearch" class="form-control" placeholder="Search admin name..."
+                                onkeyup="filterAdmins()">
+                        </div>
+                    </div>
+                </div>
+
+
+                {% if dept_admins %}
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead>
+                            <tr>
+                                <th>Admin</th>
+                                <th>Department</th>
+                                <th>Contact</th>
+                                <th>Gender</th>
+                                <th>Username</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for admin in dept_admins %}
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="avatar-sm me-2">
+                                            <i class="fas fa-user"></i>
+                                        </div>
+                                        <div>
+                                            <strong>{{ admin.admin_name }}</strong><br>
+                                            <small class="text-muted">ID: {{ admin.id }}</small>
+                                        </div>
+                                    </div>
+                                </td>
+
+                                <td>
+                                    <span class="badge badge-department">{{ admin.department_name }}</span>
+                                </td>
+
+                                <td>
+                                    <i class="fas fa-envelope me-1 text-muted"></i> {{ admin.admin_email }}<br>
+                                    <i class="fas fa-phone me-1 text-muted"></i> {{ admin.admin_phone }}
+                                </td>
+
+                                <td>
+                                    <span class="badge badge-teal">{{ admin.admin_gender }}</span>
+                                </td>
+
+                                <td>
+                                    <code>{{ admin.admin_username }}</code>
+                                </td>
+                                <td>
+                                    <small>
+                                        {% if admin.created_at %}
+                                        {{ admin.created_at.strftime('%d-%m-%Y %H:%M') }}
+                                        {% else %}
+                                        N/A
+                                        {% endif %}
+                                    </small>
+                                </td>
+
+
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{{ url_for('hr_view_dept_admin', id=admin.id) }}"
+                                            class="btn btn-outline-teal" title="View">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <a href="{{ url_for('hr_edit_dept_admin', id=admin.id) }}"
+                                            class="btn btn-outline-teal" title="Edit">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <button type="button" class="btn btn-outline-danger" title="Delete"
+                                            onclick="confirmDelete({{ admin.id }}, '{{ admin.admin_name }}')">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {% else %}
+                <div class="text-center text-muted py-5">
+                    <i class="fas fa-users-cog fa-3x mb-3" style="opacity:0.4;"></i>
+                    <h5>No Department Admins Found</h5>
+                    <p>No department admins have been created yet.</p>
+                    <a href="{{ url_for('hr_add_dept_admin') }}" class="btn btn-teal">
+                        <i class="fas fa-plus"></i> Add First Admin
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function filterAdmins() {
+            const input = document.getElementById("adminSearch");
+            const filter = input.value.toLowerCase();
+            const rows = document.querySelectorAll("tbody tr");
+
+            rows.forEach(row => {
+                const nameCell = row.querySelector("td strong");
+                if (!nameCell) return;
+
+                const name = nameCell.textContent.toLowerCase();
+                row.style.display = name.includes(filter) ? "" : "none";
+            });
+        }
+
+        function confirmDelete(adminId, adminName) {
+            if (confirm(`Are you sure you want to delete "${adminName}"? This action cannot be undone.`)) {
+                // Create a form to submit DELETE request
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = `/hr-delete-dept-admin/${adminId}`;
+
+                document.body.appendChild(form);
+                form.submit();
+            }
+        }
+    </script>
+
+</body>
+
+</html>

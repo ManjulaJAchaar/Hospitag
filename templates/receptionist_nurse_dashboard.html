@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta name="login-nonce" content="{{ session.get('login_nonce', '') }}">
+    <meta charset="UTF-8">
+    <title>Receptionist & Nurse Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    
+    <style>
+        :root {
+            --accent-teal: #20b2aa;
+            --border-teal: #b2f5ea;
+            --input-bg: #f9fafb;
+            --shadow-teal: rgba(32, 178, 170, 0.08);
+        }
+
+        body {
+            background: white;
+            min-height: 100vh;
+            font-family: 'Segoe UI', Arial, sans-serif;
+        }
+
+        .form-control {
+            border: 1.5px solid #ddd;
+            border-radius: 10px;
+            padding: 0.6rem 0.85rem;
+            background: var(--input-bg);
+            font-size: 1rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .form-control:focus {
+            border-color: var(--accent-teal);
+            box-shadow: 0 0 0 0.13rem rgba(32, 178, 170, 0.12);
+            background: #fff;
+        }
+
+        .form-select {
+            border: 1.5px solid #ddd;
+            border-radius: 10px;
+            padding: 0.6rem 0.85rem;
+            background: var(--input-bg);
+            font-size: 1rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .form-select:focus {
+            border-color: var(--accent-teal);
+            box-shadow: 0 0 0 0.13rem rgba(32, 178, 170, 0.12);
+            background: #fff;
+        }
+
+        .input-group .form-control {
+            border-top-right-radius: 0;
+            border-bottom-right-radius: 0;
+        }
+
+        .btn-outline-secondary {
+            background: transparent;
+            color: #6c757d;
+            border: 1.5px solid #6c757d;
+            font-weight: 500;
+            border-radius: 0 10px 10px 0;
+            padding: 0.6rem 1rem;
+            border-left: none;
+            cursor: not-allowed;
+        }
+
+        .btn-outline-teal {
+            background: transparent;
+            color: var(--accent-teal);
+            border: 1.5px solid var(--accent-teal);
+            font-weight: 500;
+            border-radius: 0 10px 10px 0;
+            padding: 0.6rem 1rem;
+            border-left: none;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .btn-outline-teal:hover,
+        .btn-outline-teal:focus {
+            background: var(--accent-teal);
+            color: #fff;
+            border-color: var(--accent-teal);
+        }
+
+        .spinner-border.text-secondary {
+            color: var(--accent-teal) !important;
+            width: 1.5rem;
+            height: 1.5rem;
+        }
+
+        /* RFID Modal Styles */
+        .modal-content {
+            border-radius: 15px;
+            border: none;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-header {
+            border-radius: 15px 15px 0 0;
+            border-bottom: none;
+            background-color: #20b2aa;
+            color: white;
+        }
+
+        .rfid-scan-animation {
+            font-size: 5em;
+            color: #20b2aa;
+            position: relative;
+            display: inline-block;
+        }
+
+        .rfid-scan-animation .bi-wifi {
+            animation: pulse 1.5s infinite ease-in-out;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(0.9);
+                opacity: 0.7;
+            }
+            50% {
+                transform: scale(1.1);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(0.9);
+                opacity: 0.7;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container my-4">
+
+        <!-- DASHBOARD HEADER -->
+        <div class="d-flex justify-content-between align-items-center mt-4 mb-4">
+            <h3>Receptionist & Nurse Dashboard</h3>
+            <a href="{{ url_for('staff_logout') }}" class="btn btn-danger"><i class="bi bi-box-arrow-right"></i>
+                Logout</a>
+        </div>
+
+        <!-- ADD PATIENT FORM -->
+        <div class="card p-4 mb-4">
+            <h5 class="mb-3">Add Patient</h5>
+            <form method="POST">
+                <!-- Basic Information -->
+                <h6>Basic Information</h6>
+                <div class="mb-3">
+                    <label class="form-label">Full Name <span class="text-danger">*</span></label>
+                    <input type="text" name="full_name" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Age <span class="text-danger">*</span></label>
+                    <input type="number" name="age" class="form-control" required min="0" max="120">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Gender <span class="text-danger">*</span></label>
+                    <select name="gender" class="form-select" required>
+                        <option value="" disabled selected>Select</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Phone <span class="text-danger">*</span></label>
+                    <input type="text" name="phone" class="form-control" maxlength="10" minlength="10" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Email (Optional)</label>
+                    <input type="email" name="email" class="form-control">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Address <span class="text-danger">*</span></label>
+                    <textarea name="address" class="form-control" rows="2" required></textarea>
+                </div>
+
+                <!-- Identity & Documentation -->
+                <h6>Identity & Documentation</h6>
+                <div class="mb-3">
+                    <label class="form-label">Aadhaar Number</label>
+                    <input type="text" name="aadhar_number" class="form-control" maxlength="12" pattern="[0-9]{12}">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">ID Proof Type</label>
+                    <select name="id_proof_type" class="form-select">
+                        <option value="">Select ID Proof</option>
+                        <option value="aadhar">Aadhaar Card</option>
+                        <option value="pan">PAN Card</option>
+                        <option value="voter_id">Voter ID</option>
+                        <option value="driving_license">Driving License</option>
+                        <option value="passport">Passport</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">ID Proof Number</label>
+                    <input type="text" name="id_proof_number" class="form-control">
+                </div>
+
+                <!-- Health Insurance -->
+                <h6>Health Insurance</h6>
+                <div class="mb-3">
+                    <label class="form-label">Insurance Status</label>
+                    <select name="has_insurance" class="form-select">
+                        <option value="no">No Insurance</option>
+                        <option value="yes">Has Insurance</option>
+                        <option value="cashless">Cashless Insurance</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Insurance Provider</label>
+                    <input type="text" name="insurance_provider" class="form-control">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Policy/Card Number</label>
+                    <input type="text" name="insurance_policy_number" class="form-control">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Policy Start Date</label>
+                    <input type="date" name="policy_start_date" class="form-control">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Policy Expiry Date</label>
+                    <input type="date" name="policy_expiry_date" class="form-control">
+                </div>
+
+                <!-- Emergency Contact -->
+                <h6>Emergency Contact</h6>
+                <div class="mb-3">
+                    <label class="form-label">Emergency Contact Name <span class="text-danger">*</span></label>
+                    <input type="text" name="emergency_contact_name" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Relationship <span class="text-danger">*</span></label>
+                    <select name="emergency_contact_relation" class="form-select" required>
+                        <option value="spouse">Spouse</option>
+                        <option value="parent">Parent</option>
+                        <option value="child">Child</option>
+                        <option value="sibling">Sibling</option>
+                        <option value="friend">Friend</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Emergency Contact Phone <span class="text-danger">*</span></label>
+                    <input type="text" name="emergency_contact_phone" class="form-control" maxlength="10" minlength="10"
+                        required>
+                </div>
+
+                <!-- RFID Assignment -->
+                <h6>RFID Assignment</h6>
+                <div class="mb-3">
+                    <label class="form-label">Scan RFID Tag <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <input type="text" id="rfid_uid" name="rfid_uid" class="form-control"
+                            placeholder="Click button to scan..." readonly required>
+                        <button type="button" class="btn btn-outline-secondary" id="rfid_scan_btn">
+                            <i class="bi bi-upc-scan"></i> Connect RFID Reader First
+                        </button>
+                    </div>
+                    <div class="form-text">
+                        Click the button, then bring the RFID tag near the reader.
+                    </div>
+                </div>
+
+                <!-- VITALS SECTION -->
+                <div class="card p-4 mt-4" style="border: 2px solid var(--border-teal);">
+                    <h5 class="mb-3" style="color: var(--accent-teal);">
+                        <i class="bi bi-heart-pulse me-2"></i>Enter Vitals
+                    </h5>
+                    <div class="mb-3">
+                        <label class="form-label">Temperature (°C)</label>
+                        <input type="number" name="temperature" class="form-control" step="0.1" required>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label class="form-label">Systolic BP (mmHg)</label>
+                            <input type="number" name="bp_systolic" class="form-control" placeholder="Systolic" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Diastolic BP (mmHg)</label>
+                            <input type="number" name="bp_diastolic" class="form-control" placeholder="Diastolic" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Pulse (bpm)</label>
+                        <input type="number" name="pulse" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Respiratory Rate</label>
+                        <input type="number" name="respiratory_rate" class="form-control">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Oxygen Saturation (%)</label>
+                        <input type="number" name="oxygen_saturation" class="form-control">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Blood Sugar Level (mg/dL)</label>
+                        <input type="number" name="blood_sugar_level" class="form-control">
+                    </div>
+                </div>
+
+                <div class="mt-4">
+                    <button type="submit" class="btn btn-success me-2">
+                        <i class="bi bi-person-plus"></i> Save Patient Information
+                    </button>
+                    <button type="reset" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-clockwise"></i> Reset Form
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- RFID Scanning Modal -->
+    <div class="modal fade" id="rfidScanModal" tabindex="-1" aria-hidden="true"
+        data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-upc-scan me-2"></i>RFID Scanner
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                                <div class="modal-body text-center">
+                    <div class="rfid-scan-animation mb-3">
+                        <i class="bi bi-wifi"></i>
+                    </div>
+                    <h5 class="mb-3">Scanning for RFID Tag</h5>
+                    <p id="scanStatus" class="text-muted">Listening for RFID tags...</p>
+                    <div class="spinner-border text-secondary mt-3" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SERIAL PORT SELECTION MODAL -->
+    <div class="modal fade" id="serialPortModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header" style="background:#20b2aa;color:#fff;border-bottom:none;">
+                    <h5 class="modal-title">
+                        <i class="bi bi-usb-symbol"></i> Select RFID Serial Port
+                    </h5>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted mb-3">
+                        Click <b>Connect</b> and select your RFID device from the browser popup.
+                        <br><small>(Chrome / Edge only)</small>
+                    </p>
+                    <button class="btn btn-success w-100" id="connectSerialBtn">
+                        <i class="bi bi-usb-plug"></i> Connect
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // Initialize global variables
+        window.__serialPortOpen = false;
+        window.__latestUid = null;
+        
+        // RFID Serial Port Handler
+        let serialPort = null;
+        let reader = null;
+
+        async function initSerialRfid(port) {
+            try {
+                serialPort = port;
+                
+                while (port.readable) {
+                    reader = port.readable.getReader();
+                    
+                    try {
+                        while (true) {
+                            const { value, done } = await reader.read();
+                            if (done) break;
+                            
+                            // Convert bytes to string
+                            const textDecoder = new TextDecoder();
+                            const data = textDecoder.decode(value);
+                            
+                            // Clean and process RFID data
+                            const cleanData = data.trim();
+                            if (cleanData && cleanData.length > 0) {
+                                console.log('RFID Data received:', cleanData);
+                                window.__latestUid = cleanData;
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Serial reading error:', error);
+                    } finally {
+                        if (reader) {
+                            reader.releaseLock();
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Serial init error:', error);
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+            const scanBtn = document.getElementById("rfid_scan_btn");
+            const rfidUidInput = document.getElementById("rfid_uid");
+            let rfidScanModal = null;
+            let scanInterval = null;
+
+            // Initialize modals
+            try {
+                rfidScanModal = new bootstrap.Modal(document.getElementById('rfidScanModal'));
+            } catch (error) {
+                console.error('Modal initialization error:', error);
+            }
+
+            function updateScanBtn() {
+                if (!window.__serialPortOpen) {
+                    scanBtn.disabled = true;
+                    scanBtn.innerHTML = '<i class="bi bi-upc-scan"></i> Connect RFID Reader First';
+                    scanBtn.classList.add('btn-outline-secondary');
+                    scanBtn.classList.remove('btn-outline-teal');
+                } else {
+                    scanBtn.disabled = false;
+                    scanBtn.innerHTML = '<i class="bi bi-upc-scan"></i> Scan RFID Tag';
+                    scanBtn.classList.remove('btn-outline-secondary');
+                    scanBtn.classList.add('btn-outline-teal');
+                }
+            }
+
+            function stopModalRfidScan() {
+                if (scanInterval) {
+                    clearInterval(scanInterval);
+                    scanInterval = null;
+                }
+            }
+
+            function startModalRfidScan() {
+                if (!rfidScanModal) return;
+                
+                const statusEl = document.getElementById('scanStatus');
+                if (statusEl) {
+                    statusEl.textContent = 'Present your tag now...';
+                }
+                
+                rfidScanModal.show();
+
+                let attempts = 0;
+                const maxAttempts = 50;
+
+                stopModalRfidScan();
+
+                scanInterval = setInterval(() => {
+                    attempts++;
+
+                    const uid = window.__latestUid;
+                    if (uid && uid.trim().length > 0) {
+                        if (statusEl) {
+                            statusEl.textContent = 'Tag found! Processing...';
+                        }
+
+                        rfidUidInput.value = uid.trim();
+                        window.__latestUid = null;
+
+                        stopModalRfidScan();
+
+                        setTimeout(() => {
+                            rfidScanModal.hide();
+                            if (statusEl) {
+                                statusEl.textContent = 'Listening for RFID tags...';
+                            }
+                        }, 800);
+
+                        return;
+                    }
+
+                    if (attempts >= maxAttempts) {
+                        if (statusEl) {
+                            statusEl.textContent = 'No tag detected. Please try again.';
+                        }
+                        stopModalRfidScan();
+                        setTimeout(() => rfidScanModal.hide(), 1200);
+                    }
+                }, 300);
+            }
+
+            function startRfidScan() {
+                if (!window.__serialPortOpen) {
+                    const modalEl = document.getElementById("serialPortModal");
+                    if (modalEl) {
+                        new bootstrap.Modal(modalEl).show();
+                    } else {
+                        alert("Serial port not connected. Please connect RFID serial port.");
+                    }
+                    return;
+                }
+
+                startModalRfidScan();
+            }
+
+            // Stop scanning if modal closed
+            const rfidModalEl = document.getElementById('rfidScanModal');
+            if (rfidModalEl) {
+                rfidModalEl.addEventListener('hidden.bs.modal', () => {
+                    stopModalRfidScan();
+                    const statusEl = document.getElementById('scanStatus');
+                    if (statusEl) {
+                        statusEl.textContent = 'Listening for RFID tags...';
+                    }
+                });
+            }
+
+            // Event listeners
+            if (scanBtn) {
+                scanBtn.addEventListener("click", startRfidScan);
+            }
+
+            // Update button state
+            setInterval(updateScanBtn, 1000);
+            updateScanBtn();
+
+            // Form submission validation
+            const mainForm = document.querySelector('form[method="POST"]');
+            if (mainForm) {
+                mainForm.addEventListener('submit', function(e) {
+                    const rfidValue = rfidUidInput.value.trim();
+                    if (!rfidValue) {
+                        e.preventDefault();
+                        alert('Please scan an RFID tag before submitting the form.');
+                        return false;
+                    }
+                });
+            }
+
+            // Handle Serial Port Connection
+            const connectSerialBtn = document.getElementById('connectSerialBtn');
+            if (connectSerialBtn) {
+                connectSerialBtn.addEventListener('click', async function() {
+                    try {
+                        if (!('serial' in navigator)) {
+                            alert('Web Serial API not supported. Please use Chrome or Edge browser.');
+                            return;
+                        }
+
+                        const port = await navigator.serial.requestPort();
+                        await port.open({ baudRate: 9600 });
+                        
+                        window.__serialPortOpen = true;
+                        
+                        const serialModal = bootstrap.Modal.getInstance(document.getElementById('serialPortModal'));
+                        if (serialModal) {
+                            serialModal.hide();
+                        }
+                        
+                        // Success feedback
+                        const btn = this;
+                        const originalText = btn.innerHTML;
+                        btn.innerHTML = '<i class="bi bi-check-circle"></i> Connected!';
+                        btn.classList.remove('btn-success');
+                        btn.classList.add('btn-success');
+                        
+                        setTimeout(() => {
+                            updateScanBtn();
+                        }, 500);
+                        
+                        // Start RFID reading
+                        initSerialRfid(port);
+                        
+                    } catch (error) {
+                        console.error('Serial connection error:', error);
+                        if (error.name === 'NotFoundError') {
+                            alert('No device selected. Please try again and select your RFID device.');
+                        } else {
+                            alert('Failed to connect to serial port. Please check your device and try again.');
+                        }
+                    }
+                });
+            }
+        });
+    </script>
+
+</body>
+
+</html>

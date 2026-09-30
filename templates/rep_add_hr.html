@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Add HR Manager</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container my-4">
+        <h2 class="text-center mb-4">Add HR Manager</h2>
+        
+        <div class="mb-3">
+            <a href="{{ url_for('rep_dashboard') }}" class="btn btn-secondary">
+                ← Back to Dashboard
+            </a>
+        </div>
+
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card p-4">
+                                        
+                    <!-- Flash messages -->
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                    {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+                    {% endwith %}
+
+                    <form method="POST" class="needs-validation" novalidate>
+                        
+                        <h5 class="mb-3">Hospital: {{ hospital_name }}</h5>
+                        <hr>
+
+                        <!-- Name -->
+                        <div class="mb-3">
+                            <input type="text" class="form-control" name="hr_name" placeholder="HR Manager Name" required minlength="3">
+                            <div class="invalid-feedback">Please enter a valid name (min 3 characters).</div>
+                        </div>
+
+                        <!-- Gender -->
+                        <div class="mb-3">
+                            <select class="form-control" name="hr_gender" required>
+                                <option value="" disabled selected>Select Gender</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                                <option value="Other">Other</option>
+                            </select>
+                            <div class="invalid-feedback">Please select a gender.</div>
+                        </div>
+
+                        <!-- Email -->
+                        <div class="mb-3">
+                            <input type="email" class="form-control" name="hr_email" placeholder="Email" required>
+                            <div class="invalid-feedback">Please enter a valid email address.</div>
+                        </div>
+
+                        <!-- Phone -->
+                        <div class="mb-3">
+                            <input type="text" class="form-control" name="hr_phone" placeholder="Phone" required pattern="^[0-9]{10}$">
+                            <div class="invalid-feedback">Please enter a 10-digit phone number.</div>
+                        </div>
+
+                        <!-- Username -->
+                        <div class="mb-3">
+                            <input type="text" class="form-control" name="hr_username" placeholder="Username" required minlength="4">
+                            <div class="invalid-feedback">Username must be at least 4 characters.</div>
+                        </div>
+
+                        <!-- Password -->
+                        <div class="mb-3">
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="passwordInput" name="hr_password" placeholder="Password" required minlength="6">
+                                <button type="button" class="btn btn-outline-secondary" id="togglePassword">
+                                    <i class="bi bi-eye" id="passwordIcon"></i>
+                                </button>
+                                <div class="invalid-feedback">Password must be at least 6 characters.</div>
+                            </div>
+                        </div>
+
+                        <button class="btn btn-success w-100" type="submit">Add HR Manager</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Bootstrap validation
+        (function () {
+            'use strict';
+            const forms = document.querySelectorAll('.needs-validation');
+            Array.prototype.slice.call(forms).forEach(function (form) {
+                form.addEventListener('submit', function (event) {
+                    if (!form.checkValidity()) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                    }
+                    form.classList.add('was-validated');
+                }, false);
+            });
+        })();
+
+        // Password toggle
+        const passwordInput = document.getElementById('passwordInput');
+        const togglePassword = document.getElementById('togglePassword');
+        const passwordIcon = document.getElementById('passwordIcon');
+
+        togglePassword.addEventListener('click', function () {
+            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordInput.setAttribute('type', type);
+            
+            if (type === 'text') {
+                passwordIcon.classList.remove('bi-eye');
+                passwordIcon.classList.add('bi-eye-slash');
+            } else {
+                passwordIcon.classList.remove('bi-eye-slash');
+                passwordIcon.classList.add('bi-eye');
+            }
+        });
+    </script>
+</body>
+</html>

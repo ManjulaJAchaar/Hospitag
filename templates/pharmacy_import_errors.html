@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Import Result</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    pre {
+      max-height: 220px;
+      overflow: auto;
+      background: #0b1020;
+      color: #e5e7eb;
+      padding: 12px;
+      border-radius: 8px;
+      margin: 0;
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body class="bg-light">
+
+<div class="container py-4">
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">Import Result</h3>
+    <a href="{{ url_for('pharmacy_import') }}" class="btn btn-outline-secondary btn-sm">Back to Import</a>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }} mb-3">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <div class="card shadow-sm mb-3">
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <div class="text-muted">File</div>
+          <div class="fw-semibold">{{ run.file_name }}</div>
+        </div>
+        <div class="col-md-2">
+          <div class="text-muted">Total</div>
+          <div class="fw-semibold">{{ run.total_rows }}</div>
+        </div>
+        <div class="col-md-2">
+          <div class="text-muted">Success</div>
+          <div class="fw-semibold text-success">{{ run.success_rows }}</div>
+        </div>
+        <div class="col-md-2">
+          <div class="text-muted">Failed</div>
+          <div class="fw-semibold text-danger">{{ run.failed_rows }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span>Errors</span>
+      {% if not errors %}
+        <span class="badge bg-success">No errors 🎉</span>
+      {% endif %}
+    </div>
+
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-striped table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th style="width:90px;">Row No</th>
+              <th style="width:320px;">Error</th>
+              <th>Raw</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in errors %}
+              <tr>
+                <td class="fw-semibold">{{ e.row_no }}</td>
+                <td>{{ e.error_message }}</td>
+                <td>
+                  {% if e.raw_json %}
+                    <pre>{{ e.raw_json }}</pre>
+                  {% else %}
+                    <span class="text-muted">-</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="3" class="text-center text-muted p-4">No error rows.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

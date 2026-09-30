@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Set PIN</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+
+  <style>
+    :root {
+      --teal: #009688;
+      --teal-dark: #00796b;
+      --teal-light: #e0f7fa;
+      --shadow: 0 6px 24px rgba(0, 150, 136, 0.12);
+      --radius: 14px;
+    }
+    body { background:#fff; min-height:100vh; display:flex; align-items:center; justify-content:center; }
+    .card {
+      width: 380px; max-width: 95vw;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      border: 1px solid #cdeeee;
+      position: relative;
+      overflow:hidden;
+    }
+    .card::before {
+      content:""; position:absolute; top:0; left:0; right:0; height:4px; background:var(--teal);
+    }
+    .btn-teal { background: var(--teal); color:#fff; border:none; }
+    .btn-teal:hover { background: var(--teal-dark); color:#fff; }
+    .form-control:focus {
+      border-color: var(--teal);
+      box-shadow: 0 0 0 .2rem rgba(0,150,136,.20);
+    }
+    .modal-header {
+      background: var(--teal);
+      color: #fff;
+      border-bottom: none;
+    }
+    .btn-close-white { filter: invert(1) grayscale(1) brightness(2); }
+
+    .rfid-scan-animation .bi-wifi {
+      animation: pulse 1.5s infinite ease-in-out;
+    }
+    @keyframes pulse {
+      0% { transform: scale(0.9); opacity: 0.7; }
+      50% { transform: scale(1.1); opacity: 1; }
+      100% { transform: scale(0.9); opacity: 0.7; }
+    }
+    .spinner-border { color: var(--teal) !important; }
+  </style>
+</head>
+
+<body>
+
+<div class="card p-4">
+  <h4 class="mb-3 text-center" style="color:var(--teal); font-weight:700;">
+    <i class="bi bi-shield-lock"></i> Set 4-Digit PIN
+  </h4>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <form method="POST" action="{{ url_for('receptionist_set_pin') }}">
+    <div class="mb-3">
+      <label class="form-label">RFID UID</label>
+      <div class="input-group">
+        <input type="text" class="form-control" id="rfidUid" name="rfid_uid"
+               value="{{ rfid_uid or '' }}" readonly required>
+        <button type="button" class="btn btn-outline-secondary" id="scanUidBtn">
+          <i class="bi bi-upc-scan"></i>
+        </button>
+      </div>
+      <small class="text-muted">Click scan icon if UID is empty.</small>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label">New 4-digit PIN</label>
+      <input type="password" name="new_pin" class="form-control" pattern="^\d{4}$" maxlength="4" required>
+      <small class="text-muted">Only numbers, exactly 4 digits.</small>
+    </div>
+
+    <button type="submit" class="btn btn-teal w-100 fw-semibold">
+      Set PIN & Continue
+    </button>
+
+    <a href="{{ url_for('receptionist_login') }}" class="btn btn-link w-100 mt-2">Back to Login</a>
+  </form>
+</div>
+
+<!-- SERIAL PORT SELECTION MODAL (same as your other pages) -->
+<div class="modal fade" id="serialPortModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-usb-symbol"></i> Select RFID Serial Port</h5>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted mb-3">
+          Click <b>Connect</b> and select your RFID device (USB/COM).
+          <br><small>(Chrome / Edge only)</small>
+        </p>
+        <button class="btn btn-teal w-100" id="connectSerialBtn">Connect</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- RFID Scan Modal (2nd image style) -->
+<div class="modal fade" id="rfidScanModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-upc-scan me-2"></i> RFID Scanner</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body text-center py-4">
+        <div class="rfid-scan-animation mb-3" style="font-size:3em;color:var(--teal);">
+          <i class="bi bi-wifi"></i>
+        </div>
+        <h5 class="mb-2">Scanning for RFID Tag</h5>
+        <p id="scanStatus" class="text-muted">Present your tag now...</p>
+        <div class="spinner-border mt-3" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ url_for('static', filename='js/serial-init.js') }}"></script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const scanBtn = document.getElementById("scanUidBtn");
+  const uidInput = document.getElementById("rfidUid");
+
+  const scanModalEl = document.getElementById("rfidScanModal");
+  const scanStatus = document.getElementById("scanStatus");
+  const scanModal = new bootstrap.Modal(scanModalEl);
+
+  let scanInterval = null;
+
+  function stopScan() {
+    if (scanInterval) clearInterval(scanInterval);
+    scanInterval = null;
+  }
+
+  function startScan() {
+    // if serial not connected, serial-init will show serialPortModal automatically
+    scanStatus.textContent = "Present your tag now...";
+    scanModal.show();
+
+    window.__latestUid = null;
+    let attempts = 0;
+    const maxAttempts = 50; // ~15 sec
+
+    scanInterval = setInterval(() => {
+      attempts++;
+      const uid = window.__latestUid;
+
+      if (uid) {
+        uidInput.value = uid.trim();
+        window.__latestUid = null;
+
+        scanStatus.textContent = "Tag detected ✔";
+        setTimeout(() => scanModal.hide(), 700);
+        stopScan();
+        return;
+      }
+
+      if (attempts >= maxAttempts) {
+        scanStatus.textContent = "No tag detected. Try again.";
+        setTimeout(() => scanModal.hide(), 1200);
+        stopScan();
+      }
+    }, 300);
+  }
+
+  scanBtn.addEventListener("click", startScan);
+  uidInput.addEventListener("click", () => {
+    if (!uidInput.value) startScan();
+  });
+
+  window.addEventListener("beforeunload", stopScan);
+});
+</script>
+
+</body>
+</html>

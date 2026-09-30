@@ -1,0 +1,2336 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="login-nonce" content="{{ session.get('login_nonce', '') }}">
+  <title>Hospital Admin Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Font Awesome 6 -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --teal: #20c997;
+      --teal-600: #17b88b;
+      --teal-700: #129a76;
+
+      --bg: #f7fbfa;
+      --surface: #ffffff;
+      --surface-2: #f3fbf8;
+
+      --border: #e6efec;
+      --border-2: #dcebe6;
+
+      --text: #1f2d3d;
+      --muted: #6b7a89;
+
+      --shadow: 0 10px 30px rgba(32, 201, 151, 0.12);
+      --shadow-soft: 0 6px 18px rgba(16, 24, 40, 0.06);
+      --radius: 16px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+
+    /* Header */
+    .dashboard-header {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.1rem 1.2rem;
+      margin: 0 0 1.2rem 0;
+      box-shadow: var(--shadow-soft);
+    }
+
+    .dashboard-header h3 {
+      margin: 0;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+    }
+
+    .dashboard-header p {
+      margin-top: .35rem;
+      color: var(--muted);
+    }
+
+    /* Cards */
+    .card {
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      box-shadow: var(--shadow-soft);
+    }
+
+    .card.p-4,
+    .card.p-3 {
+      background: var(--surface);
+    }
+
+    /* Buttons */
+    .btn-teal {
+      background: var(--teal);
+      color: #fff;
+      border: 1px solid rgba(32, 201, 151, 0.12);
+      box-shadow: 0 10px 18px rgba(32, 201, 151, 0.18);
+      border-radius: 12px;
+      font-weight: 700;
+      transition: transform .15s ease, box-shadow .15s ease, background-color .15s ease;
+    }
+
+    .btn-teal:hover {
+      background: var(--teal-600);
+      color: #fff;
+      transform: translateY(-1px);
+      box-shadow: 0 14px 24px rgba(32, 201, 151, 0.22);
+    }
+
+    .btn-outline-teal {
+      border: 1px solid rgba(32, 201, 151, 0.55);
+      color: var(--teal-700);
+      background: #fff;
+      border-radius: 12px;
+      font-weight: 700;
+      transition: transform .15s ease, background-color .15s ease, border-color .15s ease;
+    }
+
+    .btn-outline-teal:hover {
+      background: rgba(32, 201, 151, 0.08);
+      border-color: rgba(32, 201, 151, 0.7);
+      color: var(--teal-700);
+      transform: translateY(-1px);
+    }
+
+    .btn-outline-danger {
+      border-radius: 12px;
+      font-weight: 700;
+    }
+
+    .dropdown-menu {
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-soft);
+      padding: .5rem;
+    }
+
+    .dropdown-item {
+      border-radius: 10px;
+      padding: .6rem .75rem;
+    }
+
+    .dropdown-item:hover {
+      background: rgba(32, 201, 151, 0.08);
+    }
+
+    /* Utilities */
+    .bg-teal {
+      background-color: var(--teal) !important;
+    }
+
+    .text-teal {
+      color: var(--teal-700) !important;
+    }
+
+    .icon-teal {
+      color: var(--teal) !important;
+    }
+
+    /* Inputs */
+    .form-control,
+    .form-select {
+      border-radius: 12px;
+      border: 1px solid var(--border-2);
+      background: #fff;
+    }
+
+    .form-control:focus,
+    .form-select:focus {
+      border-color: rgba(32, 201, 151, 0.65);
+      box-shadow: 0 0 0 0.2rem rgba(32, 201, 151, 0.15);
+    }
+
+    .input-group .btn {
+      border-radius: 12px;
+    }
+
+    /* Alerts */
+    .alert {
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-soft);
+    }
+
+    /* Table Controls */
+    .table-controls {
+      background: var(--surface-2);
+      border-radius: 14px;
+      padding: 1.1rem;
+      margin-bottom: 1.2rem;
+      border: 1px solid var(--border);
+    }
+
+    .search-input {
+      border: 1px solid var(--border-2);
+      border-radius: 12px;
+      padding: 0.75rem 1rem;
+    }
+
+    .search-input:focus {
+      border-color: rgba(32, 201, 151, 0.65);
+      box-shadow: 0 0 0 0.2rem rgba(32, 201, 151, 0.12);
+    }
+
+    /* Pagination info */
+    .pagination-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      padding: 1rem 1.1rem;
+      background: var(--surface-2);
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      border-left: 5px solid var(--teal);
+    }
+
+    .pagination-info .info-text {
+      color: var(--teal-700);
+      font-weight: 800;
+      font-size: 0.95rem;
+    }
+
+    /* Table */
+    .table-container {
+      min-height: 400px;
+      position: relative;
+    }
+
+    .table-teal th {
+      background: rgba(32, 201, 151, 0.10);
+      color: var(--teal-700);
+      border-bottom: 2px solid rgba(32, 201, 151, 0.35);
+      font-weight: 800;
+    }
+
+    table.table {
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    .table td,
+    .table th {
+      vertical-align: middle;
+    }
+
+    .table-teal tbody tr:hover {
+      background-color: rgba(32, 201, 151, 0.06) !important;
+    }
+
+    /* Badges */
+    .badge-teal {
+      background: rgba(32, 201, 151, 0.14) !important;
+      color: var(--teal-700) !important;
+      border: 1px solid rgba(32, 201, 151, 0.35);
+      font-weight: 800;
+      border-radius: 999px;
+      padding: .45rem .65rem;
+    }
+
+    .badge-blocked {
+      background: rgba(108, 117, 125, 0.12);
+      color: #556372;
+      border: 1px solid rgba(108, 117, 125, 0.25);
+      border-radius: 999px;
+      padding: .45rem .65rem;
+      font-weight: 800;
+    }
+
+    /* Pagination (no gradients) */
+    .pagination-teal {
+      margin: 1.6rem 0 .5rem;
+      justify-content: center;
+      gap: .25rem;
+    }
+
+    .pagination-teal .page-link {
+      color: var(--teal-700);
+      border: 1px solid var(--border);
+      background-color: #fff;
+      border-radius: 12px;
+      padding: .65rem .9rem;
+      font-weight: 800;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 12px rgba(16, 24, 40, 0.05);
+    }
+
+    .pagination-teal .page-link:hover {
+      color: #fff;
+      background-color: var(--teal);
+      border-color: var(--teal);
+      transform: translateY(-1px);
+      box-shadow: 0 10px 20px rgba(32, 201, 151, 0.20);
+    }
+
+    .pagination-teal .page-item.active .page-link {
+      color: #fff;
+      background-color: var(--teal);
+      border-color: var(--teal);
+      box-shadow: 0 10px 22px rgba(32, 201, 151, 0.25);
+    }
+
+    .pagination-teal .page-item.disabled .page-link {
+      color: #93a1af;
+      background-color: #f7faf9;
+      border-color: var(--border);
+      box-shadow: none;
+    }
+
+    /* Loading state */
+    .pagination-loading {
+      display: none;
+      text-align: center;
+      padding: 2rem;
+      color: var(--teal-700);
+    }
+
+    .pagination-loading.active {
+      display: block;
+    }
+
+    /* Modals */
+    .modal-content {
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+    }
+
+    .modal-header {
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* Keep your header colors but no dark */
+    .modal-header.bg-teal {
+      background: var(--teal) !important;
+    }
+
+    .modal-header.bg-info {
+      background: rgba(32, 201, 151, 0.18) !important;
+      color: var(--teal-700) !important;
+    }
+
+    .modal-header.bg-danger {
+      background: rgba(32, 201, 151, 0.18) !important;
+      color: var(--teal-700) !important;
+    }
+
+    /* Fix buttons inside info/danger modal headers */
+    .modal-header.bg-info .btn-close,
+    .modal-header.bg-danger .btn-close {
+      filter: none;
+      opacity: .8;
+    }
+
+    /* Quick Stats cards: same teal palette, no gradients, no dark */
+    .row.mt-4 .card.text-center.border-0 {
+      background: rgba(32, 201, 151, 0.12) !important;
+      border: 1px solid rgba(32, 201, 151, 0.20) !important;
+      box-shadow: var(--shadow-soft);
+    }
+
+    .row.mt-4 .card.text-center.border-0 .card-body {
+      color: var(--teal-700) !important;
+    }
+
+    .row.mt-4 .card.text-center.border-0 i {
+      color: var(--teal) !important;
+    }
+
+    .row.mt-4 .card.text-center.border-0 h5 {
+      font-weight: 900;
+      color: var(--teal-700) !important;
+    }
+
+    /* Make text-muted nicer */
+    .text-muted {
+      color: var(--muted) !important;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: .5rem;
+      flex-wrap: wrap;
+    }
+
+    .header-actions .btn {
+      height: 42px;
+      padding: .55rem .9rem;
+      display: inline-flex;
+      align-items: center;
+      gap: .45rem;
+      white-space: nowrap;
+    }
+
+    .header-actions .dropdown .btn {
+      height: 42px;
+    }
+
+    /* keep logout always last and visible */
+    .header-actions .btn-logout {
+      border-color: #dc3545;
+      color: #dc3545;
+    }
+
+    .header-actions .btn-logout:hover {
+      background: #dc3545;
+      color: #fff;
+    }
+
+    /* mobile: actions go full width neatly */
+    @media (max-width: 992px) {
+      .dashboard-header {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: .75rem;
+      }
+
+      .header-actions {
+        width: 100%;
+        justify-content: flex-start;
+      }
+    }
+  </style>
+
+
+</head>
+
+<body>
+  <div class="container-xl py-3">
+    <!-- SERIAL PORT SELECTION MODAL -->
+    <div class="modal fade" id="serialPortModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header" style="background:#20c997;color:#fff;">
+            <h5 class="modal-title">
+              <i class="fa-solid fa-plug me-2"></i> Select RFID Serial Port
+            </h5>
+          </div>
+
+          <div class="modal-body">
+            <p class="text-muted mb-3">
+              Click <b>Connect</b> and select your RFID device (USB/COM) from the browser popup.
+              <br><small>(Works in Chrome / Edge only)</small>
+            </p>
+
+            <button class="btn btn-teal w-100" id="connectSerialBtn">
+              Connect
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RFID Scan Modal -->
+    <div class="modal fade" id="rfidScanModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header" style="background:#20c997;color:#fff;">
+            <h5 class="modal-title">
+              <i class="fa-solid fa-upc-scan me-2"></i> RFID Scanner
+            </h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body text-center">
+            <div class="mb-3" style="font-size:4em;color:#20c997;">
+              <i class="fa-solid fa-wifi"></i>
+            </div>
+            <h5 class="mb-2">Scanning for RFID Tag</h5>
+            <p id="scanStatus" class="text-muted mb-3">Present your tag now...</p>
+            <div class="spinner-border" role="status" style="color:#20c997;">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dashboard Header -->
+    <div class="dashboard-header d-flex justify-content-between align-items-center">
+      <div>
+        <h3>
+          <i class="fa-solid fa-hospital-user icon-teal me-2"></i>
+          Welcome, {{ admin_name }}!
+        </h3>
+        <p class="text-muted mb-0">
+          <i class="fa-solid fa-building-flag icon-teal me-1"></i>
+          Hospital: <strong class="text-teal">{{ hospital_name }}</strong>
+          {% if user_type == 'dept_admin' %}
+          | <i class="fa-solid fa-building icon-teal me-1"></i>
+          Department: <strong class="text-teal">{{ admin_department }}</strong>
+          {% endif %}
+        </p>
+      </div>
+
+
+      <div class="header-actions">
+
+        <a href="#" class="btn btn-outline-teal fw-semibold" onclick="event.preventDefault(); exportStaffData();">
+          <i class="fa-solid fa-download"></i> Export CSV
+        </a>
+
+        <a href="{{ url_for('admin_patient_tracking') }}" class="btn btn-outline-teal fw-semibold">
+          <i class="fa-solid fa-notes-medical"></i> Patient Tracking
+        </a>
+
+        <button class="btn btn-outline-teal fw-semibold" type="button" onclick="openDoctorStatusModal()">
+          <i class="fa-solid fa-user-doctor"></i> Doctor Status
+        </button>
+
+        <div class="dropdown">
+          <button class="btn btn-teal dropdown-toggle fw-semibold" type="button" id="doctorScheduleDropdown"
+            data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="fa-solid fa-calendar-days"></i> Doctor Schedules
+          </button>
+
+          <ul class="dropdown-menu shadow-lg border-0" aria-labelledby="doctorScheduleDropdown">
+            <li>
+              <h6 class="dropdown-header text-teal">
+                <i class="fa-solid fa-stethoscope me-2"></i>Schedule Management
+              </h6>
+            </li>
+
+            <li>
+              <button class="dropdown-item" type="button" onclick="openAddScheduleModal()">
+                <i class="fa-solid fa-plus text-success me-2"></i>Add New Schedule
+              </button>
+            </li>
+
+            <li>
+              <button class="dropdown-item" type="button" onclick="openAvailabilityModal()">
+                <i class="fa-solid fa-search text-info me-2"></i>Check Doctor Availability
+              </button>
+            </li>
+
+            <li>
+              <button class="dropdown-item" type="button" onclick="openEmergencyModal()">
+                <i class="fa-solid fa-exclamation-triangle text-danger me-2"></i>Emergency Scheduling
+              </button>
+            </li>
+
+            <li>
+              <hr class="dropdown-divider">
+            </li>
+
+            <li>
+              <h6 class="dropdown-header text-teal">
+                <i class="fa-solid fa-chart-bar me-2"></i>Reports
+              </h6>
+            </li>
+
+            <li>
+              <button class="dropdown-item" type="button" onclick="showWeeklyView()">
+                <i class="fa-solid fa-calendar-week me-2 text-primary"></i>Weekly Schedule View
+              </button>
+            </li>
+
+            <li>
+              <button class="dropdown-item" type="button" onclick="showAvailabilityReport()">
+                <i class="fa-solid fa-chart-bar me-2 text-success"></i>Availability Report
+              </button>
+            </li>
+          </ul>
+        </div>
+
+        <a href="{{ url_for('bed_management') }}" class="btn btn-outline-teal fw-semibold">
+          <i class="fa-solid fa-bed"></i> Manage Beds
+        </a>
+
+        <a href="{{ url_for('admin_logout') }}" class="btn btn-outline-danger fw-semibold btn-logout"
+          onclick="handleLogoutSerial(event)">
+          <i class="fa-solid fa-right-from-bracket"></i> Logout
+        </a>
+      </div>
+    </div>
+
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    {% for category, message in messages %}
+    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+      {{ message }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    <!-- Add Staff Form -->
+    <div class="card p-4 mb-4">
+      <h5 class="mb-3 text-teal fw-bold">
+        <i class="fa-solid fa-user-plus icon-teal me-2"></i>
+        Add Staff
+      </h5>
+      <form method="POST" class="needs-validation" novalidate>
+        <div class="row g-3">
+          <div class="col-md-3">
+            <label class="form-label">Role</label>
+            <select name="role" class="form-select" required>
+              <option value="" disabled selected>Select Role</option>
+              <option value="Receptionist">Receptionist</option>
+              <option value="Nurse">Nurse</option>
+              <option value="Doctor">Doctor</option>
+              <!-- <option value="Receptionist + Nurse">Receptionist + Nurse</option> -->
+            </select>
+            <div class="invalid-feedback">Please select role.</div>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">Full Name</label>
+            <input type="text" name="full_name" class="form-control" required minlength="3">
+            <div class="invalid-feedback">Please enter full name.</div>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">Gender</label>
+            <select name="gender" class="form-select" required>
+              <option value="" disabled selected>Select Gender</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select>
+            <div class="invalid-feedback">Please select gender.</div>
+          </div>
+
+
+
+
+
+
+          <div class="col-md-3">
+            <!-- <label class="form-label">Department</label> -->
+            <label class="form-label">Department</label>
+
+            {% if departments and departments|length > 0 %}
+            <!-- Enterprise mode -->
+            <select name="department_id" class="form-select" required>
+              <option value="" disabled selected>Select Department</option>
+              {% for d in departments %}
+              <option value="{{ d.id }}">{{ d.department_name }}</option>
+              {% endfor %}
+            </select>
+            <div class="invalid-feedback">Please select department.</div>
+            {% else %}
+            <!-- Standard mode -->
+            <select name="department_id" class="form-select">
+              <option value="" selected>General / No Department</option>
+            </select>
+            <small class="text-muted">Departments are not configured for this hospital.</small>
+            {% endif %}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Email</label>
+            <input type="email" name="email" class="form-control" required>
+            <div class="invalid-feedback">Enter valid email.</div>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">Phone</label>
+            <input type="text" name="phone" class="form-control" pattern="^[0-9]{10}$" required>
+            <div class="invalid-feedback">Enter 10-digit phone number.</div>
+          </div>
+
+          <div class="col-md-2">
+            <label class="form-label">Age</label>
+            <input type="number" name="age" class="form-control" min="18" max="120" required>
+            <div class="invalid-feedback">Enter valid age.</div>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Address</label>
+            <input type="text" name="address" class="form-control" required>
+            <div class="invalid-feedback">Enter address.</div>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">Username</label>
+            <input type="text" name="username" class="form-control" minlength="4" required>
+            <div class="invalid-feedback">Username must be at least 4 characters.</div>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">Password</label>
+            <div class="input-group">
+              <input type="password" name="password" id="staffPassword" class="form-control" minlength="6" required>
+              <button class="btn btn-outline-secondary" type="button" id="toggleStaffPassword">
+                <i class="fa-regular fa-eye" id="staffPasswordIcon"></i>
+              </button>
+              <div class="invalid-feedback">Password must be at least 6 characters.</div>
+            </div>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">RFID UID</label>
+            <div class="input-group">
+              <input type="text" name="rfid_uid" id="rfidUidInput" class="form-control" placeholder="Click Scan..."
+                readonly required>
+              <button class="btn btn-outline-teal" type="button" id="scanRfidBtn">
+                <i class="fa-solid fa-wifi"></i> Scan
+              </button>
+            </div>
+            <div class="invalid-feedback">Please scan RFID UID.</div>
+            <small class="text-muted">Click Scan, then tap card on reader.</small>
+          </div>
+        </div>
+
+        <div class="mt-3">
+          <button type="submit" class="btn btn-teal fw-semibold px-4">
+            <i class="fa-solid fa-plus me-1"></i> Add Staff
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Doctor Scheduling Management Section (hidden by default) -->
+    <div class="card p-4 mb-4" id="doctorSchedulingSection" style="display:none;">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0 text-teal fw-bold">
+          <i class="fa-solid fa-calendar-days icon-teal me-2"></i>
+          Doctor Schedule Management
+        </h5>
+
+        <div class="d-flex gap-2">
+          <button class="btn btn-teal btn-sm fw-semibold" type="button" onclick="openAddScheduleModal()">
+            <i class="fa-solid fa-plus me-1"></i> Add Schedule
+          </button>
+          <a class="btn btn-outline-teal btn-sm fw-semibold" href="/doctor-schedules">
+            <i class="fa-solid fa-calendar-week me-1"></i> Full Weekly View
+          </a>
+
+          <a class="btn btn-outline-info btn-sm fw-semibold" href="/doctor-availability-report">
+            <i class="fa-solid fa-chart-bar me-1"></i> Availability Report
+          </a>
+        </div>
+      </div>
+
+      <!-- top controls -->
+      <div class="row g-3 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Select Doctor</label>
+          <select class="form-select" id="scheduleDoctorSelect">
+            <option value="">Choose a doctor...</option>
+          </select>
+          <small class="text-muted">Pick a doctor to load schedules.</small>
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label fw-semibold">Week Starting</label>
+          <input type="date" class="form-control" id="scheduleWeekStart">
+          <small class="text-muted">Auto loads that week.</small>
+        </div>
+
+        <div class="col-md-5">
+          <label class="form-label fw-semibold">Quick Actions</label>
+          <div class="d-flex flex-wrap gap-2">
+            <button class="btn btn-outline-teal btn-sm" type="button" onclick="openAvailabilityModal()">
+              <i class="fa-solid fa-user-clock me-1"></i> Check Availability
+            </button>
+            <button class="btn btn-outline-danger btn-sm" type="button" onclick="openEmergencyModal()">
+              <i class="fa-solid fa-triangle-exclamation me-1"></i> Emergency
+            </button>
+            <button class="btn btn-outline-secondary btn-sm" type="button" onclick="refreshDoctorSchedule()">
+              <i class="fa-solid fa-rotate me-1"></i> Refresh
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- schedule display -->
+      <div class="row mt-4 g-3">
+        <div class="col-lg-8">
+          <div class="card border-0" style="background:#f8fffe;">
+            <div class="card-header" style="background:#e6f5f2;">
+              <div class="d-flex justify-content-between align-items-center">
+                <div class="fw-bold text-teal">
+                  <i class="fa-solid fa-table-cells me-2"></i> Week Snapshot
+                </div>
+                <div class="small text-muted" id="weekRangeText">Select doctor + week</div>
+              </div>
+            </div>
+
+            <div class="card-body p-2">
+              <div class="table-responsive">
+                <table class="table table-bordered table-sm align-middle mb-0">
+                  <thead class="table-teal">
+                    <tr>
+                      <th style="width: 120px;">Day</th>
+                      <th>Schedules</th>
+                    </tr>
+                  </thead>
+                  <tbody id="weekScheduleBody">
+                    <tr>
+                      <td colspan="2" class="text-center text-muted py-4">No data loaded.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="px-2 pb-2 pt-3 d-flex justify-content-end">
+                <a href="/doctor-schedules" class="btn btn-outline-teal btn-sm fw-semibold">
+                  <i class="fa-solid fa-up-right-from-square me-1"></i> Open Full Calendar
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-4">
+          <div class="card border-0" style="background:#fff;">
+            <div class="card-header" style="background:#ffffff;">
+              <div class="fw-bold text-teal">
+                <i class="fa-solid fa-list-check me-2"></i> Upcoming / Notes
+              </div>
+              <div class="small text-muted">Next 7 days schedule lines</div>
+            </div>
+            <div class="card-body" style="max-height: 330px; overflow:auto;">
+              <div id="upcomingScheduleList" class="text-muted text-center py-4">
+                Select doctor to load upcoming schedule…
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Weekly Schedule Form -->
+    <div id="weeklyScheduleForm" style="display:none;">
+      <div class="card border-0" style="background: #f8fffe;">
+        <div class="card-header" style="background: #e6f5f2;">
+          <h6 class="mb-0 text-teal fw-bold">
+            <i class="fa-solid fa-calendar-week me-2"></i>Weekly Schedule Setup
+          </h6>
+        </div>
+        <div class="card-body">
+          <form id="doctorScheduleForm" onsubmit="saveDoctorSchedule(event)">
+            <div class="table-responsive">
+              <table class="table table-sm table-bordered">
+                <thead class="table-teal">
+                  <tr>
+                    <th width="12%">Day</th>
+                    <th width="10%">Working</th>
+                    <th width="15%">Start Time</th>
+                    <th width="15%">End Time</th>
+                    <th width="15%">Break Start</th>
+                    <th width="15%">Break End</th>
+                    <th width="18%">Consultation Duration</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% set days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'] %}
+                  {% for day in days %}
+                  <tr>
+                    <td class="fw-bold text-teal">{{ day }}</td>
+                    <td class="text-center">
+                      <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="active_{{ day.lower() }}"
+                          name="active_{{ day.lower() }}" value="1" {% if day in
+                          ['Monday','Tuesday','Wednesday','Thursday','Friday'] %}checked{% endif %}>
+                        <label class="form-check-label" for="active_{{ day.lower() }}"></label>
+                      </div>
+                    </td>
+                    <td><input type="time" class="form-control form-control-sm" name="start_{{ day.lower() }}"
+                        value="09:00"></td>
+                    <td><input type="time" class="form-control form-control-sm" name="end_{{ day.lower() }}"
+                        value="17:00"></td>
+                    <td><input type="time" class="form-control form-control-sm" name="break_start_{{ day.lower() }}"
+                        value="13:00"></td>
+                    <td><input type="time" class="form-control form-control-sm" name="break_end_{{ day.lower() }}"
+                        value="14:00"></td>
+                    <td>
+                      <select class="form-select form-select-sm" name="duration_{{ day.lower() }}">
+                        <option value="15">15 minutes</option>
+                        <option value="20" selected>20 minutes</option>
+                        <option value="30">30 minutes</option>
+                        <option value="45">45 minutes</option>
+                        <option value="60">1 hour</option>
+                      </select>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+
+            <div class="row mt-3">
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Additional Settings:</label>
+                <div class="row">
+                  <div class="col-6">
+                    <label class="form-label small">Max Patients/Slot:</label>
+                    <input type="number" name="max_patients" class="form-control form-control-sm" value="1" min="1"
+                      max="5">
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label small">Effective From:</label>
+                    <input type="date" name="effective_date" class="form-control form-control-sm"
+                      value="{{ today_date if today_date else '' }}" required>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6 d-flex align-items-end">
+                <button type="submit" class="btn btn-teal fw-semibold me-2">
+                  <i class="fa-solid fa-save me-1"></i> Save Schedule
+                </button>
+                <button type="button" class="btn btn-outline-secondary" onclick="hideWeeklyScheduleForm()">
+                  <i class="fa-solid fa-times me-1"></i> Cancel
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Availability Override Form -->
+    <div id="availabilityOverrideForm" style="display:none;">
+      <div class="card border-0" style="background: #fff8f0;">
+        <div class="card-header" style="background: #ffeaa7;">
+          <h6 class="mb-0 fw-bold" style="color: #d63031;">
+            <i class="fa-solid fa-calendar-xmark me-2"></i>Mark Doctor Unavailable
+          </h6>
+        </div>
+        <div class="card-body">
+          <form id="availabilityOverrideFormEl" onsubmit="saveAvailabilityOverride(event)">
+            <div class="row">
+              <div class="col-md-3">
+                <label class="form-label">Date:</label>
+                <input type="date" name="override_date" class="form-control" required
+                  min="{{ today_date if today_date else '' }}">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Type:</label>
+                <select name="override_type" class="form-select" required>
+                  <option value="">Select Type</option>
+                  <option value="unavailable">Full Day Unavailable</option>
+                  <option value="custom_hours">Custom Hours</option>
+                  <option value="emergency">Emergency Leave</option>
+                  <option value="holiday">Holiday/Vacation</option>
+                </select>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label">Start Time:</label>
+                <input type="time" name="override_start" class="form-control">
+                <small class="text-muted">Leave empty for full day</small>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label">End Time:</label>
+                <input type="time" name="override_end" class="form-control">
+              </div>
+              <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-warning fw-semibold w-100">
+                  <i class="fa-solid fa-ban me-1"></i> Mark
+                </button>
+              </div>
+            </div>
+            <div class="row mt-2">
+              <div class="col-md-8">
+                <label class="form-label">Reason:</label>
+                <input type="text" name="override_reason" class="form-control"
+                  placeholder="Enter reason for unavailability..." required>
+              </div>
+              <div class="col-md-4 d-flex align-items-end">
+                <button type="button" class="btn btn-outline-secondary w-100" onclick="hideAvailabilityOverride()">
+                  <i class="fa-solid fa-times me-1"></i> Cancel
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Current Schedule Display -->
+    <div id="currentScheduleDisplay" class="mt-4">
+      <!-- Will be populated by JavaScript -->
+    </div>
+
+    <!-- Staff List Table -->
+    <div class="card p-3">
+      <h5 class="mb-3 text-teal fw-bold">
+        <i class="fa-solid fa-users-gear icon-teal me-2"></i>
+        Staff Added by You
+      </h5>
+
+      <!-- Search and Filter Controls -->
+      <div class="table-controls">
+        <div class="row align-items-center">
+          <div class="col-md-6">
+            <div class="input-group">
+              <input type="text" id="searchInput" class="form-control search-input"
+                placeholder="Search by name, role, department...">
+              <button class="btn btn-teal" type="button">
+                <i class="fa-solid fa-search"></i>
+              </button>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <select id="roleFilter" class="form-select">
+              <option value="">All Roles</option>
+              <option value="Doctor">Doctor</option>
+              <option value="Nurse">Nurse</option>
+              <option value="Receptionist">Receptionist</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <select id="statusFilter" class="form-select">
+              <option value="">All Status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pagination Info -->
+      <div class="pagination-info">
+        <div class="info-text">
+          <i class="fa-solid fa-info-circle me-2"></i>
+          Showing <span id="showingStart">1</span> to <span id="showingEnd">10</span> of
+          <span id="totalRecords">{{ staff_list|length }}</span> staff members
+        </div>
+        <div class="records-per-page">
+          <label class="form-label mb-0 text-teal fw-semibold">Show:</label>
+          <select id="recordsPerPage" class="form-select form-select-sm">
+            <option value="5">5</option>
+            <option value="10" selected>10</option>
+            <option value="25">25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+          <span class="text-teal fw-semibold">per page</span>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <div class="table-responsive">
+          <table class="table table-striped table-bordered align-middle table-teal" id="staffTable">
+            <thead>
+              <tr>
+                <th>SL No</th>
+                <th>Role</th>
+                <th>Name</th>
+                <th>Department</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th>Username</th>
+                <th>Created On</th>
+                <th>Status</th>
+                <th>Actions</th>
+                <th>Account</th>
+              </tr>
+            </thead>
+            <tbody id="staffTableBody">
+              {% for s in staff_list %}
+              <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ s.role }}</td>
+                <td>{{ s.full_name }}</td>
+                <td>{{ s.department or "General" }}</td>
+
+                <td>{{ s.email }}</td>
+                <td>{{ s.phone }}</td>
+                <td>{{ s.username }}</td>
+                <td>{{ s.created_on }}</td>
+                <td>
+                  {% if s.is_active %}
+                  <span class="badge badge-teal">Active</span>
+                  {% else %}
+                  <span class="badge badge-blocked">Inactive</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <a href="{{ url_for('admin_edit_staff', staff_id=s.id) }}" class="btn btn-sm btn-outline-teal mb-1">
+                    <i class="fa-regular fa-pen-to-square"></i> Edit
+                  </a>
+                  <a href="{{ url_for('admin_delete_staff', staff_id=s.id) }}"
+                    class="btn btn-sm btn-outline-danger mb-1"
+                    onclick="return confirm('Are you sure you want to delete this staff?');">
+                    <i class="fa-regular fa-trash-can"></i> Delete
+                  </a>
+                </td>
+                <td>
+                  {% if s.can_login %}
+                  <span class="badge badge-teal me-1"><i class="fa-regular fa-circle-check me-1"></i>Allowed</span>
+                  <a href="{{ url_for('admin_toggle_staff', staff_id=s.id) }}" class="btn btn-sm btn-outline-secondary">
+                    <i class="fa-solid fa-lock"></i> Block
+                  </a>
+                  {% else %}
+                  <span class="badge badge-blocked me-1"><i class="fa-solid fa-ban me-1"></i>Blocked</span>
+                  <a href="{{ url_for('admin_toggle_staff', staff_id=s.id) }}" class="btn btn-sm btn-teal">
+                    <i class="fa-solid fa-unlock"></i> Unblock
+                  </a>
+                  {% endif %}
+                </td>
+              </tr>
+              {% else %}
+              <tr id="noDataRow">
+                <td colspan="11" class="text-center text-muted">No staff added yet.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="pagination-loading" id="paginationLoading">
+          <i class="fa-solid fa-spinner fa-spin fa-2x text-teal"></i>
+          <p class="mt-2 text-teal fw-semibold">Loading...</p>
+        </div>
+      </div>
+
+      <nav aria-label="Staff pagination" id="paginationContainer">
+        <ul class="pagination pagination-teal" id="paginationList">
+          <!-- Pagination will be generated by JavaScript -->
+        </ul>
+      </nav>
+
+      <!-- Quick Stats -->
+      <div class="row mt-4">
+        <div class="col-md-3">
+          <div class="card text-center border-0" style="background: linear-gradient(135deg, #20c997 0%, #17a891 100%);">
+            <div class="card-body text-white">
+              <i class="fa-solid fa-user-doctor fa-2x mb-2"></i>
+              <h5 class="mb-0" id="doctorCount">0</h5>
+              <small>Doctors</small>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card text-center border-0" style="background: linear-gradient(135deg, #20c997 0%, #17a891 100%);">
+            <div class="card-body text-white">
+              <i class="fa-solid fa-user-nurse fa-2x mb-2"></i>
+              <h5 class="mb-0" id="nurseCount">0</h5>
+              <small>Nurses</small>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card text-center border-0" style="background: linear-gradient(135deg, #20c997 0%, #17a891 100%);">
+            <div class="card-body text-white">
+              <i class="fa-solid fa-user-tie fa-2x mb-2"></i>
+              <h5 class="mb-0" id="receptionistCount">0</h5>
+              <small>Receptionists</small>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card text-center border-0" style="background: linear-gradient(135deg, #20c997 0%, #17a891 100%);">
+            <div class="card-body text-white">
+              <i class="fa-solid fa-users fa-2x mb-2"></i>
+              <h5 class="mb-0" id="totalStaffCount">0</h5>
+              <small>Total Staff</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bootstrap bundle + your serial init -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/serial-init.js') }}"></script>
+
+    <script>
+      // Staff data from Jinja2
+      const staffData = {{ staff_list | tojson }};
+
+      // Pagination variables
+      let currentPage = 1;
+      let recordsPerPage = 10;
+      let filteredData = [...staffData];
+
+      function handleLogoutSerial(e) {
+        if (e) e.preventDefault();
+        try {
+          if (window.__disconnectWebSerial) window.__disconnectWebSerial();
+        } catch (err) {
+          console.warn("Serial disconnect failed:", err);
+        }
+        sessionStorage.setItem("force_serial_prompt", "1");
+        sessionStorage.setItem("webserial_connected", "0");
+        window.location.href = "{{ url_for('admin_logout') }}";
+      }
+
+      // Bootstrap validation
+      (function () {
+        'use strict';
+        const forms = document.querySelectorAll('.needs-validation');
+        Array.prototype.slice.call(forms).forEach(function (form) {
+          form.addEventListener('submit', function (event) {
+            if (!form.checkValidity()) {
+              event.preventDefault();
+              event.stopPropagation();
+            }
+            form.classList.add('was-validated');
+          }, false);
+        });
+      })();
+
+      // Password visibility toggle
+      const staffPasswordInput = document.getElementById('staffPassword');
+      const toggleStaffPassword = document.getElementById('toggleStaffPassword');
+      const staffPasswordIcon = document.getElementById('staffPasswordIcon');
+      if (toggleStaffPassword) {
+        toggleStaffPassword.addEventListener('click', function () {
+          const type = staffPasswordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+          staffPasswordInput.setAttribute('type', type);
+          staffPasswordIcon.classList.toggle('fa-eye');
+          staffPasswordIcon.classList.toggle('fa-eye-slash');
+        });
+      }
+
+      function filterData() {
+        const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+        const roleFilter = document.getElementById('roleFilter').value;
+        const statusFilter = document.getElementById('statusFilter').value;
+
+        filteredData = staffData.filter(staff => {
+          const dept = (staff.department || "General").toLowerCase();
+
+          const matchesSearch =
+            (staff.full_name || "").toLowerCase().includes(searchTerm) ||
+            (staff.role || "").toLowerCase().includes(searchTerm) ||
+            dept.includes(searchTerm) ||
+            (staff.email || "").toLowerCase().includes(searchTerm);
+
+          const matchesRole = !roleFilter || staff.role === roleFilter;
+
+          const matchesStatus = !statusFilter ||
+            (statusFilter === 'active' && staff.is_active) ||
+            (statusFilter === 'inactive' && !staff.is_active);
+
+          return matchesSearch && matchesRole && matchesStatus;
+        });
+
+        currentPage = 1;
+        updateDisplay();
+      }
+
+      function updateDisplay() {
+        const startIndex = (currentPage - 1) * recordsPerPage;
+        const endIndex = startIndex + recordsPerPage;
+        const currentData = filteredData.slice(startIndex, endIndex);
+
+        updateTable(currentData, startIndex);
+        updatePagination();
+        updatePaginationInfo();
+        updateStats();
+      }
+
+      function updateTable(data, startIndex) {
+        const tbody = document.getElementById('staffTableBody');
+        if (data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">No staff found matching your criteria.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = data.map((staff, index) => `
+        <tr>
+          <td>${startIndex + index + 1}</td>
+          <td>${staff.role}</td>
+          <td>${staff.full_name}</td>
+          <td>${staff.department || "General"}</td>
+          <td>${staff.email}</td>
+          <td>${staff.phone}</td>
+          <td>${staff.username}</td>
+          <td>${staff.created_on}</td>
+          <td>
+            ${staff.is_active ?
+            '<span class="badge badge-teal">Active</span>' :
+            '<span class="badge badge-blocked">Inactive</span>'
+          }
+          </td>
+          <td>
+            <a href="/admin-staff/edit/${staff.id}" class="btn btn-sm btn-outline-teal mb-1">
+              <i class="fa-regular fa-pen-to-square"></i> Edit
+            </a>
+            <a href="/admin-staff/delete/${staff.id}" class="btn btn-sm btn-outline-danger mb-1"
+               onclick="return confirm('Are you sure you want to delete this staff?');">
+              <i class="fa-regular fa-trash-can"></i> Delete
+            </a>
+          </td>
+          <td>
+            ${staff.can_login ?
+            `<span class="badge badge-teal me-1"><i class="fa-regular fa-circle-check me-1"></i>Allowed</span>
+               <a href="/admin-staff/toggle/${staff.id}" class="btn btn-sm btn-outline-secondary">
+                 <i class="fa-solid fa-lock"></i> Block
+               </a>` :
+            `<span class="badge badge-blocked me-1"><i class="fa-solid fa-ban me-1"></i>Blocked</span>
+               <a href="/admin-staff/toggle/${staff.id}" class="btn btn-sm btn-teal">
+                 <i class="fa-solid fa-unlock"></i> Unblock
+               </a>`
+          }
+          </td>
+        </tr>
+      `).join('');
+      }
+
+      function updatePagination() {
+        const totalPages = Math.ceil(filteredData.length / recordsPerPage);
+        const paginationList = document.getElementById('paginationList');
+
+        if (totalPages <= 1) {
+          document.getElementById('paginationContainer').style.display = 'none';
+          return;
+        }
+
+        document.getElementById('paginationContainer').style.display = 'block';
+
+        let paginationHTML = '';
+
+        paginationHTML += `
+        <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+          <a class="page-link" href="#" onclick="changePage(${currentPage - 1}); return false;">
+            <i class="fa-solid fa-chevron-left"></i>
+          </a>
+        </li>
+      `;
+
+        const showPages = 5;
+        let startPage = Math.max(1, currentPage - Math.floor(showPages / 2));
+        let endPage = Math.min(totalPages, startPage + showPages - 1);
+
+        if (endPage - startPage < showPages - 1) {
+          startPage = Math.max(1, endPage - showPages + 1);
+        }
+
+        if (startPage > 1) {
+          paginationHTML += `
+          <li class="page-item">
+            <a class="page-link" href="#" onclick="changePage(1); return false;">1</a>
+          </li>
+        `;
+          if (startPage > 2) {
+            paginationHTML += `
+            <li class="page-item disabled">
+              <span class="page-link">...</span>
+            </li>
+          `;
+          }
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+          paginationHTML += `
+          <li class="page-item ${i === currentPage ? 'active' : ''}">
+            <a class="page-link" href="#" onclick="changePage(${i}); return false;">${i}</a>
+          </li>
+        `;
+        }
+
+        if (endPage < totalPages) {
+          if (endPage < totalPages - 1) {
+            paginationHTML += `
+            <li class="page-item disabled">
+              <span class="page-link">...</span>
+            </li>
+          `;
+          }
+          paginationHTML += `
+          <li class="page-item">
+            <a class="page-link" href="#" onclick="changePage(${totalPages}); return false;">${totalPages}</a>
+          </li>
+        `;
+        }
+
+        paginationHTML += `
+        <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+          <a class="page-link" href="#" onclick="changePage(${currentPage + 1}); return false;">
+            <i class="fa-solid fa-chevron-right"></i>
+          </a>
+        </li>
+      `;
+
+        paginationList.innerHTML = paginationHTML;
+      }
+
+      function updatePaginationInfo() {
+        const startRecord = (currentPage - 1) * recordsPerPage + 1;
+        const endRecord = Math.min(currentPage * recordsPerPage, filteredData.length);
+        document.getElementById('showingStart').textContent = filteredData.length === 0 ? 0 : startRecord;
+        document.getElementById('showingEnd').textContent = endRecord;
+        document.getElementById('totalRecords').textContent = filteredData.length;
+      }
+
+      function updateStats() {
+        const doctorCount = filteredData.filter(s => s.role === 'Doctor').length;
+        const nurseCount = filteredData.filter(s => s.role === 'Nurse').length;
+        const receptionistCount = filteredData.filter(s => s.role === 'Receptionist').length;
+
+        document.getElementById('doctorCount').textContent = doctorCount;
+        document.getElementById('nurseCount').textContent = nurseCount;
+        document.getElementById('receptionistCount').textContent = receptionistCount;
+        document.getElementById('totalStaffCount').textContent = filteredData.length;
+      }
+
+      function changePage(page) {
+        const totalPages = Math.ceil(filteredData.length / recordsPerPage);
+        if (page < 1 || page > totalPages) return;
+
+        showLoading();
+
+        setTimeout(() => {
+          currentPage = page;
+          updateDisplay();
+          hideLoading();
+
+          document.getElementById('staffTable').scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+          });
+        }, 250);
+      }
+
+      function changeRecordsPerPage() {
+        recordsPerPage = parseInt(document.getElementById('recordsPerPage').value, 10);
+        currentPage = 1;
+        updateDisplay();
+      }
+
+      function showLoading() {
+        document.getElementById('paginationLoading').classList.add('active');
+        document.getElementById('staffTableBody').style.opacity = '0.5';
+      }
+
+      function hideLoading() {
+        document.getElementById('paginationLoading').classList.remove('active');
+        document.getElementById('staffTableBody').style.opacity = '1';
+      }
+
+      function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+          const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+          };
+          clearTimeout(timeout);
+          timeout = setTimeout(later, wait);
+        };
+      }
+
+      document.getElementById('searchInput').addEventListener('input', debounce(filterData, 300));
+      document.getElementById('roleFilter').addEventListener('change', filterData);
+      document.getElementById('statusFilter').addEventListener('change', filterData);
+      document.getElementById('recordsPerPage').addEventListener('change', changeRecordsPerPage);
+
+      document.addEventListener('keydown', function (e) {
+        if (e.target.tagName.toLowerCase() === 'input') return;
+
+        const totalPages = Math.ceil(filteredData.length / recordsPerPage);
+
+        switch (e.key) {
+          case 'ArrowLeft':
+            e.preventDefault();
+            if (currentPage > 1) changePage(currentPage - 1);
+            break;
+          case 'ArrowRight':
+            e.preventDefault();
+            if (currentPage < totalPages) changePage(currentPage + 1);
+            break;
+          case 'Home':
+            e.preventDefault();
+            changePage(1);
+            break;
+          case 'End':
+            e.preventDefault();
+            changePage(totalPages);
+            break;
+        }
+      });
+
+      document.addEventListener('DOMContentLoaded', function () {
+        const style = document.createElement('style');
+        style.textContent = `
+        .table-teal tbody tr {
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+        .table-teal tbody tr:hover {
+          background-color: rgba(32,201,151,0.08) !important;
+          transform: translateX(2px);
+          box-shadow: 2px 0 8px rgba(32,201,151,0.15);
+        }
+      `;
+        document.head.appendChild(style);
+      });
+
+      // Export CSV
+      function exportStaffData() {
+        const headers = ['SL No', 'Role', 'Name', 'Department', 'Email', 'Phone', 'Username', 'Created On', 'Status'];
+        const csvContent = [
+          headers.join(','),
+          ...filteredData.map((staff, index) => [
+            index + 1,
+            staff.role,
+            `"${staff.full_name}"`,
+            `"${staff.department || "General"}"`,
+            staff.email,
+            staff.phone,
+            staff.username,
+            `"${staff.created_on}"`,
+            staff.is_active ? 'Active' : 'Inactive'
+          ].join(','))
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `staff_data_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      }
+
+      document.addEventListener('DOMContentLoaded', function () {
+        // init pagination
+        updateDisplay();
+
+        // export button
+        const headerActions = document.querySelector('.dashboard-header .d-flex.gap-2');
+        if (headerActions) {
+          const exportBtn = document.createElement('a');
+          exportBtn.href = '#';
+          exportBtn.className = 'btn btn-outline-teal fw-semibold me-2';
+          exportBtn.innerHTML = '<i class="fa-solid fa-download me-1"></i> Export CSV';
+          exportBtn.onclick = function (e) {
+            e.preventDefault();
+            exportStaffData();
+          };
+          headerActions.insertBefore(exportBtn, headerActions.firstChild);
+        }
+      });
+
+      function optimizeForLargeDataset() {
+        if (staffData.length > 1000) {
+          document.getElementById('recordsPerPage').value = '25';
+          recordsPerPage = 25;
+          updateDisplay();
+
+          const performanceTip = document.createElement('div');
+          performanceTip.className = 'alert alert-info alert-dismissible fade show mt-2';
+          performanceTip.innerHTML = `
+          <i class="fa-solid fa-lightbulb me-2"></i>
+          <strong>Performance Tip:</strong> Large dataset detected. Use filters to narrow down results for better performance.
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+          document.querySelector('.table-controls')?.appendChild(performanceTip);
+        }
+      }
+      setTimeout(optimizeForLargeDataset, 100);
+    </script>
+
+    <!-- ✅ Doctor Scheduling (GLOBAL) -->
+    <script>
+      // ====== CONFIG: change ONLY these endpoints if your routes differ ======
+      const API = {
+        doctors: "/get_doctors",
+        departments: "/get_departments",
+        weekly: (doctorId, weekStart) => `/get-doctor-weekly-snapshot?doctor_id=${doctorId}&week_start=${weekStart}`,
+        upcoming: (doctorId) => `/get-doctor-upcoming-schedules?doctor_id=${doctorId}`
+      };
+
+      // Global alert helper
+      window.showAlert = function (message, type) {
+        const alertTypes = {
+          'success': 'alert-success',
+          'error': 'alert-danger',
+          'warning': 'alert-warning',
+          'info': 'alert-info'
+        };
+
+        const icon =
+          type === 'success' ? 'check' :
+            type === 'error' ? 'times' :
+              type === 'warning' ? 'exclamation-triangle' :
+                'info';
+
+        const alertHtml = `
+        <div class="alert ${alertTypes[type] || 'alert-info'} alert-dismissible fade show position-fixed"
+             style="top: 20px; right: 20px; z-index: 9999; min-width: 300px;">
+          <i class="fa-solid fa-${icon}-circle me-2"></i>
+          ${message}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      `;
+
+        document.body.insertAdjacentHTML('beforeend', alertHtml);
+
+        setTimeout(() => {
+          const alerts = document.querySelectorAll('.alert.position-fixed');
+          const last = alerts[alerts.length - 1];
+          if (last) last.remove();
+        }, 5000);
+      };
+
+      // ✅ Make these GLOBAL so onclick="" works
+      window.loadDoctorsAndDepartments = function () {
+        // doctors for modals
+        fetch(API.doctors)
+          .then(r => r.json())
+          .then(doctors => {
+            const selects = document.querySelectorAll('select[name="doctor_id"]');
+            selects.forEach(select => {
+              select.innerHTML = '<option value="">Select Doctor</option>';
+              doctors.forEach(doctor => {
+                const name = doctor.name || doctor.full_name || "Doctor";
+                const spec = doctor.specialization ? ` - ${doctor.specialization}` : "";
+                select.innerHTML += `<option value="${doctor.id}">${escapeHtml(name)}${escapeHtml(spec)}</option>`;
+              });
+            });
+          })
+          .catch(err => console.error('Error loading doctors:', err));
+
+        // departments for quick schedule modal
+        fetch(API.departments)
+          .then(r => r.json())
+          .then(depts => {
+            const selects = document.querySelectorAll('select[name="department_id"]');
+            selects.forEach(select => {
+              select.innerHTML = '<option value="">Select Department</option>';
+              depts.forEach(dept => {
+                const label = dept.name || dept.department_name || "Department";
+                select.innerHTML += `<option value="${dept.id}">${escapeHtml(label)}</option>`;
+              });
+            });
+          })
+          .catch(err => console.error('Error loading departments:', err));
+      };
+
+      window.openAddScheduleModal = function () {
+        window.loadDoctorsAndDepartments();
+        const modalEl = document.getElementById("quickScheduleModal");
+        if (!modalEl) return window.showAlert("quickScheduleModal not found", "error");
+        modalEl.querySelector('[name="schedule_date"]').value = new Date().toISOString().split("T")[0];
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+      };
+
+      window.openAvailabilityModal = function () {
+        window.loadDoctorsAndDepartments();
+        const modalEl = document.getElementById("doctorAvailabilityModal");
+        if (!modalEl) return window.showAlert("doctorAvailabilityModal not found", "error");
+        modalEl.querySelector('[name="check_date"]').value = new Date().toISOString().split("T")[0];
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+      };
+
+      window.openEmergencyModal = function () {
+        window.loadDoctorsAndDepartments();
+        const modalEl = document.getElementById("emergencySchedulingModal");
+        if (!modalEl) return window.showAlert("emergencySchedulingModal not found", "error");
+        modalEl.querySelector('[name="emergency_date"]').value = new Date().toISOString().split("T")[0];
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+      };
+
+      window.showWeeklyView = function () {
+        window.location.href = "/doctor-schedules";
+      };
+
+      window.showAvailabilityReport = function () {
+        window.location.href = "/doctor-availability-report";
+      };
+
+      window.saveQuickSchedule = function () {
+        const form = document.getElementById('quickScheduleForm');
+        if (!form) return window.showAlert("quickScheduleForm not found", "error");
+
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+
+        fetch('/add-doctor-schedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        })
+          .then(r => r.json())
+          .then(result => {
+            if (result.success) {
+              window.showAlert('Schedule added successfully!', 'success');
+              bootstrap.Modal.getInstance(document.getElementById('quickScheduleModal'))?.hide();
+            } else {
+              window.showAlert(result.error || 'Error adding schedule', 'error');
+            }
+          })
+          .catch(error => window.showAlert('Network error: ' + error.message, 'error'));
+      };
+
+      window.checkDoctorAvailability = function () {
+        const form = document.getElementById('availabilityCheckForm');
+        if (!form) return window.showAlert("availabilityCheckForm not found", "error");
+
+        const formData = new FormData(form);
+        const doctorId = formData.get('doctor_id');
+        const checkDate = formData.get('check_date');
+
+        if (!doctorId || !checkDate) {
+          window.showAlert('Please select both doctor and date', 'warning');
+          return;
+        }
+
+        fetch(`/check-doctor-availability/${doctorId}/${checkDate}`)
+          .then(r => r.json())
+          .then(result => {
+            const resultsDiv = document.getElementById('availabilityResults');
+            if (!resultsDiv) return;
+
+            if (result.available) {
+              resultsDiv.innerHTML = `
+              <div class="alert alert-success">
+                <i class="fa-solid fa-check-circle me-2"></i>
+                <strong>Available!</strong> Dr. ${escapeHtml(result.doctor_name || "")} is available on ${escapeHtml(checkDate)}
+                <br><small>Current schedules: ${(result.schedules || []).length} shifts</small>
+              </div>
+            `;
+            } else {
+              resultsDiv.innerHTML = `
+              <div class="alert alert-danger">
+                <i class="fa-solid fa-times-circle me-2"></i>
+                <strong>Not Available!</strong> Dr. ${escapeHtml(result.doctor_name || "")} has conflicts on ${escapeHtml(checkDate)}
+              </div>
+            `;
+            }
+          })
+          .catch(error => window.showAlert('Error checking availability: ' + error.message, 'error'));
+      };
+
+      window.saveEmergencySchedule = function () {
+        const form = document.getElementById('emergencyScheduleForm');
+        if (!form) return window.showAlert("emergencyScheduleForm not found", "error");
+
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+        data.is_emergency = true;
+
+        fetch('/add-emergency-schedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        })
+          .then(r => r.json())
+          .then(result => {
+            if (result.success) {
+              window.showAlert('Emergency schedule created successfully!', 'success');
+              bootstrap.Modal.getInstance(document.getElementById('emergencySchedulingModal'))?.hide();
+            } else {
+              window.showAlert(result.error || 'Error creating emergency schedule', 'error');
+            }
+          })
+          .catch(error => window.showAlert('Network error: ' + error.message, 'error'));
+      };
+
+      window.refreshDoctorSchedule = function () {
+        const doctorId = document.getElementById("scheduleDoctorSelect")?.value;
+        const weekStart = document.getElementById("scheduleWeekStart")?.value;
+        if (!doctorId || !weekStart) return;
+        loadWeeklySnapshot(doctorId, weekStart);
+        loadUpcoming(doctorId);
+      };
+
+      document.addEventListener("DOMContentLoaded", () => {
+        initDoctorScheduleSection();
+      });
+
+      function initDoctorScheduleSection() {
+        const doctorSelect = document.getElementById("scheduleDoctorSelect");
+        const weekStartInput = document.getElementById("scheduleWeekStart");
+        if (!doctorSelect || !weekStartInput) return;
+
+        weekStartInput.value = getMondayISO(new Date());
+
+        fetch(API.doctors)
+          .then(r => r.json())
+          .then(doctors => {
+            doctorSelect.innerHTML = `<option value="">Choose a doctor...</option>`;
+            doctors.forEach(d => {
+              doctorSelect.innerHTML += `<option value="${d.id}">${escapeHtml(d.name || d.full_name || "Doctor")}${d.specialization ? " - " + escapeHtml(d.specialization) : ""}</option>`;
+            });
+          })
+          .catch(err => {
+            console.error("Doctors load failed:", err);
+            doctorSelect.innerHTML = `<option value="">Failed to load doctors</option>`;
+          });
+
+        doctorSelect.addEventListener("change", () => {
+          const doctorId = doctorSelect.value;
+          const weekStart = weekStartInput.value;
+          if (!doctorId) {
+            setWeekEmpty();
+            setUpcomingEmpty("Select doctor to load upcoming schedule…");
+            return;
+          }
+          loadWeeklySnapshot(doctorId, weekStart);
+          loadUpcoming(doctorId);
+        });
+
+        weekStartInput.addEventListener("change", () => {
+          const doctorId = doctorSelect.value;
+          if (!doctorId) return;
+          loadWeeklySnapshot(doctorId, weekStartInput.value);
+        });
+      }
+
+      function loadWeeklySnapshot(doctorId, weekStart) {
+        setWeekLoading();
+        fetch(API.weekly(doctorId, weekStart))
+          .then(r => r.json())
+          .then(data => renderWeekSnapshot(data, weekStart))
+          .catch(err => {
+            console.error("Weekly snapshot failed:", err);
+            setWeekError("Failed to load weekly snapshot.");
+          });
+      }
+
+      function loadUpcoming(doctorId) {
+        setUpcomingEmpty("Loading…");
+        fetch(API.upcoming(doctorId))
+          .then(r => r.json())
+          .then(data => renderUpcoming(data))
+          .catch(err => {
+            console.error("Upcoming failed:", err);
+            setUpcomingEmpty("Failed to load upcoming schedules.");
+          });
+      }
+
+      function renderWeekSnapshot(data, weekStart) {
+        const body = document.getElementById("weekScheduleBody");
+        const weekRangeText = document.getElementById("weekRangeText");
+        if (!body || !weekRangeText) return;
+
+        const weekEnd = data.week_end || addDaysISO(weekStart, 6);
+        weekRangeText.textContent = `${weekStart} → ${weekEnd}`;
+
+        if (!data.days || data.days.length === 0) {
+          body.innerHTML = `<tr><td colspan="2" class="text-center text-muted py-4">No schedules for this week.</td></tr>`;
+          return;
+        }
+
+        body.innerHTML = data.days.map(d => {
+          const items = (d.items || []).map(it => {
+            const badgeClass =
+              (it.shift_type || "").toLowerCase().includes("morning") ? "bg-success" :
+                (it.shift_type || "").toLowerCase().includes("afternoon") ? "bg-warning text-dark" :
+                  (it.shift_type || "").toLowerCase().includes("evening") ? "bg-primary" :
+                    (it.shift_type || "").toLowerCase().includes("night") ? "bg-dark" :
+                      "bg-secondary";
+
+            return `
+            <div class="d-flex flex-wrap gap-2 align-items-center mb-1">
+              <span class="badge ${badgeClass}">${escapeHtml(it.shift_type || "Shift")}</span>
+              <span class="small fw-semibold">${escapeHtml(it.start_time || "")} - ${escapeHtml(it.end_time || "")}</span>
+              <span class="small text-muted">• Max ${escapeHtml(String(it.max_patients ?? ""))}</span>
+              ${it.is_available === 0 ? `<span class="badge bg-danger">Unavailable</span>` : ``}
+            </div>
+          `;
+          }).join("");
+
+          return `
+          <tr>
+            <td class="fw-bold text-teal">
+              ${escapeHtml(d.day || "")}<br>
+              <span class="text-muted small">${escapeHtml(d.date || "")}</span>
+            </td>
+            <td>${items || `<span class="text-muted">No shifts</span>`}</td>
+          </tr>
+        `;
+        }).join("");
+      }
+
+      function renderUpcoming(data) {
+        const box = document.getElementById("upcomingScheduleList");
+        if (!box) return;
+
+        const items = data.items || [];
+        if (items.length === 0) {
+          setUpcomingEmpty("No upcoming schedules found.");
+          return;
+        }
+
+        box.innerHTML = items.map(it => `
+        <div class="card mb-2 border-0" style="background:#f8fffe;">
+          <div class="card-body py-2">
+            <div class="d-flex justify-content-between">
+              <div class="fw-semibold">${escapeHtml(it.date || "")} <span class="text-muted">(${escapeHtml(it.day_of_week || "")})</span></div>
+              <span class="badge bg-teal">${escapeHtml(it.shift_type || "Shift")}</span>
+            </div>
+            <div class="small text-muted mt-1">
+              <i class="fa-solid fa-clock me-1"></i>${escapeHtml(it.start_time || "")} - ${escapeHtml(it.end_time || "")}
+            </div>
+            ${it.notes ? `<div class="small mt-1">${escapeHtml(it.notes)}</div>` : ``}
+          </div>
+        </div>
+      `).join("");
+      }
+
+      function setWeekLoading() {
+        const body = document.getElementById("weekScheduleBody");
+        if (body) body.innerHTML = `<tr><td colspan="2" class="text-center text-muted py-4">Loading…</td></tr>`;
+      }
+
+      function setWeekEmpty() {
+        const body = document.getElementById("weekScheduleBody");
+        const weekRangeText = document.getElementById("weekRangeText");
+        if (weekRangeText) weekRangeText.textContent = "Select doctor + week";
+        if (body) body.innerHTML = `<tr><td colspan="2" class="text-center text-muted py-4">No data loaded.</td></tr>`;
+      }
+
+      function setWeekError(msg) {
+        const body = document.getElementById("weekScheduleBody");
+        if (body) body.innerHTML = `<tr><td colspan="2" class="text-center text-danger py-4">${escapeHtml(msg)}</td></tr>`;
+      }
+
+      function setUpcomingEmpty(msg) {
+        const box = document.getElementById("upcomingScheduleList");
+        if (box) box.innerHTML = `<div class="text-muted text-center py-4">${escapeHtml(msg)}</div>`;
+      }
+
+      function getMondayISO(dateObj) {
+        const d = new Date(dateObj);
+        const day = d.getDay();
+        const diff = (day === 0 ? -6 : 1) - day;
+        d.setDate(d.getDate() + diff);
+        return d.toISOString().split("T")[0];
+      }
+
+      function addDaysISO(iso, days) {
+        const d = new Date(iso);
+        d.setDate(d.getDate() + days);
+        return d.toISOString().split("T")[0];
+      }
+
+      function escapeHtml(str) {
+        return String(str ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+    </script>
+    <script>
+      let doctorStatusTimer = null;
+      let doctorStatusCache = [];
+
+      window.openDoctorStatusModal = function () {
+        const modalEl = document.getElementById("doctorStatusModal");
+        if (!modalEl) return showAlert("doctorStatusModal not found", "error");
+
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+
+        loadDoctorStatus(true);
+
+        // auto refresh every 10 sec
+        clearInterval(doctorStatusTimer);
+        doctorStatusTimer = setInterval(() => loadDoctorStatus(false), 10000);
+
+        // stop timer when modal closes
+        modalEl.addEventListener("hidden.bs.modal", () => {
+          clearInterval(doctorStatusTimer);
+          doctorStatusTimer = null;
+        }, { once: true });
+
+        // search filter
+        const search = document.getElementById("doctorStatusSearch");
+        if (search) {
+          search.oninput = () => renderDoctorStatus(doctorStatusCache);
+        }
+      };
+
+      window.loadDoctorStatus = function (manual) {
+        fetch("/doctor-status")
+          .then(r => r.json())
+          .then(res => {
+            if (!res.success) {
+              if (manual) showAlert(res.error || "Failed to load doctor status", "error");
+              return;
+            }
+            doctorStatusCache = res.doctors || [];
+            document.getElementById("doctorStatusLastUpdate").textContent =
+              `${res.date} ${res.time}`;
+
+            renderDoctorStatus(doctorStatusCache);
+          })
+          .catch(err => {
+            if (manual) showAlert("Network error: " + err.message, "error");
+          });
+      };
+
+      function renderDoctorStatus(doctors) {
+        const tbody = document.getElementById("doctorStatusTbody");
+        if (!tbody) return;
+
+        const q = (document.getElementById("doctorStatusSearch")?.value || "").toLowerCase().trim();
+
+        const filtered = (doctors || []).filter(d => {
+          const name = (d.full_name || "").toLowerCase();
+          const dept = (d.department_name || "").toLowerCase();
+          return !q || name.includes(q) || dept.includes(q);
+        });
+
+        if (filtered.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-4">No doctors found.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = filtered.map((d, idx) => {
+          const status = d.status || "FREE";
+          const badge =
+            status === "BUSY" ? `<span class="badge bg-danger">BUSY</span>` :
+              status === "FREE" ? `<span class="badge bg-success">FREE</span>` :
+                `<span class="badge bg-secondary">INACTIVE</span>`;
+
+          const shifts = (d.today_shifts || []).map(s =>
+            `<span class="badge bg-light text-dark border me-1 mb-1">
+           ${escapeHtml(s.shift_type || "Shift")} • ${escapeHtml(s.start_time)}-${escapeHtml(s.end_time)}
+         </span>`
+          ).join("");
+
+          return `
+        <tr>
+          <td>${idx + 1}</td>
+          <td class="fw-semibold">${escapeHtml(d.full_name || "")}</td>
+          <td>${escapeHtml(d.department_name || "—")}</td>
+          <td>${escapeHtml(d.email || "—")}</td>
+          <td>${escapeHtml(d.phone || "—")}</td>
+          <td>${badge}</td>
+          <td>${shifts || `<span class="text-muted">No shifts today</span>`}</td>
+        </tr>
+      `;
+        }).join("");
+      }
+    </script>
+
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const scanBtn = document.getElementById('scanRfidBtn');
+    const uidInput = document.getElementById('rfidUidInput');
+    const scanStatus = document.getElementById('scanStatus');
+
+    if (!scanBtn || !uidInput) return;
+
+    const rfidModalEl = document.getElementById('rfidScanModal');
+    const serialModalEl = document.getElementById('serialPortModal');
+
+    const rfidModal = rfidModalEl ? new bootstrap.Modal(rfidModalEl) : null;
+    const serialModal = serialModalEl ? new bootstrap.Modal(serialModalEl) : null;
+
+    let interval = null;
+
+    function stop() {
+      if (interval) clearInterval(interval);
+      interval = null;
+    }
+
+    async function startScan() {
+      if (!window.__serialPortOpen) {
+        if (serialModal) serialModal.show();
+        return;
+      }
+
+      if (scanStatus) scanStatus.textContent = "Present your tag now...";
+      if (rfidModal) rfidModal.show();
+
+      uidInput.value = "";
+      uidInput.classList.remove('is-valid', 'is-invalid');
+      window.__latestUid = null;
+
+      // tell ESP32 to start scanning
+      if (window.__serialScanOn) {
+        await window.__serialScanOn();
+      }
+
+      let attempts = 0;
+      const maxAttempts = 50; // ~15 sec if interval = 300ms
+
+      stop();
+      interval = setInterval(async () => {
+        attempts++;
+
+        const uid = window.__latestUid;
+        if (uid && uid.trim()) {
+          uidInput.value = uid.trim();
+          uidInput.classList.add('is-valid');
+
+          if (scanStatus) scanStatus.textContent = "✅ Tag detected!";
+          window.__latestUid = null;
+
+          // stop scan on ESP32
+          if (window.__serialScanOff) {
+            await window.__serialScanOff();
+          }
+
+          setTimeout(() => rfidModal && rfidModal.hide(), 800);
+          stop();
+          return;
+        }
+
+        if (attempts >= maxAttempts) {
+          if (scanStatus) scanStatus.textContent = "❌ Timeout. Try again.";
+
+          if (window.__serialScanOff) {
+            await window.__serialScanOff();
+          }
+
+          setTimeout(() => rfidModal && rfidModal.hide(), 1000);
+          stop();
+        }
+      }, 300);
+    }
+
+    scanBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      startScan();
+    });
+
+    uidInput.addEventListener('click', function (e) {
+      e.preventDefault();
+      startScan();
+    });
+
+    rfidModalEl?.addEventListener('hidden.bs.modal', async () => {
+      stop();
+      if (window.__serialScanOff) {
+        await window.__serialScanOff();
+      }
+    });
+
+    window.addEventListener('beforeunload', stop);
+  });
+</script>
+    <!-- Quick Schedule Modal -->
+    <div class="modal fade" id="quickScheduleModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header bg-teal text-white">
+            <h5 class="modal-title">
+              <i class="fa-solid fa-calendar-plus me-2"></i>Quick Add Schedule
+            </h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <form id="quickScheduleForm">
+              <div class="row">
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">Doctor:</label>
+                  <select class="form-select" name="doctor_id" required>
+                    <option value="">Select Doctor</option>
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">Date:</label>
+                  <input type="date" class="form-control" name="schedule_date" required>
+                </div>
+              </div>
+              <div class="row mt-3">
+                <div class="col-md-4">
+                  <label class="form-label fw-semibold">Shift Type:</label>
+                  <select class="form-select" name="shift_type" required>
+                    <option value="">Select Shift</option>
+                    <option value="Morning">Morning (8AM-2PM)</option>
+                    <option value="Afternoon">Afternoon (2PM-8PM)</option>
+                    <option value="Evening">Evening (6PM-10PM)</option>
+                    <option value="Night">Night (10PM-6AM)</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label fw-semibold">Start Time:</label>
+                  <input type="time" class="form-control" name="start_time" required>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label fw-semibold">End Time:</label>
+                  <input type="time" class="form-control" name="end_time" required>
+                </div>
+              </div>
+              <div class="row mt-3">
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">Max Patients:</label>
+                  <input type="number" class="form-control" name="max_patients" value="20" min="1" max="100">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">Department:</label>
+                  <select class="form-select" name="department_id">
+                    <option value="">Select Department</option>
+                  </select>
+                </div>
+              </div>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-teal fw-semibold" onclick="saveQuickSchedule()">
+              <i class="fa-solid fa-save me-1"></i> Save Schedule
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Doctor Availability Check Modal -->
+    <div class="modal fade" id="doctorAvailabilityModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header bg-info text-white">
+            <h5 class="modal-title">
+              <i class="fa-solid fa-user-clock me-2"></i>Check Doctor Availability
+            </h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <form id="availabilityCheckForm">
+              <div class="row">
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">Doctor:</label>
+                  <select class="form-select" name="doctor_id" required>
+                    <option value="">Select Doctor</option>
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">Date:</label>
+                  <input type="date" class="form-control" name="check_date" required>
+                </div>
+              </div>
+            </form>
+            <div id="availabilityResults" class="mt-4"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            <button type="button" class="btn btn-info fw-semibold" onclick="checkDoctorAvailability()">
+              <i class="fa-solid fa-search me-1"></i> Check Availability
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Emergency Scheduling Modal -->
+    <div class="modal fade" id="emergencySchedulingModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header bg-danger text-white">
+            <h5 class="modal-title">
+              <i class="fa-solid fa-exclamation-triangle me-2"></i>Emergency Scheduling
+            </h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="alert alert-warning">
+              <i class="fa-solid fa-info-circle me-2"></i>
+              <strong>Emergency Scheduling:</strong> This will override existing schedules and create emergency slots.
+            </div>
+            <form id="emergencyScheduleForm">
+              <div class="row">
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">Available Doctor:</label>
+                  <select class="form-select" name="doctor_id" required>
+                    <option value="">Select Doctor</option>
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">Emergency Date:</label>
+                  <input type="date" class="form-control" name="emergency_date" required>
+                </div>
+              </div>
+              <div class="row mt-3">
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">Emergency Start Time:</label>
+                  <input type="time" class="form-control" name="emergency_start" required>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">Emergency End Time:</label>
+                  <input type="time" class="form-control" name="emergency_end" required>
+                </div>
+              </div>
+              <div class="mt-3">
+                <label class="form-label fw-semibold">Emergency Reason:</label>
+                <textarea class="form-control" name="emergency_reason" rows="3"
+                  placeholder="Describe the emergency situation..." required></textarea>
+              </div>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-danger fw-semibold" onclick="saveEmergencySchedule()">
+              <i class="fa-solid fa-exclamation-triangle me-1"></i> Create Emergency Schedule
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Doctor Status Modal -->
+    <div class="modal fade" id="doctorStatusModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header bg-teal text-white">
+            <h5 class="modal-title">
+              <i class="fa-solid fa-user-doctor me-2"></i>Doctor Status (Live)
+            </h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+
+          <div class="modal-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <div class="text-muted">
+                <span class="fw-semibold text-teal">Last update:</span>
+                <span id="doctorStatusLastUpdate">-</span>
+              </div>
+              <div class="d-flex gap-2">
+                <input type="text" id="doctorStatusSearch" class="form-control"
+                  placeholder="Search doctor / department..." style="max-width:320px;">
+                <button class="btn btn-outline-teal" type="button" onclick="loadDoctorStatus(true)">
+                  <i class="fa-solid fa-rotate me-1"></i>Refresh
+                </button>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="table table-bordered align-middle">
+                <thead class="table-teal">
+                  <tr>
+                    <th style="width:70px;">#</th>
+                    <th>Doctor</th>
+                    <th>Department</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th style="width:120px;">Status</th>
+                    <th>Today Shifts</th>
+                  </tr>
+                </thead>
+                <tbody id="doctorStatusTbody">
+                  <tr>
+                    <td colspan="7" class="text-center text-muted py-4">Loading…</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="small text-muted">
+              <i class="fa-solid fa-circle-info me-1"></i>
+              BUSY = current time is inside an active schedule slot. FREE = no active slot now.
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  </div>
+</body>
+
+</html>

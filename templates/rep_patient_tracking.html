@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patient Tracking - {{ hospital_name }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --accent-teal: #38b2ac;
+            --accent-teal-dark: #269d96;
+            --accent-teal-light: #4fd1c7;
+            --border-teal: #b2f5ea;
+            --bg-teal-light: #f0fdfa;
+            --            --text-main: #181c1d;
+            --text-muted: #4b5152;
+            --card-shadow: rgba(56, 178, 172, 0.1);
+        }
+
+        body {
+            background: #ffffff;
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .header-card {
+            background: var(--bg-teal-light);
+            border: 2px solid var(--border-teal);
+            border-radius: 12px;
+            box-shadow: 0 4px 20px var(--card-shadow);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            position: relative;
+        }
+
+        .header-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--accent-teal);
+            border-radius: 10px 10px 0 0;
+        }
+
+        .page-title {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--accent-teal-dark);
+            margin-bottom: 0.5rem;
+        }
+
+        .page-subtitle {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+            margin: 0;
+        }
+
+        .stats-card {
+            background: #ffffff;
+            border: 2px solid var(--border-teal);
+            border-radius: 10px;
+            padding: 1.5rem;
+            text-align: center;
+            box-shadow: 0 3px 15px var(--card-shadow);
+            transition: transform 0.2s;
+        }
+
+        .stats-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .stats-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--accent-teal);
+            margin-bottom: 0.5rem;
+        }
+
+        .stats-label {
+            color: var(--text-muted);
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .patient-card {
+            background: #ffffff;
+            border: 1px solid var(--border-teal);
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 12px var(--card-shadow);
+            transition: all 0.3s;
+        }
+
+        .patient-card:hover {
+            border-color: var(--accent-teal);
+            box-shadow: 0 4px 20px var(--card-shadow);
+            transform: translateY(-1px);
+        }
+
+        .patient-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-teal);
+        }
+
+        .patient-name {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--accent-teal-dark);
+            margin: 0;
+        }
+
+        .patient-id {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .activity-badge {
+            padding: 0.3rem 0.8rem;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            background: var(--accent-teal);
+            color: white;
+            margin-right: 0.5rem;
+        }
+
+        .status-badge {
+            padding: 0.3rem 0.7rem;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-active {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #6ee7b7;
+        }
+
+        .status-inactive {
+            background: #fecaca;
+            color: #991b1b;
+            border: 1px solid #f87171;
+        }
+
+        .patient-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .info-item {
+            display: flex;
+            align-items: center;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        .info-item i {
+            color: var(--accent-teal);
+            margin-right: 0.5rem;
+            width: 16px;
+        }
+
+        .activity-section {
+            background: var(--bg-teal-light);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .activity-title {
+            color: var(--accent-teal-dark);
+            font-weight: 600;
+            margin-bottom: 0.8rem;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .activity-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .hierarchy-section {
+            background: linear-gradient(135deg, var(--bg-teal-light), #ffffff);
+            border: 1px solid var(--border-teal);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+
+        .hierarchy-title {
+            color: var(--accent-teal-dark);
+            font-weight: 600;
+            margin-bottom: 0.8rem;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .hierarchy-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .hierarchy-icon {
+            color: var(--accent-teal);
+            margin-right: 0.5rem;
+            width: 16px;
+        }
+
+        .back-btn {
+            background: var(--accent-teal);
+            color: white;
+            border: none;
+            padding: 0.7rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .back-btn:hover {
+            background: var(--accent-teal-dark);
+            color: white;
+            transform: translateY(-1px);
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-muted);
+        }
+
+        .no-data i {
+            font-size: 4rem;
+            color: var(--border-teal);
+            margin-bottom: 1rem;
+        }
+
+        @media (max-width: 768px) {
+            .container-fluid {
+                padding: 1rem;
+            }
+            
+            .patient-info {
+                grid-template-columns: 1fr;
+            }
+            
+            .patient-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+
+            .activity-row {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid py-4">
+        <!-- Header -->
+        <div class="header-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="page-title">
+                        <i class="bi bi-person-plus-fill me-2"></i>Patient Tracking
+                    </h1>
+                    <p class="page-subtitle">
+                        <i class="bi bi-building me-2"></i>{{ hospital_name }} - Complete Patient Management Flow
+                    </p>
+                </div>
+                <a href="{{ url_for('rep_dashboard') }}" class="back-btn">
+                    <i class="bi bi-arrow-left"></i>Back to Dashboard
+                </a>
+            </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="row mb-4">
+            <div class="col-md-3 mb-3">
+                <div class="stats-card">
+                    <div class="stats-number">{{ patients_data|length }}</div>
+                    <div class="stats-label">Total Patients</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stats-card">
+                    <div class="stats-number">{{ patients_data|selectattr('vitals_count', 'greaterthan', 0)|list|length }}</div>
+                    <div class="stats-label">With Vitals</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stats-card">
+                    <div class="stats-number">{{ patients_data|selectattr('consultation_count', 'greaterthan', 0)|list|length }}</div>
+                    <div class="stats-label">Consulted</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stats-card">
+                    <div class="stats-number">{{ patients_data|selectattr('gender', 'equalto', 'Female')|list|length }}</div>
+                    <div class="stats-label">Female Patients</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Patient List -->
+        {% if patients_data %}
+            {% for patient in patients_data %}
+            <div class="patient-card">
+                <div class="patient-header">
+                    <div>
+                        <h3 class="patient-name">{{ patient.patient_name }}</h3>
+                        <div class="patient-id">Patient ID: #{{ patient.patient_id }}</div>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        {% if patient.vitals_count > 0 %}
+                            <span class="activity-badge">{{ patient.vitals_count }} Vitals</span>
+                        {% endif %}
+                        {% if patient.consultation_count > 0 %}
+                            <span class="activity-badge">{{ patient.consultation_count }} Consultations</span>
+                        {% endif %}
+                        <div class="text-muted small">
+                            <i class="bi bi-calendar me-1"></i>
+                            Registered: {{ patient.patient_created_at.strftime('%d-%m-%Y') if patient.patient_created_at else 'N/A' }}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="patient-info">
+                    {% if patient.age %}
+                    <div class="info-item">
+                        <i class="bi bi-calendar-heart"></i>
+                        <strong>Age:</strong>&nbsp;{{ patient.age }} years
+                    </div>
+                    {% endif %}
+                    {% if patient.gender %}
+                    <div class="info-item">
+                        <i class="bi bi-person"></i>
+                        <strong>Gender:</strong>&nbsp;{{ patient.gender }}
+                    </div>
+                    {% endif %}
+                    {% if patient.phone %}
+                    <div class="info-item">
+                        <i class="bi bi-phone"></i>
+                        <strong>Phone:</strong>&nbsp;{{ patient.phone }}
+                    </div>
+                    {% endif %}
+                    {% if patient.email %}
+                    <div class="info-item">
+                        <i class="bi bi-envelope"></i>
+                        <strong>Email:</strong>&nbsp;{{ patient.email }}
+                    </div>
+                    {% endif %}
+                    {% if patient.rfid_uid %}
+                    <div class="info-item">
+                        <i class="bi bi-credit-card-2-front"></i>
+                        <strong>RFID:</strong>&nbsp;{{ patient.rfid_uid }}
+                    </div>
+                    {% endif %}
+                    <div class="info-item">
+                        <i class="bi bi-person-badge"></i>
+                        <strong>Added by:</strong>&nbsp;{{ patient.added_by_staff }} ({{ patient.added_by_role }})
+                        <span class="status-badge ms-2 {{ 'status-active' if patient.staff_is_active else 'status-inactive' }}">
+                            {{ 'Active' if patient.staff_is_active else 'Inactive' }}
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Recent Activity -->
+                {% if patient.vitals_count > 0 or patient.consultation_count > 0 %}
+                <div class="activity-section">
+                    <div class="activity-title">Recent Medical Activity</div>
+                    {% if patient.last_vitals_by %}
+                    <div class="activity-row">
+                        <span><i class="bi bi-heart-pulse me-2"></i><strong>Latest Vitals:</strong> {{ patient.last_vitals_by }}</span>
+                        <span class="text-muted">{{ patient.last_vitals_date.strftime('%d-%m-%Y %H:%M') if patient.last_vitals_date else '' }}</span>
+                    </div>
+                    {% endif %}
+                    {% if patient.last_consultation_by %}
+                    <div class="activity-row">
+                        <span><i class="bi bi-stethoscope me-2"></i><strong>Latest Consultation:</strong> {{ patient.last_consultation_by }}</span>
+                        <span class="text-muted">{{ patient.last_consultation_date.strftime('%d-%m-%Y %H:%M') if patient.last_consultation_date else '' }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <div class="hierarchy-section">
+                    <div class="hierarchy-title">Management Chain</div>
+                    <div class="hierarchy-item">
+                        <i class="bi bi-person-badge hierarchy-icon"></i>
+                        <strong>Representative:</strong> {{ patient.created_by_rep or 'N/A' }}
+                    </div>
+                    <div class="hierarchy-item">
+                        <i class="bi bi-person-gear hierarchy-icon"></i>
+                        <strong>HR Manager:</strong> {{ patient.created_by_hr or 'N/A' }}
+                        {% if patient.hr_email %}
+                            <span class="text-muted ms-2">({{ patient.hr_email }})</span>                        {% endif %}
+                        <span class="status-badge ms-2 {{ 'status-active' if patient.hr_is_active else 'status-inactive' }}">
+                            {{ 'Active' if patient.hr_is_active else 'Inactive' }}
+                        </span>
+                    </div>
+                    <div class="hierarchy-item">
+                        <i class="bi bi-person-check hierarchy-icon"></i>
+                        <strong>Department Admin:</strong> {{ patient.managed_by_admin or 'N/A' }}
+                        {% if patient.admin_email %}
+                            <span class="text-muted ms-2">({{ patient.admin_email }})</span>
+                        {% endif %}
+                        <span class="status-badge ms-2 {{ 'status-active' if patient.admin_is_active else 'status-inactive' }}">
+                            {{ 'Active' if patient.admin_is_active else 'Inactive' }}
+                        </span>
+                    </div>
+                    <div class="hierarchy-item">
+                        <i class="bi bi-person-fill hierarchy-icon"></i>
+                        <strong>Staff Member:</strong> {{ patient.added_by_staff or 'N/A' }}
+                        {% if patient.staff_email %}
+                            <span class="text-muted ms-2">({{ patient.staff_email }})</span>
+                        {% endif %}
+                        {% if patient.staff_department %}
+                            <span class="text-muted ms-2">[{{ patient.staff_department }}]</span>
+                        {% endif %}
+                        <span class="status-badge ms-2 {{ 'status-active' if patient.staff_is_active else 'status-inactive' }}">
+                            {{ 'Active' if patient.staff_is_active else 'Inactive' }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="no-data">
+                <i class="bi bi-person-plus"></i>
+                <h3>No Patients Found</h3>
+                <p>No patients have been registered in this hospital yet.</p>
+            </div>
+        {% endif %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Add some interactivity
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add click animation to cards
+            const cards = document.querySelectorAll('.patient-card');
+            cards.forEach(card => {
+                card.addEventListener('click', function(e) {
+                    // Prevent animation on button clicks
+                    if (!e.target.closest('a, button')) {
+                        this.style.transform = 'scale(0.98)';
+                        setTimeout(() => {
+                            this.style.transform = '';
+                        }, 100);
+                    }
+                });
+            });
+
+            // Add tooltip functionality for truncated text
+            const infoItems = document.querySelectorAll('.info-item');
+            infoItems.forEach(item => {
+                if (item.scrollWidth > item.clientWidth) {
+                    item.title = item.textContent.trim();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

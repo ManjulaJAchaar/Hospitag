@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>My Consultancy Records</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body {background:#f7fafa;font-family:'Segoe UI',Arial,sans-serif;}
+    .header{background:#009688;color:#fff;padding:15px 20px;display:flex;justify-content:space-between;align-items:center;}
+    .header h3{margin:0;font-weight:600;}
+    .table thead th{background:#009688;color:#fff;font-size:0.85rem;text-align:center;}
+    .table td{font-size:0.8rem;vertical-align:middle;}
+    .text-truncate-30{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .badge-datetime{background:#17a2b8;color:#fff;font-size:0.75rem;}
+  </style>
+</head>
+
+<body>
+  <div class="header">
+    <h3><i class="bi bi-clipboard-data"></i> My Consultancy Records ({{ records|length }} total)</h3>
+    <a href="{{ url_for('doctor_dashboard') }}" class="btn btn-light"><i class="bi bi-arrow-left"></i> Back to Dashboard</a>
+  </div>
+
+  <div class="container-fluid mt-4">
+    <div class="table-responsive">
+      <table class="table table-bordered table-striped table-hover align-middle">
+        <thead>
+          <tr>
+            <th>SL No.</th>
+            <th>Patient Name</th>
+            <th>Patient ID</th>
+            <th>Chief Complaint</th>
+            <th>Diagnosis</th>
+            <th>Prescription</th>
+            <th>Additional Notes</th>
+            <th>Appointment Date/Time</th>
+            <th>Created On</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in records %}
+          <tr>
+            <td class="text-center fw-bold">{{ loop.index }}</td>
+            <td class="fw-bold text-primary">{{ c.patient_name or 'Unknown Patient' }}</td>
+            <td class="text-center">{{ c.patient_id }}</td>
+            <td class="text-truncate-30" title="{{ c.chief_complaint or '' }}">
+              {{ c.chief_complaint or '-' }}
+            </td>
+            <td class="text-truncate-30" title="{{ c.diagnosis or '' }}">
+              {{ c.diagnosis or '-' }}
+            </td>
+            <td class="text-truncate-30" title="{{ c.prescription or '' }}">
+              {{ c.prescription or '-' }}
+            </td>
+            <td class="text-truncate-30" title="{{ c.additional_notes or '' }}">
+              {{ c.additional_notes or '-' }}
+            </td>
+            <td class="text-center">
+              {% if c.appointment_datetime %}
+                <span class="badge badge-datetime">{{ c.appointment_datetime.strftime('%d/%m/%Y') }}</span><br>
+                <small>{{ c.appointment_datetime.strftime('%I:%M %p') }}</small>
+              {% else %}
+                <span class="text-muted">Not Set</span>
+              {% endif %}
+            </td>
+            <td class="text-center">
+              {% if c.created_at %}
+                <span class="badge bg-success">{{ c.created_at.strftime('%d/%m/%Y') }}</span><br>
+                <small class="text-muted">{{ c.created_at.strftime('%I:%M %p') }}</small>
+              {% else %}
+                <span class="text-muted">Unknown</span>
+              {% endif %}
+            </td>
+            <td class="text-center">
+              <div class="btn-group" role="group">
+                <a href="{{ url_for('view_consultancy_details', id=c.id) }}" 
+                   class="btn btn-sm btn-info" title="View Full Details">
+                  <i class="bi bi-eye"></i>
+                </a>
+                <a href="{{ url_for('edit_consultancy', id=c.id) }}" 
+                   class="btn btn-sm btn-primary" title="Edit Record">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                <a href="{{ url_for('delete_consultancy', id=c.id) }}" 
+                   class="btn btn-sm btn-danger" title="Delete Record"
+                   onclick="return confirm('Delete this consultancy record permanently?\\n\\nPatient: {{ c.patient_name }}\\nCreated: {{ c.created_at.strftime('%d/%m/%Y %I:%M %p') if c.created_at else 'Unknown' }}')">
+                  <i class="bi bi-trash"></i>
+                </a>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="10" class="text-center text-muted py-4">
+              <i class="bi bi-clipboard-x fs-1 text-muted"></i><br>
+              <strong>No consultancy records found.</strong><br>
+              <small>Start by scanning a patient and filling out a consultancy form.</small>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</body>
+</html>

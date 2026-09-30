@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Add HSN</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --teal-50: #f0fdfa;
+      --teal-100: #ccfbf1;
+      --teal-200: #99f6e4;
+      --teal-300: #5eead4;
+      --teal-400: #2dd4bf;
+      --teal-500: #14b8a6;
+      --teal-600: #0d9488;
+      --teal-700: #0f766e;
+      --teal-800: #115e59;
+      --teal-900: #134e4a;
+    }
+
+    body {
+      background: linear-gradient(135deg, var(--teal-50) 0%, #f8fafc 100%);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      min-height: 100vh;
+    }
+
+    .main-container {
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    .header-section {
+      background: linear-gradient(135deg, var(--teal-600) 0%, var(--teal-700) 100%);
+      color: white;
+      padding: 2rem;
+      border-radius: 12px 12px 0 0;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+
+    .header-title {
+      font-size: 1.75rem;
+      font-weight: 600;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .header-subtitle {
+      opacity: 0.9;
+      margin-top: 0.5rem;
+      font-size: 0.95rem;
+    }
+
+    .main-card {
+      background: white;
+      border-radius: 0 0 12px 12px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+      border: none;
+      overflow: hidden;
+    }
+
+    .card-body {
+      padding: 2.5rem;
+    }
+
+    .form-section {
+      margin-bottom: 2rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .form-section:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .section-title {
+      color: var(--teal-700);
+      font-weight: 600;
+      font-size: 1.1rem;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .form-label {
+      font-weight: 500;
+      color: #374151;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .required-asterisk {
+      color: #dc2626;
+      font-weight: bold;
+    }
+
+    .form-control {
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      font-size: 0.95rem;
+      transition: all 0.2s ease;
+      background-color: #fafafa;
+    }
+
+    .form-control:focus {
+      border-color: var(--teal-400);
+      box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.1);
+      background-color: white;
+      outline: none;
+    }
+
+    .input-group {
+      position: relative;
+    }
+
+    .input-icon {
+      position: absolute;
+      left: 1rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--teal-500);
+      z-index: 5;
+      pointer-events: none;
+    }
+
+    .form-control.has-icon {
+      padding-left: 2.75rem;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--teal-500) 0%, var(--teal-600) 100%);
+      border: none;
+      border-radius: 8px;
+      padding: 0.75rem 2rem;
+      font-weight: 500;
+      font-size: 1rem;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      margin-right: 0.75rem;
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, var(--teal-600) 0%, var(--teal-700) 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 8px -1px rgba(0, 0, 0, 0.15);
+    }
+
+    .btn-outline-secondary {
+      border: 2px solid var(--teal-200);
+      color: var(--teal-700);
+      border-radius: 8px;
+      padding: 0.75rem 1.5rem;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      background: white;
+    }
+
+    .btn-outline-secondary:hover {
+      background: var(--teal-50);
+      border-color: var(--teal-300);
+      color: var(--teal-800);
+    }
+
+    .form-text {
+      color: #6b7280;
+      font-size: 0.875rem;
+      margin-top: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .info-card {
+      background: linear-gradient(135deg, var(--teal-50) 0%, #f0f9ff 100%);
+      border: 1px solid var(--teal-200);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .info-card h6 {
+      color: var(--teal-700);
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .info-card ul {
+      margin: 0;
+      padding-left: 1.25rem;
+      color: #374151;
+    }
+
+    .info-card li {
+      margin-bottom: 0.25rem;
+      font-size: 0.875rem;
+    }
+
+    .tax-preview {
+      background: var(--teal-50);
+      border: 1px solid var(--teal-200);
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      margin-top: 0.5rem;
+      font-size: 0.875rem;
+      color: var(--teal-700);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .actions-section {
+      border-top: 1px solid #e5e7eb;
+      padding-top: 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .form-validation {
+      margin-top: 0.25rem;
+      font-size: 0.875rem;
+    }
+
+    .is-valid {
+      border-color: #10b981;
+    }
+
+    .is-invalid {
+      border-color: #ef4444;
+    }
+
+    .valid-feedback {
+      color: #10b981;
+    }
+
+    .invalid-feedback {
+      color: #ef4444;
+    }
+
+    @media (max-width: 768px) {
+      .card-body {
+        padding: 1.5rem;
+      }
+      
+      .header-section {
+        padding: 1.5rem;
+      }
+      
+      .header-title {
+        font-size: 1.5rem;
+      }
+
+      .actions-section {
+        flex-direction: column;
+        gap: 0.75rem;
+        align-items: stretch;
+      }
+
+      .btn-primary, .btn-outline-secondary {
+        width: 100%;
+        margin-right: 0;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container py-4">
+    <div class="main-container">
+      <!-- Header Section -->
+      <div class="header-section">
+        <h1 class="header-title">
+          <i class="fas fa-tags"></i>
+          Add HSN Code
+        </h1>
+        <p class="header-subtitle mb-0">Configure tax settings for harmonized system nomenclature</p>
+      </div>
+
+      <!-- Main Card -->
+      <div class="main-card">
+        <div class="card-body">
+          <!-- Info Card -->
+          <div class="info-card">
+            <h6>
+              <i class="fas fa-info-circle"></i>
+              HSN Code Guidelines
+            </h6>
+            <ul>
+              <li>HSN codes should be 4, 6, or 8 digits as per GST requirements</li>
+              <li>Tax percentage will be applied to all items with this HSN code</li>
+              <li>Common GST rates: 0%, 5%, 12%, 18%, 28%</li>
+            </ul>
+          </div>
+
+          <form method="POST" id="hsnForm" novalidate>
+            <!-- HSN Details Section -->
+            <div class="form-section">
+              <h5 class="section-title">
+                <i class="fas fa-barcode"></i>
+                HSN Details
+              </h5>
+
+              <!-- HSN Code -->
+              <div class="mb-4">
+                <label class="form-label">
+                  <i class="fas fa-hashtag"></i>
+                  HSN Code <span class="required-asterisk">*</span>
+                </label>
+                <div class="input-group">
+                  <div class="input-icon">
+                    <i class="fas fa-barcode"></i>
+                  </div>
+                  <input 
+                    class="form-control has-icon" 
+                    name="hsn_code" 
+                    id="hsn_code"
+                    placeholder="e.g., 3004, 300420, 30042010"
+                    pattern="[0-9]{4,8}"
+                    required
+                  >
+                  <div class="invalid-feedback">
+                    Please enter a valid HSN code (4-8 digits)
+                  </div>
+                  <div class="valid-feedback">
+                    Valid HSN code format
+                  </div>
+                </div>
+                <div class="form-text">
+                  <i class="fas fa-lightbulb"></i>
+                  Enter 4, 6, or 8 digit HSN code as per GST classification
+                </div>
+              </div>
+
+              <!-- Description -->
+              <div class="mb-4">
+                <label class="form-label">
+                  <i class="fas fa-align-left"></i>
+                  Description
+                </label>
+                <div class="input-group">
+                  <div class="input-icon">
+                    <i class="fas fa-file-text"></i>
+                  </div>
+                  <input 
+                    class="form-control has-icon" 
+                    name="description"
+                    id="description"
+                    placeholder="Brief description of goods/services"
+                    maxlength="255"
+                  >
+                </div>
+                <div class="form-text">
+                  <i class="fas fa-info-circle"></i>
+                  Optional: Describe the category of items for this HSN code
+                </div>
+              </div>
+            </div>
+
+            <!-- Tax Configuration Section -->
+            <div class="form-section">
+              <h5 class="section-title">
+                <i class="fas fa-percentage"></i>
+                Tax Configuration
+              </h5>
+
+              <!-- Tax Percent -->
+              <div class="mb-4">
+                <label class="form-label">
+                  <i class="fas fa-calculator"></i>
+                  Tax Percentage <span class="required-asterisk">*</span>
+                </label>
+                <div class="input-group">
+                  <div class="input-icon">
+                    <i class="fas fa-percentage"></i>
+                  </div>
+                  <input 
+                    class="form-control has-icon" 
+                    name="tax_percent" 
+                    id="tax_percent"
+                    type="number" 
+                    step="0.01" 
+                    value="0"
+                    min="0"
+                    max="100"
+                    placeholder="0.00"
+                    required
+                  >
+                  <div class="invalid-feedback">
+                    Please enter a valid tax percentage (0-100)
+                  </div>
+                  <div class="valid-feedback">
+                    Valid tax percentage
+                  </div>
+                </div>
+                <div class="tax-preview" id="taxPreview" style="display: none;">
+                  <i class="fas fa-eye"></i>
+                  <span id="taxPreviewText"></span>
+                </div>
+                <div class="form-text">
+                  <i class="fas fa-coins"></i>
+                  Common GST rates: 0%, 5%, 12%, 18%, 28%
+                </div>
+              </div>
+
+              <!-- Quick Tax Rate Buttons -->
+              <div class="mb-4">
+                <label class="form-label">
+                  <i class="fas fa-mouse-pointer"></i>
+                  Quick Select Common Rates
+                </label>
+                <div class="d-flex gap-2 flex-wrap">
+                  <button type="button" class="btn btn-sm btn-outline-secondary tax-quick-btn" data-rate="0">0%</button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary tax-quick-btn" data-rate="5">5%</button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary tax-quick-btn" data-rate="12">12%</button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary tax-quick-btn" data-rate="18">18%</button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary tax-quick-btn" data-rate="28">28%</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Actions Section -->
+                        <div class="actions-section">
+              <div class="d-flex align-items-center text-muted">
+                <i class="fas fa-shield-alt me-2"></i>
+                <small>All changes are saved securely</small>
+              </div>
+              <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                  <i class="fas fa-save me-2"></i>
+                  Save HSN Code
+                </button>
+                <a class="btn btn-outline-secondary" href="{{ url_for('pharmacy_hsn_tax_list') }}">
+                  <i class="fas fa-times me-2"></i>
+                  Cancel
+                </a>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Additional Help Section -->
+      <div class="mt-4">
+        <div class="info-card">
+          <h6>
+            <i class="fas fa-question-circle"></i>
+            Need Help?
+          </h6>
+          <div class="row">
+            <div class="col-md-6 mb-2">
+              <small class="d-flex align-items-center">
+                <i class="fas fa-book me-2 text-muted"></i>
+                <a href="#" class="text-decoration-none" style="color: var(--teal-700);">HSN Code Reference</a>
+              </small>
+            </div>
+            <div class="col-md-6 mb-2">
+              <small class="d-flex align-items-center">
+                <i class="fas fa-calculator me-2 text-muted"></i>
+                <a href="#" class="text-decoration-none" style="color: var(--teal-700);">GST Rate Calculator</a>
+              </small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Enhanced JavaScript -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const form = document.getElementById('hsnForm');
+      const hsnCodeInput = document.getElementById('hsn_code');
+      const taxPercentInput = document.getElementById('tax_percent');
+      const descriptionInput = document.getElementById('description');
+      const taxPreview = document.getElementById('taxPreview');
+      const taxPreviewText = document.getElementById('taxPreviewText');
+      const quickTaxButtons = document.querySelectorAll('.tax-quick-btn');
+
+      // HSN Code validation
+      hsnCodeInput.addEventListener('input', function() {
+        const value = this.value.trim();
+        const isValid = /^[0-9]{4,8}$/.test(value);
+        
+        if (value === '') {
+          this.classList.remove('is-valid', 'is-invalid');
+        } else if (isValid) {
+          this.classList.remove('is-invalid');
+          this.classList.add('is-valid');
+        } else {
+          this.classList.remove('is-valid');
+          this.classList.add('is-invalid');
+        }
+      });
+
+      // Tax percentage validation and preview
+      taxPercentInput.addEventListener('input', function() {
+        const value = parseFloat(this.value);
+        const isValid = !isNaN(value) && value >= 0 && value <= 100;
+        
+        if (this.value === '') {
+          this.classList.remove('is-valid', 'is-invalid');
+          taxPreview.style.display = 'none';
+        } else if (isValid) {
+          this.classList.remove('is-invalid');
+          this.classList.add('is-valid');
+          updateTaxPreview(value);
+        } else {
+          this.classList.remove('is-valid');
+          this.classList.add('is-invalid');
+          taxPreview.style.display = 'none';
+        }
+      });
+
+      // Update tax preview
+      function updateTaxPreview(percentage) {
+        if (percentage >= 0) {
+          const sampleAmount = 1000;
+          const taxAmount = (sampleAmount * percentage) / 100;
+          const totalAmount = sampleAmount + taxAmount;
+          
+          taxPreviewText.textContent = `Example: ₹${sampleAmount} + ${percentage}% tax = ₹${totalAmount.toFixed(2)}`;
+          taxPreview.style.display = 'flex';
+        } else {
+          taxPreview.style.display = 'none';
+        }
+      }
+
+      // Quick tax rate buttons
+      quickTaxButtons.forEach(button => {
+        button.addEventListener('click', function() {
+          const rate = this.getAttribute('data-rate');
+          taxPercentInput.value = rate;
+          taxPercentInput.dispatchEvent(new Event('input'));
+          
+          // Visual feedback
+          quickTaxButtons.forEach(btn => btn.classList.remove('btn-primary'));
+          quickTaxButtons.forEach(btn => btn.classList.add('btn-outline-secondary'));
+          this.classList.remove('btn-outline-secondary');
+          this.classList.add('btn-primary');
+          
+          setTimeout(() => {
+            this.classList.remove('btn-primary');
+            this.classList.add('btn-outline-secondary');
+          }, 1500);
+        });
+      });
+
+      // Form validation
+      form.addEventListener('submit', function(e) {
+        const hsnCode = hsnCodeInput.value.trim();
+        const taxPercent = parseFloat(taxPercentInput.value);
+        
+        let isValid = true;
+        
+        // HSN Code validation
+        if (!hsnCode || !/^[0-9]{4,8}$/.test(hsnCode)) {
+          hsnCodeInput.classList.add('is-invalid');
+          isValid = false;
+        }
+        
+        // Tax percentage validation
+        if (isNaN(taxPercent) || taxPercent < 0 || taxPercent > 100) {
+          taxPercentInput.classList.add('is-invalid');
+          isValid = false;
+        }
+        
+        if (!isValid) {
+          e.preventDefault();
+          
+          // Show error alert
+          const alertDiv = document.createElement('div');
+          alertDiv.className = 'alert alert-danger alert-dismissible fade show';
+          alertDiv.innerHTML = `
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            Please correct the errors in the form before submitting.
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          `;
+          
+          form.insertBefore(alertDiv, form.firstChild);
+          
+          // Scroll to first error
+          const firstError = form.querySelector('.is-invalid');
+          if (firstError) {
+            firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            firstError.focus();
+          }
+        } else {
+          // Show loading state
+          const submitBtn = form.querySelector('button[type="submit"]');
+          submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
+          submitBtn.disabled = true;
+        }
+      });
+
+      // Auto-format HSN code (remove non-numeric characters)
+      hsnCodeInput.addEventListener('input', function() {
+        this.value = this.value.replace(/[^0-9]/g, '');
+      });
+
+      // Character counter for description
+      descriptionInput.addEventListener('input', function() {
+        const maxLength = 255;
+        const currentLength = this.value.length;
+        const remaining = maxLength - currentLength;
+        
+        let counterDiv = this.parentNode.querySelector('.character-counter');
+        if (!counterDiv) {
+          counterDiv = document.createElement('div');
+          counterDiv.className = 'character-counter form-text mt-1';
+          this.parentNode.appendChild(counterDiv);
+        }
+        
+        counterDiv.innerHTML = `
+          <i class="fas fa-keyboard me-1"></i>
+          ${currentLength}/${maxLength} characters
+          ${remaining < 20 ? `<span class="text-warning">(${remaining} remaining)</span>` : ''}
+        `;
+        
+        if (remaining < 0) {
+          this.classList.add('is-invalid');
+          counterDiv.innerHTML = `<i class="fas fa-exclamation-triangle me-1"></i><span class="text-danger">Exceeded by ${Math.abs(remaining)} characters</span>`;
+        } else {
+          this.classList.remove('is-invalid');
+        }
+      });
+
+      // Auto-save to localStorage
+      const formElements = [hsnCodeInput, taxPercentInput, descriptionInput];
+      
+      formElements.forEach(element => {
+        // Load saved value
+        const savedValue = localStorage.getItem(`hsnForm_${element.name}`);
+        if (savedValue && element.name !== 'hsn_code') { // Don't auto-load HSN code for security
+          element.value = savedValue;
+          element.dispatchEvent(new Event('input'));
+        }
+        
+        // Save on change
+        element.addEventListener('input', function() {
+          localStorage.setItem(`hsnForm_${this.name}`, this.value);
+        });
+      });
+
+      // Clear saved data on successful submit
+      form.addEventListener('submit', function() {
+        if (form.checkValidity()) {
+          setTimeout(() => {
+            formElements.forEach(element => {
+              localStorage.removeItem(`hsnForm_${element.name}`);
+            });
+          }, 1000);
+        }
+      });
+
+      // Keyboard shortcuts
+      document.addEventListener('keydown', function(e) {
+        // Ctrl+S to save
+        if (e.ctrlKey && e.key === 's') {
+          e.preventDefault();
+          form.dispatchEvent(new Event('submit'));
+        }
+        
+        // Escape to cancel
+        if (e.key === 'Escape') {
+          const cancelBtn = form.querySelector('a[href*="hsn_tax_list"]');
+          if (cancelBtn) {
+            window.location.href = cancelBtn.href;
+          }
+        }
+      });
+
+      // Initialize tooltips
+      const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+      const tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+      });
+
+      // Focus first input on load
+      setTimeout(() => {
+        hsnCodeInput.focus();
+      }, 100);
+    });
+  </script>
+</body>
+</html>

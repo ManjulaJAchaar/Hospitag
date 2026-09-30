@@ -1,0 +1,73 @@
+/* ---------- GLOBAL COLORS ---------- */
+
+body {
+    background-color: #e0f2f2 !important;
+}
+
+/* ---------- TEAL BUTTONS ---------- */
+
+.btn-teal {
+    background-color: #008080 !important;
+    color: white !important;
+    border: none !important;
+}
+
+.btn-teal:hover {
+    background-color: #005f5f !important;
+    color: white !important;
+}
+
+/* Outline button */
+.btn-teal-outline {
+    border: 2px solid #008080 !important;
+    color: #008080 !important;
+    background: transparent !important;
+}
+
+.btn-teal-outline:hover {
+    background-color: #008080 !important;
+    color: white !important;
+}
+
+/* ----------- NAVBAR ---------- */
+
+.navbar-teal {
+    background-color: #008080 !important;
+}
+
+.navbar-teal .navbar-brand,
+.navbar-teal a {
+    color: white !important;
+}
+
+/* ---------- CARDS ---------- */
+
+.card {
+    border-radius: 10px;
+    border: 1px solid #33a1a1 !important;
+}
+
+.card-title {
+    color: #005f5f !important;
+}
+
+/* ---------- TABLE ---------- */
+
+table th {
+    background-color: #008080 !important;
+    color: white !important;
+}
+
+table tr:hover {
+    background-color: #f0ffff !important;
+}
+
+/* ---------- LINKS ---------- */
+
+a {
+    color: #005f5f !important;
+}
+
+a:hover {
+    color: #003d3d !important;
+}

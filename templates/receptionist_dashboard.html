@@ -1,0 +1,1487 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="login-nonce" content="{{ session.get('login_nonce', '') }}">
+  <title>Receptionist - Add Patient</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    :root {
+      --teal: #009688;
+      --teal-light: #e0f7fa;
+      --teal-dark: #00796b;
+      --teal-card: #26a69a;
+      --gray-bg: #f7f9fc;
+      --shadow: 0 4px 12px rgba(0, 150, 136, 0.12);
+      --border-radius: 14px;
+    }
+
+    body {
+      background: var(--gray-bg);
+      color: #1a242f;
+    }
+
+    .card {
+      border-radius: var(--border-radius);
+      box-shadow: var(--shadow);
+      background: #fff;
+    }
+
+    .dashboard-header {
+      background: linear-gradient(90deg, var(--teal) 65%, var(--teal-light) 100%);
+      color: #fff;
+      border-radius: var(--border-radius);
+      box-shadow: var(--shadow);
+      padding: 22px 30px 16px 30px;
+      margin-bottom: 24px;
+    }
+
+    .dashboard-header h3 {
+      color: #fff;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .dashboard-header p {
+      color: #ecfeff;
+    }
+
+    .dropdown .btn {
+      background: var(--teal-light);
+      color: var(--teal-dark);
+      border: none;
+    }
+
+    .form-label {
+      color: var(--teal-dark);
+      font-weight: 500;
+    }
+
+    .btn-success,
+    .btn-outline-success,
+    .btn-outline-teal {
+      background: var(--teal);
+      border-color: var(--teal);
+      color: #fff;
+    }
+
+    .btn-outline-teal {
+      background: none;
+      color: var(--teal);
+      border-color: var(--teal-card);
+    }
+
+    .btn-success:hover,
+    .btn-outline-teal:hover {
+      background: var(--teal-dark);
+      border-color: var(--teal-dark);
+    }
+
+    .table thead {
+      background: var(--teal-light);
+      color: var(--teal-dark);
+    }
+
+    .badge.bg-success {
+      background: var(--teal) !important;
+    }
+
+    .badge.bg-secondary {
+      background: #bdbdbd !important;
+      color: #fff;
+    }
+
+    .badge.bg-danger {
+      background: #dc3545 !important;
+    }
+
+    .badge.bg-warning {
+      background: #ffc107 !important;
+      color: #000;
+    }
+
+    .input-group-text {
+      background: var(--teal);
+      color: #fff;
+      border: none;
+    }
+
+    .alert {
+      border-radius: 8px;
+      box-shadow: 0 1px 5px rgba(0, 150, 136, 0.12);
+    }
+
+    .section-header {
+      color: var(--teal);
+      border-bottom: 2px solid var(--teal-light);
+      padding-bottom: 8px;
+      margin-bottom: 15px;
+      margin-top: 25px;
+      font-weight: 600;
+    }
+
+    .section-header:first-of-type {
+      margin-top: 15px;
+    }
+
+    .form-text {
+      color: #6c757d;
+      font-size: 0.875em;
+    }
+
+    @media (max-width: 991.98px) {
+      .dashboard-header {
+        padding: 18px 18px 12px 18px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="container my-4">
+
+    <!-- TOP BAR -->
+    <div class="dashboard-header d-flex justify-content-between align-items-center mb-3">
+      <div>
+        <h3 class="mb-1">Receptionist Dashboard</h3>
+        <p class="mb-0">
+          Welcome, <strong>{{ staff_name or 'Receptionist' }}</strong> |
+          Hospital: <strong>{{ hospital_name or 'N/A' }}</strong>
+        </p>
+      </div>
+
+      <div class="d-flex gap-2 align-items-center">
+        <!-- Doctor Status -->
+        <div class="dropdown">
+          <button class="btn d-flex align-items-center" data-bs-toggle="dropdown" id="doctorStatusBtn">
+            <i class="bi bi-heart-pulse me-2"></i>
+            Doctor Status
+            <span class="badge bg-secondary ms-2" id="freeDoctorCount">0</span>
+          </button>
+
+          <div class="dropdown-menu dropdown-menu-end p-2" style="width: 360px;">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <strong style="color: var(--teal-dark);">Doctors</strong>
+              <button class="btn btn-sm btn-outline-teal" type="button" onclick="loadDoctorStatus()">
+                <i class="bi bi-arrow-repeat"></i>
+              </button>
+            </div>
+
+            <div id="doctorStatusList" style="max-height: 320px; overflow:auto;">
+              <div class="text-muted small">Loading...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Profile Dropdown -->
+        <div class="dropdown">
+          <button class="btn d-flex align-items-center" data-bs-toggle="dropdown">
+            <img src="{{ url_for('static', filename=staff_photo if staff_photo else 'images/default_avatar.png') }}"
+              alt="Profile" class="rounded-circle" style="width:32px;height:32px;object-fit:cover;">
+            <span class="ms-2">{{ staff_name or 'Profile' }}</span>
+          </button>
+
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li>
+              <a class="dropdown-item" href="{{ url_for('staff_profile') }}">
+                <i class="bi bi-person"></i> Profile
+              </a>
+            </li>
+
+            <li>
+              <hr class="dropdown-divider">
+            </li>
+
+            <li>
+              <a class="dropdown-item text-danger" href="{{ url_for('receptionist_logout') }}"
+                onclick="handleLogoutSerial()">
+                <i class="bi bi-box-arrow-right"></i> Logout
+              </a>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- FLASH MESSAGES -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    {% for category, message in messages %}
+    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+      {{ message }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    <!-- ADD PATIENT FORM -->
+    <div class="row">
+      <div class="col-12">
+        <div class="card p-4 mb-4">
+          <h5 class="mb-3" style="color: var(--teal); font-weight:600;">
+            <i class="bi bi-person-plus"></i> Add Patient
+          </h5>
+
+          <form method="POST" class="row g-3">
+
+            <!-- BASIC INFORMATION SECTION -->
+            <div class="col-12">
+              <h6 class="section-header">
+                <i class="bi bi-person"></i> Basic Information
+              </h6>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Full Name <span class="text-danger">*</span></label>
+              <input type="text" name="full_name" class="form-control" required>
+            </div>
+
+            <div class="col-md-3">
+              <label class="form-label">Age <span class="text-danger">*</span></label>
+              <input type="number" name="age" class="form-control" min="0" max="120" required>
+            </div>
+
+            <div class="col-md-3">
+              <label class="form-label">Gender <span class="text-danger">*</span></label>
+              <select name="gender" class="form-select" required>
+                <option value="" disabled selected>Select</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Phone <span class="text-danger">*</span></label>
+              <input type="text" name="phone" class="form-control" maxlength="10" minlength="10"
+                placeholder="10-digit mobile number" required>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Email</label>
+              <input type="email" name="email" class="form-control" placeholder="Optional">
+            </div>
+
+            <div class="col-md-12">
+              <label class="form-label">Address <span class="text-danger">*</span></label>
+              <textarea name="address" class="form-control" rows="2"
+                placeholder="Complete address with city, state, pincode" required></textarea>
+            </div>
+
+            <!-- IDENTITY & DOCUMENTATION SECTION -->
+            <div class="col-12">
+              <h6 class="section-header">
+                <i class="bi bi-person-vcard"></i> Identity & Documentation
+              </h6>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Aadhaar Number</label>
+              <input type="text" name="aadhar_number" class="form-control" pattern="[0-9]{12}" maxlength="12"
+                placeholder="12-digit Aadhaar number">
+              <div class="form-text">Optional but recommended for government schemes</div>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">ID Proof Type</label>
+              <select name="id_proof_type" class="form-select">
+                <option value="">Select ID Proof</option>
+                <option value="aadhar">Aadhaar Card</option>
+                <option value="pan">PAN Card</option>
+                <option value="voter_id">Voter ID</option>
+                <option value="driving_license">Driving License</option>
+                <option value="passport">Passport</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <div class="col-md-12">
+              <label class="form-label">ID Proof Number</label>
+              <input type="text" name="id_proof_number" class="form-control" placeholder="Enter ID proof number">
+            </div>
+
+            <!-- INSURANCE SECTION -->
+            <div class="col-12">
+              <h6 class="section-header">
+                <i class="bi bi-shield-plus"></i> Health Insurance
+              </h6>
+            </div>
+
+            <div class="col-md-4">
+              <label class="form-label">Insurance Status</label>
+              <select name="has_insurance" id="has_insurance" class="form-select"
+                onchange="toggleInsuranceFields(this.value)">
+                <option value="no">No Insurance</option>
+                <option value="yes">Has Insurance</option>
+                <option value="cashless">Cashless Insurance</option>
+              </select>
+            </div>
+
+            <div class="col-md-4" id="insurance_provider_div" style="display: none;">
+              <label class="form-label">Insurance Provider</label>
+              <select name="insurance_provider" id="insurance_provider" class="form-select">
+                <option value="">Select Provider</option>
+
+                <optgroup label="Karnataka Government Schemes">
+                  <option value="karnataka_arogya_sri">Karnataka Arogya Sri</option>
+                  <option value="yashaswini">Yashaswini Cooperative Health Scheme</option>
+                  <option value="karnataka_rashtriya_swasthya_bima_yojana">Karnataka Rashtriya Swasthya Bima Yojana
+                    (RSBY)</option>
+                  <option value="pradhan_mantri_suraksha_bima_yojana">Pradhan Mantri Suraksha Bima Yojana</option>
+                  <option value="pradhan_mantri_jeevan_jyoti_bima_yojana">Pradhan Mantri Jeevan Jyoti Bima Yojana
+                  </option>
+                  <option value="karnataka_state_government_employee_health_scheme">Karnataka State Government Employee
+                    Health Scheme</option>
+                  <option value="janani_suraksha_yojana">Janani Suraksha Yojana (JSY)</option>
+                  <option value="rashtriya_bal_swasthya_karyakram">Rashtriya Bal Swasthya Karyakram (RBSK)</option>
+                  <option value="mukhyamantri_santwana_harish_yojana">Mukhyamantri Santwana Harish Yojana</option>
+                  <option value="karnataka_health_insurance_scheme">Karnataka Health Insurance Scheme</option>
+                </optgroup>
+
+                <optgroup label="Central Government Schemes">
+                  <option value="ayushman_bharat">Ayushman Bharat (PMJAY)</option>
+                  <option value="employee_state_insurance">Employee State Insurance (ESI)</option>
+                  <option value="central_government_health_scheme">Central Government Health Scheme (CGHS)</option>
+                  <option value="ex_servicemen_contributory_health_scheme">Ex-Servicemen Contributory Health Scheme
+                    (ECHS)</option>
+                  <option value="railway_medical_benefit_scheme">Railway Medical Benefit Scheme</option>
+                </optgroup>
+
+                <optgroup label="Private Insurance">
+                  <option value="star_health">Star Health</option>
+                  <option value="icici_lombard">ICICI Lombard</option>
+                  <option value="hdfc_ergo">HDFC ERGO</option>
+                  <option value="bajaj_allianz">Bajaj Allianz</option>
+                  <option value="new_india_assurance">New India Assurance</option>
+                  <option value="oriental_insurance">Oriental Insurance</option>
+                  <option value="united_india_insurance">United India Insurance</option>
+                  <option value="national_insurance">National Insurance</option>
+                  <option value="reliance_general">Reliance General Insurance</option>
+                  <option value="sbi_general">SBI General Insurance</option>
+                  <option value="tata_aig">Tata AIG</option>
+                  <option value="cholamandalam_ms">Cholamandalam MS General Insurance</option>
+                </optgroup>
+
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <div class="col-md-4" id="policy_number_div" style="display: none;">
+              <label class="form-label">Policy/Card Number</label>
+              <input type="text" name="insurance_policy_number" class="form-control"
+                placeholder="Enter policy or card number">
+            </div>
+
+            <div class="col-md-6" id="policy_start_date_div" style="display: none;">
+              <label class="form-label">Policy Start Date</label>
+              <input type="date" name="policy_start_date" class="form-control">
+            </div>
+
+            <div class="col-md-6" id="policy_expiry_date_div" style="display: none;">
+              <label class="form-label">Policy Expiry Date</label>
+              <input type="date" name="policy_expiry_date" class="form-control">
+            </div>
+
+            <!-- EMERGENCY CONTACT SECTION -->
+            <div class="col-12">
+              <h6 class="section-header">
+                <i class="bi bi-telephone-plus"></i> Emergency Contact
+              </h6>
+            </div>
+
+            <div class="col-md-4">
+              <label class="form-label">Emergency Contact Name <span class="text-danger">*</span></label>
+              <input type="text" name="emergency_contact_name" class="form-control"
+                placeholder="Full name of emergency contact" required>
+            </div>
+
+            <div class="col-md-4">
+              <label class="form-label">Relationship <span class="text-danger">*</span></label>
+              <select name="emergency_contact_relation" class="form-select" required>
+                <option value="">Select Relationship</option>
+                <option value="spouse">Spouse</option>
+                <option value="parent">Parent</option>
+                <option value="child">Child</option>
+                <option value="sibling">Sibling</option>
+                <option value="friend">Friend</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <div class="col-md-4">
+              <label class="form-label">Emergency Contact Phone <span class="text-danger">*</span></label>
+              <input type="text" name="emergency_contact_phone" class="form-control" maxlength="10" minlength="10"
+                placeholder="10-digit mobile number" required>
+            </div>
+
+            <!-- RFID TAG SECTION -->
+            <div class="col-12">
+              <h6 class="section-header">
+                <i class="bi bi-credit-card"></i> RFID Assignment
+              </h6>
+            </div>
+
+            <!-- BED ASSIGNMENT SECTION -->
+            {% if is_enterprise %}
+
+            <div class="col-12">
+              <h6 class="section-header">
+                <i class="bi bi-hospital"></i> Admission & Bed Assignment
+              </h6>
+            </div>
+
+            <div class="col-md-4">
+              <label class="form-label">Admission Type <span class="text-danger">*</span></label>
+              <select name="admission_type" id="admission_type" class="form-select" required>
+                <option value="outpatient">Outpatient (No bed needed)</option>
+                <option value="inpatient">Inpatient (Requires bed)</option>
+              </select>
+            </div>
+
+            <div class="col-md-4">
+              <label class="form-label">Department <span class="text-danger">*</span></label>
+              <select name="department_id" id="department_select" class="form-select" required>
+                <option value="">Select Department</option>
+                {% for dept in departments %}
+                <option value="{{ dept.id }}">{{ dept.department_name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="col-md-4" id="bed_assignment_section" style="display: none;">
+              <label class="form-label">Assign Bed <span class="text-danger">*</span></label>
+              <div class="input-group">
+                <select name="assigned_bed_id" id="bed_select" class="form-select">
+                  <option value="">Select department first</option>
+                </select>
+                <button type="button" class="btn btn-outline-info" onclick="showBedList()" title="View All Beds">
+                  <i class="bi bi-list-ul"></i>
+                </button>
+              </div>
+              <div class="form-text">Select a bed or click the list icon to view all available beds</div>
+            </div>
+
+            <div class="col-12" id="bed_info_section" style="display: none;">
+              <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i>
+                <strong>Bed Assignment:</strong> Patient will be assigned to the selected bed automatically.
+                The bed status will be updated to "Occupied" in the system.
+              </div>
+            </div>
+
+            {% endif %}
+
+            <div class="col-md-8">
+              <label class="form-label">Scan Tag & Assign UID <span class="text-danger">*</span></label>
+              <div class="input-group">
+                <input type="text" id="rfid_uid" name="rfid_uid" class="form-control"
+                  placeholder="Click icon to scan..." readonly required>
+                <span class="input-group-text" id="rfid_scan_btn" style="cursor:pointer;">
+                  <i class="bi bi-radioactive"></i>
+                </span>
+              </div>
+              <div class="form-text">
+                Click the icon, then bring the RFID tag near the reader.
+              </div>
+            </div>
+
+            <div class="col-12 mt-4">
+              <button type="submit" class="btn btn-success btn-lg">
+                <i class="bi bi-save"></i> Save Patient Information
+              </button>
+              <button type="reset" class="btn btn-outline-secondary btn-lg ms-2" onclick="resetForm()">
+                <i class="bi bi-arrow-clockwise"></i> Reset Form
+              </button>
+            </div>
+
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- RFID Scanning Modal -->
+    <div class="modal fade" id="rfidScanModal" tabindex="-1" aria-labelledby="rfidScanModalLabel" aria-hidden="true"
+      data-bs-backdrop="static" data-bs-keyboard="false">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="rfidScanModalLabel">
+              <i class="bi bi-upc-scan me-2"></i>RFID Scanner
+            </h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body text-center">
+            <div class="rfid-scan-animation mb-3" style="font-size:4em;color:var(--teal);">
+              <i class="bi bi-wifi"></i>
+            </div>
+            <h5 class="mb-3">Scanning for RFID Tag</h5>
+            <p id="scanStatus" class="text-muted">Listening for RFID tags...</p>
+            <div class="spinner-border text-secondary mt-3" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PATIENT LIST -->
+    <div class="card p-3">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0" style="color: var(--teal); font-weight:600;">
+          <i class="bi bi-people"></i> Patients Added by You
+        </h5>
+        <span class="badge bg-primary">{{ patients|length }} Total</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-striped table-bordered align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Sl No</th>
+              <th>Full Name</th>
+              <th>Age</th>
+              <th>Gender</th>
+              <th>Phone</th>
+              <th>Department</th>
+              <th>Bed Assignment</th>
+              <th>Insurance</th>
+              <th>Emergency Contact</th>
+              <th>RFID UID</th>
+              <th>Created On</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {% for p in patients %}
+            <tr>
+              <td>{{ loop.index }}</td>
+
+              <td><strong>{{ p.full_name }}</strong></td>
+
+              <td>{{ p.age }}</td>
+
+              <td>
+                {% if p.gender == 'Male' %}
+                <i class="bi bi-gender-male text-primary"></i> {{ p.gender }}
+                {% elif p.gender == 'Female' %}
+                <i class="bi bi-gender-female text-danger"></i> {{ p.gender }}
+                {% else %}
+                <i class="bi bi-gender-ambiguous text-warning"></i> {{ p.gender }}
+                {% endif %}
+              </td>
+
+              <!-- ✅ FIXED: Properly closed Phone <td> -->
+              <td><i class="bi bi-telephone"></i> {{ p.phone }}</td>
+
+              <td>
+                {% if p.department_name %}
+                <span class="badge bg-info">{{ p.department_name }}</span>
+                {% else %}
+                <span class="badge bg-secondary">Outpatient</span>
+                {% endif %}
+              </td>
+
+              <td>
+                {% if p.bed_number %}
+                <span class="badge bg-success">
+                  <i class="bi bi-hospital"></i>
+                  Floor {{ p.floor_number }} - Room {{ p.room_number }} - Bed {{ p.bed_number }}
+                </span>
+                {% else %}
+                <span class="badge bg-secondary">No bed assigned</span>
+                {% endif %}
+              </td>
+
+              <!-- ✅ FIXED: Insurance must be inside its own <td> -->
+              <td>
+                {% if p.has_insurance == 'no' %}
+                <span class="badge bg-secondary">No Insurance</span>
+                {% elif p.has_insurance == 'cashless' %}
+                <span class="badge bg-success">Cashless</span>
+                {% if p.insurance_provider %}
+                <br><small class="text-muted">{{ p.insurance_provider.replace('_', ' ').title() }}</small>
+                {% endif %}
+                {% else %}
+                <span class="badge bg-warning">Has Insurance</span>
+                {% if p.insurance_provider %}
+                <br><small class="text-muted">{{ p.insurance_provider.replace('_', ' ').title() }}</small>
+                {% endif %}
+                {% endif %}
+              </td>
+
+              <td>
+                <strong>{{ p.emergency_contact_name }}</strong>
+                <br><small class="text-muted">{{ p.emergency_contact_phone }}</small>
+              </td>
+
+              <td><code class="text-primary">{{ p.rfid_uid }}</code></td>
+
+              <td>{{ p.created_on }}</td>
+
+              <td>
+                {% if p.is_active %}
+                <span class="badge bg-success">Active</span>
+                {% else %}
+                <span class="badge bg-secondary">Blocked</span>
+                {% endif %}
+              </td>
+
+              <td>
+                <div class="btn-group" role="group">
+                  <form action="{{ url_for('receptionist_toggle_patient', pid=p.id) }}" method="post"
+                    style="display:inline-block;">
+                    <button type="submit"
+                      class="btn btn-sm {% if p.is_active %}btn-outline-danger{% else %}btn-outline-success{% endif %}"
+                      title="{% if p.is_active %}Block Patient{% else %}Unblock Patient{% endif %}">
+                      {% if p.is_active %}
+                      <i class="bi bi-lock"></i>
+                      {% else %}
+                      <i class="bi bi-unlock"></i>
+                      {% endif %}
+                    </button>
+                  </form>
+
+                  <a href="{{ url_for('receptionist_edit_patient', pid=p.id) }}" class="btn btn-sm btn-outline-primary"
+                    title="Edit Patient">
+                    <i class="bi bi-pencil"></i>
+                  </a>
+
+                  <a href="{{ url_for('receptionist_delete_patient', pid=p.id) }}" class="btn btn-sm btn-outline-danger"
+                    onclick="return confirm('Are you sure you want to delete {{ p.full_name }}? This action cannot be undone.');"
+                    title="Delete Patient">
+                    <i class="bi bi-trash"></i>
+                  </a>
+                </div>
+              </td>
+            </tr>
+
+            {% else %}
+            <tr>
+              <!-- ✅ FIXED: colspan must match 13 columns -->
+              <td colspan="13" class="text-center text-muted py-4">
+                <i class="bi bi-person-x display-6 text-muted"></i>
+                <br>No patients added yet.
+                <br><small>Start by adding your first patient above.</small>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="{{ url_for('static', filename='js/serial-init.js') }}"></script>
+
+
+
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const modalElement = document.getElementById('rfidScanModal');
+      const scanBtn = document.getElementById('rfid_scan_btn');
+      const uidInput = document.getElementById('rfid_uid');
+      const scanStatus = document.getElementById('scanStatus');
+
+      const rfidScanModal = modalElement ? new bootstrap.Modal(modalElement) : null;
+
+      let scanInterval = null;
+      let scanFinished = false;
+
+      if (scanBtn) scanBtn.addEventListener("click", startModalRfidScan);
+      if (uidInput) uidInput.addEventListener("click", startModalRfidScan);
+
+      const admissionTypeSelect = document.getElementById('admission_type');
+      const departmentSelect = document.getElementById('department_select');
+
+      if (admissionTypeSelect) admissionTypeSelect.addEventListener('change', handleAdmissionTypeChange);
+      if (departmentSelect) departmentSelect.addEventListener('change', handleDepartmentChange);
+
+      if (admissionTypeSelect) handleAdmissionTypeChange();
+      toggleInsuranceFields('no');
+
+      const closeBtn = document.querySelector(".close-bed-modal");
+      if (closeBtn) {
+        closeBtn.addEventListener("click", () => {
+          const modal = document.getElementById("bedModal");
+          if (modal) modal.style.display = "none";
+        });
+      }
+
+      const form = document.querySelector('form');
+      if (form) {
+        form.addEventListener('submit', function (e) {
+          if (!validateForm()) e.preventDefault();
+        });
+      }
+
+      if (modalElement) {
+        modalElement.addEventListener("hidden.bs.modal", async function () {
+          stopModalRfidScan();
+          scanFinished = true;
+          await stopDeviceScan();
+          if (scanStatus) scanStatus.textContent = "Listening for RFID tags...";
+        });
+      }
+
+      window.addEventListener('beforeunload', async () => {
+        stopModalRfidScan();
+        scanFinished = true;
+        await stopDeviceScan();
+      });
+
+      window.__stopPatientRfidScan = async function () {
+        stopModalRfidScan();
+        scanFinished = true;
+        await stopDeviceScan();
+      };
+
+      window.handleLogoutSerial = handleLogoutSerial;
+
+      async function startDeviceScan() {
+        try {
+          if (window.__serialScanOn) {
+            await window.__serialScanOn();
+          }
+        } catch (e) {
+          console.warn("SCAN_ON failed:", e);
+        }
+      }
+
+      async function stopDeviceScan() {
+        try {
+          if (window.__serialScanOff) {
+            await window.__serialScanOff();
+          }
+        } catch (e) {
+          console.warn("SCAN_OFF failed:", e);
+        }
+      }
+
+      function stopModalRfidScan() {
+        if (scanInterval) {
+          clearInterval(scanInterval);
+          scanInterval = null;
+        }
+      }
+
+      async function startModalRfidScan(e) {
+        if (e) e.preventDefault();
+
+        if (!window.__serialPortOpen) {
+          const serialModalEl = document.getElementById("serialPortModal");
+          if (serialModalEl) {
+            bootstrap.Modal.getOrCreateInstance(serialModalEl).show();
+          } else {
+            alert("Please connect your RFID reader first.");
+          }
+          return;
+        }
+
+        stopModalRfidScan();
+        scanFinished = false;
+
+        if (uidInput) {
+          uidInput.value = '';
+          uidInput.classList.remove('is-valid', 'is-invalid');
+        }
+
+        window.__latestUid = null;
+
+        if (scanStatus) scanStatus.textContent = 'Present your tag now...';
+        if (rfidScanModal) rfidScanModal.show();
+
+        await startDeviceScan();
+
+        let attempts = 0;
+        const maxAttempts = 50;
+
+        scanInterval = setInterval(async () => {
+          if (scanFinished) return;
+
+          attempts++;
+
+          const uid = window.__latestUid;
+
+          if (uid && uid.trim()) {
+            scanFinished = true;
+
+            if (scanStatus) scanStatus.textContent = '✅ Tag detected!';
+            if (uidInput) {
+              uidInput.value = uid.trim();
+              uidInput.classList.add('is-valid');
+            }
+
+            try {
+              await fetch("/rfid-read", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ uid: uid.trim() })
+              });
+            } catch (e) {
+              console.warn("Server UID post failed:", e);
+            }
+
+            window.__latestUid = null;
+
+            stopModalRfidScan();
+            await stopDeviceScan();
+
+            setTimeout(() => {
+              if (rfidScanModal) rfidScanModal.hide();
+              if (scanStatus) scanStatus.textContent = 'Listening for RFID tags...';
+            }, 800);
+
+            return;
+          }
+
+          if (attempts >= maxAttempts) {
+            scanFinished = true;
+
+            if (scanStatus) scanStatus.textContent = "❌ No tag detected. Please try again.";
+            if (uidInput) uidInput.classList.add('is-invalid');
+
+            stopModalRfidScan();
+            await stopDeviceScan();
+
+            setTimeout(() => {
+              if (rfidScanModal) rfidScanModal.hide();
+              if (scanStatus) scanStatus.textContent = 'Listening for RFID tags...';
+              if (uidInput) uidInput.classList.remove('is-invalid');
+            }, 1200);
+          }
+        }, 300);
+      }
+    });
+
+    function handleLogoutSerial() {
+      try {
+        if (window.__disconnectWebSerial) window.__disconnectWebSerial();
+      } catch (e) {
+        console.warn("Serial disconnect failed:", e);
+      }
+      sessionStorage.setItem("force_serial_prompt", "1");
+    }
+
+    function handleAdmissionTypeChange() {
+      const admissionTypeEl = document.getElementById('admission_type');
+      const bedSection = document.getElementById('bed_assignment_section');
+      const bedInfoSection = document.getElementById('bed_info_section');
+      const bedSelect = document.getElementById('bed_select');
+
+      if (!admissionTypeEl || !bedSection || !bedInfoSection || !bedSelect) return;
+
+      const admissionType = admissionTypeEl.value;
+
+      if (admissionType === 'inpatient') {
+        bedSection.style.display = 'block';
+        bedInfoSection.style.display = 'block';
+        bedSelect.required = true;
+
+        const departmentId = document.getElementById('department_select')?.value;
+        if (departmentId) loadAvailableBeds(departmentId);
+      } else {
+        bedSection.style.display = 'none';
+        bedInfoSection.style.display = 'none';
+        bedSelect.required = false;
+        bedSelect.innerHTML = '<option value="">Select department first</option>';
+      }
+    }
+
+    function handleDepartmentChange() {
+      const departmentId = document.getElementById('department_select')?.value;
+      const admissionType = document.getElementById('admission_type')?.value;
+
+      if (admissionType === 'inpatient' && departmentId) loadAvailableBeds(departmentId);
+    }
+
+    function loadAvailableBeds(departmentId) {
+      const bedSelect = document.getElementById('bed_select');
+      if (!bedSelect) return;
+
+      if (!departmentId) {
+        bedSelect.innerHTML = '<option value="">Select department first</option>';
+        return;
+      }
+
+      bedSelect.innerHTML = '<option value="">Loading beds...</option>';
+
+      fetch(`/get-available-beds/${departmentId}`)
+        .then(response => response.json())
+        .then(data => {
+          if (data.error) {
+            bedSelect.innerHTML = '<option value="">Error loading beds</option>';
+            return;
+          }
+
+          bedSelect.innerHTML = '<option value="">Select a bed</option>';
+
+          if (data.beds && data.beds.length > 0) {
+            data.beds.forEach(bed => {
+              const option = document.createElement('option');
+              option.value = bed.id;
+              option.textContent = `Floor ${bed.floor_number} - Room ${bed.room_number} - Bed ${bed.bed_number}`;
+              bedSelect.appendChild(option);
+            });
+          } else {
+            bedSelect.innerHTML = '<option value="">No available beds</option>';
+          }
+        })
+        .catch(() => {
+          bedSelect.innerHTML = '<option value="">Error loading beds</option>';
+        });
+    }
+
+    function showBedList() {
+      const departmentId = document.getElementById('department_select')?.value;
+      if (!departmentId) {
+        alert('Please select a department first');
+        return;
+      }
+      document.getElementById('bedModal').style.display = 'block';
+      loadBedList(departmentId);
+    }
+
+    function loadBedList(departmentId) {
+      const contentDiv = document.getElementById('bedListContent');
+      if (!contentDiv) return;
+
+      contentDiv.innerHTML = '<div class="loading-spinner"><i class="bi bi-arrow-repeat"></i> Loading beds...</div>';
+
+      fetch(`/get-bed-list/${departmentId}`)
+        .then(response => response.json())
+        .then(data => {
+          if (data.error) {
+            contentDiv.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+            return;
+          }
+
+          let tableHTML = `
+          <table class="bed-list-table">
+            <thead>
+              <tr>
+                <th>Sl No</th>
+                <th>Bed Number</th>
+                <th>Department</th>
+                <th>Floor</th>
+                <th>Room</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+        `;
+
+          if (data.beds.length === 0) {
+            tableHTML += `
+            <tr>
+              <td colspan="7" style="text-align:center;color:#6c757d;">No beds found for this department</td>
+            </tr>
+          `;
+          } else {
+            data.beds.forEach((bed, index) => {
+              const statusClass = bed.is_occupied ? 'bed-status-occupied' : 'bed-status-free';
+              const statusText = bed.is_occupied ? 'Occupied' : 'Free';
+              const patientInfo = bed.patient_name ? `<br><small>Patient: ${bed.patient_name}</small>` : '';
+              const actionButton = bed.is_occupied
+                ? '<button class="bed-select-btn" disabled>Occupied</button>'
+                : `<button class="bed-select-btn" onclick="selectBed(${bed.id}, '${bed.bed_number}', '${bed.floor_number}', '${bed.room_number}')">Select</button>`;
+
+              tableHTML += `
+              <tr>
+                <td>${index + 1}</td>
+                <td>${bed.bed_number}</td>
+                <td><span class="department-badge">${bed.department_name}</span></td>
+                <td>Floor ${bed.floor_number}</td>
+                <td>${bed.room_number}</td>
+                <td><span class="${statusClass}">${statusText}</span>${patientInfo}</td>
+                <td>${actionButton}</td>
+              </tr>
+            `;
+            });
+          }
+
+          tableHTML += '</tbody></table>';
+          contentDiv.innerHTML = tableHTML;
+        })
+        .catch(() => {
+          contentDiv.innerHTML = '<div class="alert alert-danger">Error loading bed list</div>';
+        });
+    }
+
+    function selectBed(bedId, bedNumber, floor, room) {
+      const bedSelect = document.getElementById('bed_select');
+      if (!bedSelect) return;
+
+      let optionExists = false;
+      for (let option of bedSelect.options) {
+        if (option.value == bedId) {
+          optionExists = true;
+          break;
+        }
+      }
+
+      if (!optionExists) {
+        const newOption = new Option(`Floor ${floor} - Room ${room} - Bed ${bedNumber}`, bedId);
+        bedSelect.add(newOption);
+      }
+
+      bedSelect.value = bedId;
+      document.getElementById('bedModal').style.display = 'none';
+
+      const alertDiv = document.createElement('div');
+      alertDiv.className = 'alert alert-success alert-dismissible fade show';
+      alertDiv.innerHTML = `
+      <i class="bi bi-check-circle"></i> <strong>Bed Selected:</strong>
+      Floor ${floor} - Room ${room} - Bed ${bedNumber}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+      const container = document.querySelector('.container');
+      const firstCard = container?.querySelector('.card');
+      if (container && firstCard) container.insertBefore(alertDiv, firstCard);
+
+      setTimeout(() => {
+        if (alertDiv && alertDiv.parentNode) alertDiv.remove();
+      }, 3000);
+    }
+
+    function toggleInsuranceFields(value) {
+      const providerDiv = document.getElementById('insurance_provider_div');
+      const policyNumberDiv = document.getElementById('policy_number_div');
+      const startDateDiv = document.getElementById('policy_start_date_div');
+      const expiryDateDiv = document.getElementById('policy_expiry_date_div');
+
+      if (!providerDiv || !policyNumberDiv || !startDateDiv || !expiryDateDiv) return;
+
+      if (value === 'no') {
+        providerDiv.style.display = 'none';
+        policyNumberDiv.style.display = 'none';
+        startDateDiv.style.display = 'none';
+        expiryDateDiv.style.display = 'none';
+
+        const provider = document.getElementById('insurance_provider');
+        const policyNo = document.querySelector('[name="insurance_policy_number"]');
+        const startDate = document.querySelector('[name="policy_start_date"]');
+        const expiryDate = document.querySelector('[name="policy_expiry_date"]');
+
+        if (provider) provider.value = '';
+        if (policyNo) policyNo.value = '';
+        if (startDate) startDate.value = '';
+        if (expiryDate) expiryDate.value = '';
+      } else {
+        providerDiv.style.display = 'block';
+        policyNumberDiv.style.display = 'block';
+        startDateDiv.style.display = 'block';
+        expiryDateDiv.style.display = 'block';
+      }
+    }
+
+    async function resetForm() {
+      try {
+        if (window.__stopPatientRfidScan) {
+          await window.__stopPatientRfidScan();
+        }
+      } catch (e) {
+        console.warn("Failed to stop RFID scan:", e);
+      }
+
+      const form = document.querySelector('form');
+      if (form) form.reset();
+
+      const bedAssignment = document.getElementById('bed_assignment_section');
+      const bedInfo = document.getElementById('bed_info_section');
+      const uidInput = document.getElementById("rfid_uid");
+
+      if (bedAssignment) bedAssignment.style.display = 'none';
+      if (bedInfo) bedInfo.style.display = 'none';
+
+      toggleInsuranceFields('no');
+
+      if (uidInput) {
+        uidInput.value = '';
+        uidInput.classList.remove('is-valid', 'is-invalid');
+      }
+    }
+
+    window.onclick = function (event) {
+      const modal = document.getElementById('bedModal');
+      if (event.target === modal) modal.style.display = 'none';
+    };
+
+    function validateForm() {
+      const admissionTypeEl = document.getElementById('admission_type');
+      const bedSelect = document.getElementById('bed_select');
+
+      if (!admissionTypeEl || !bedSelect) return true;
+
+      if (admissionTypeEl.value === 'inpatient' && !bedSelect.value) {
+        alert('Please select a bed for inpatient admission');
+        bedSelect.focus();
+        return false;
+      }
+      return true;
+    }
+  </script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  <script>
+    async function loadDoctorStatus() {
+      const list = document.getElementById("doctorStatusList");
+      const freeBadge = document.getElementById("freeDoctorCount");
+
+      list.innerHTML = `<div class="text-muted small">Loading...</div>`;
+
+      try {
+        const res = await fetch("/api/doctor-status");
+        const data = await res.json();
+
+        if (!res.ok || data.error) {
+          list.innerHTML = `<div class="text-danger small">${data.error || "Failed to load"}</div>`;
+          return;
+        }
+
+        const doctors = data.doctors || [];
+        const freeCount = doctors.filter(d => Number(d.is_available) === 1).length;
+        freeBadge.textContent = freeCount;
+
+        if (!doctors.length) {
+          list.innerHTML = `<div class="text-muted small">No doctors found.</div>`;
+          return;
+        }
+
+        list.innerHTML = doctors.map(d => {
+          const free = Number(d.is_available) === 1;
+
+          const statusBadge = free
+            ? `<span class="badge bg-success">FREE</span>`
+            : `<span class="badge bg-danger">BUSY</span>`;
+
+          const phone = (d.phone || "").trim();
+          const callBtn = phone
+            ? `<a class="btn btn-sm btn-outline-success" href="tel:${phone}" title="Call Doctor">
+                 <i class="bi bi-telephone"></i>
+               </a>`
+            : `<button class="btn btn-sm btn-outline-secondary" disabled title="No phone">
+                 <i class="bi bi-telephone-x"></i>
+               </button>`;
+
+          return `
+            <div class="d-flex justify-content-between align-items-center border rounded p-2 mb-2">
+              <div>
+                <div class="fw-semibold">${d.full_name || "Doctor"}</div>
+                <div class="small text-muted">${phone || "No phone"}</div>
+              </div>
+              <div class="d-flex gap-2 align-items-center">
+                ${statusBadge}
+                ${callBtn}
+              </div>
+            </div>
+          `;
+        }).join("");
+
+      } catch (e) {
+        list.innerHTML = `<div class="text-danger small">Error: ${e.message}</div>`;
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      loadDoctorStatus();
+      setInterval(loadDoctorStatus, 10000);
+    });
+  </script>
+
+  <style>
+    .is-invalid {
+      border-color: #dc3545;
+      box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+    }
+
+    .is-valid {
+      border-color: #198754;
+      box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.25);
+    }
+
+    .rfid-scan-animation .bi-wifi {
+      animation: pulse 1.5s infinite ease-in-out;
+    }
+
+    .spinner-border.text-secondary {
+      color: var(--teal) !important;
+    }
+
+    @keyframes pulse {
+      0% {
+        transform: scale(0.9);
+        opacity: 0.7;
+      }
+
+      50% {
+        transform: scale(1.1);
+        opacity: 1;
+      }
+
+      100% {
+        transform: scale(0.9);
+        opacity: 0.7;
+      }
+    }
+
+    .table-responsive {
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .table th {
+      font-weight: 600;
+      font-size: 0.9rem;
+      white-space: nowrap;
+    }
+
+    .table td {
+      font-size: 0.9rem;
+      vertical-align: middle;
+    }
+
+    .table code {
+      font-size: 0.8rem;
+      background: rgba(0, 150, 136, 0.1);
+      color: var(--teal-dark);
+      padding: 2px 4px;
+      border-radius: 4px;
+    }
+
+    .modal-header {
+      background: var(--teal);
+      color: #fff;
+      border-radius: 14px 14px 0 0;
+      border-bottom: none;
+    }
+
+    .btn-close-white {
+      filter: invert(1) grayscale(1) brightness(2);
+    }
+
+    .bed-modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+    }
+
+    .bed-modal-content {
+      background-color: #fefefe;
+      margin: 5% auto;
+      padding: 0;
+      border-radius: 10px;
+      width: 80%;
+      max-width: 800px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      animation: slideIn 0.3s ease-out;
+    }
+
+    @keyframes slideIn {
+      from {
+        transform: translateY(-50px);
+        opacity: 0;
+      }
+
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    .bed-modal-header {
+      background: linear-gradient(135deg, #17a2b8, #138496);
+      color: white;
+      padding: 20px;
+      border-radius: 10px 10px 0 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .bed-modal-header h4 {
+      margin: 0;
+      font-size: 1.5rem;
+      font-weight: 600;
+    }
+
+    .close-bed-modal {
+      color: white;
+      font-size: 28px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: color 0.3s;
+    }
+
+    .close-bed-modal:hover {
+      color: #f8f9fa;
+    }
+
+    .bed-modal-body {
+      padding: 20px;
+      max-height: 60vh;
+      overflow-y: auto;
+    }
+
+    .bed-list-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+
+    .bed-list-table th {
+      background-color: #17a2b8;
+      color: white;
+      padding: 12px 8px;
+      text-align: left;
+      font-weight: 600;
+      border-bottom: 2px solid #138496;
+    }
+
+    .bed-list-table td {
+      padding: 12px 8px;
+      border-bottom: 1px solid #dee2e6;
+      vertical-align: middle;
+    }
+
+    .bed-list-table tr:nth-child(even) {
+      background-color: #f8f9fa;
+    }
+
+    .bed-list-table tr:hover {
+      background-color: #e9ecef;
+      cursor: pointer;
+    }
+
+    .bed-status-free {
+      background-color: #28a745;
+      color: white;
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 0.8rem;
+      font-weight: 500;
+    }
+
+    .bed-status-occupied {
+      background-color: #dc3545;
+      color: white;
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 0.8rem;
+      font-weight: 500;
+    }
+
+    .department-badge {
+      background-color: #17a2b8;
+      color: white;
+      padding: 2px 8px;
+      border-radius: 8px;
+      font-size: 0.8rem;
+    }
+
+    .bed-select-btn {
+      background-color: #28a745;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      transition: background-color 0.3s;
+    }
+
+    .bed-select-btn:hover {
+      background-color: #218838;
+    }
+
+    .bed-select-btn:disabled {
+      background-color: #6c757d;
+      cursor: not-allowed;
+    }
+
+    .loading-spinner {
+      text-align: center;
+      padding: 20px;
+      color: #17a2b8;
+    }
+  </style>
+
+  <!-- SERIAL PORT SELECTION MODAL -->
+  <div class="modal fade" id="serialPortModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="bi bi-usb-symbol"></i> Select RFID Serial Port
+          </h5>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted mb-3">
+            Click <b>Connect</b> and select your RFID device (USB/COM) from the browser popup.
+            <br><small>(Works in Chrome / Edge only)</small>
+          </p>
+
+          <button class="btn btn-success w-100" id="connectSerialBtn">
+            Connect
+          </button>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bed Assignment Modal -->
+  {% if is_enterprise %}
+  <div id="bedModal" class="bed-modal">
+    <div class="bed-modal-content">
+      <div class="bed-modal-header">
+        <h4><i class="fas fa-bed"></i> Bed List</h4>
+        <span class="close-bed-modal">&times;</span>
+      </div>
+      <div class="bed-modal-body">
+        <div id="bedListContent">
+          <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i> Loading beds...
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</body>
+
+</html>

@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Staff Overview</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --accent-teal: #38b2ac;
+            --border-teal: #b2f5ea;
+            --shadow-teal: rgba(56,178,172,0.10);
+        }
+
+        body {
+            background-color: #f8f9fa;
+        }
+
+        .card {
+            border: 1px solid var(--border-teal);
+            box-shadow: 0 4px 6px var(--shadow-teal);
+        }
+
+        .btn-primary {
+            background-color: var(--accent-teal);
+            border-color: var(--accent-teal);
+        }
+
+        .btn-primary:hover {
+            background-color: #319795;
+            border-color: #319795;
+        }
+
+        .table thead th {
+            background-color: var(--accent-teal);
+            color: white;
+            border: none;
+        }
+
+        .badge {
+            background-color: var(--accent-teal) !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container my-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="fas fa-users text-primary"></i> Staff Overview</h2>
+            <a href="{{ url_for('hr_dashboard') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+
+        <!-- Debug Section (Remove this after fixing) -->
+        <div class="alert alert-info">
+            <strong>Debug Info:</strong> Found {{ all_staff|length }} staff members
+        </div>
+
+        <div class="card shadow">
+            <div class="card-body">
+                {% if all_staff %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Sl. No.</th>
+                                <th>Staff Name</th>
+                                <th>Department</th>
+                                <th>Email</th>
+                                <th>Phone</th>
+                                <th>Dept Admin</th>
+                                <th>Added On</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for staff in all_staff %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td>
+                                    <strong>{{ staff.staff_name or 'N/A' }}</strong>
+                                    <br><small class="text-muted">{{ staff.staff_gender or 'N/A' }}</small>
+                                </td>
+                                <td>
+                                    {% if staff.department_name %}
+                                        <span class="badge">{{ staff.department_name }}</span>
+                                    {% else %}
+                                        <span class="text-muted">No Department</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ staff.staff_email or 'N/A' }}</td>
+                                <td>{{ staff.staff_phone or 'N/A' }}</td>
+                                <td>{{ staff.dept_admin_name or 'N/A' }}</td>
+                                <td>
+                                    {% if staff.created_at %}
+                                        {{ staff.created_at.strftime('%Y-%m-%d') }}
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-users fa-4x text-muted mb-3"></i>
+                    <h4 class="text-muted">No Staff Found</h4>
+                    <p class="text-muted">Staff members will appear here once department admins add them.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

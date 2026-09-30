@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Product Batches</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--grad:linear-gradient(135deg,#14b8a6 0%,#0d9488 100%);--bg:linear-gradient(135deg,#f0fdfa 0%,#ecfdf5 100%);}
+    body{font-family:Inter,sans-serif;background:var(--bg);}
+    .topbar{background:var(--grad); color:#fff; padding:14px 0;}
+    .cardx{background:#fff;border:1px solid rgba(20,184,166,.15);border-radius:16px;box-shadow:0 8px 20px rgba(0,0,0,.05);}
+    .table thead th{background:rgba(20,184,166,.08);}
+  </style>
+</head>
+<body>
+<div class="topbar">
+  <div class="container d-flex justify-content-between align-items-center">
+    <div class="fw-semibold"><i class="fa-solid fa-layer-group me-2"></i>Batches</div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-light btn-sm" href="{{ url_for('pharmacy_stock') }}">Back</a>
+      <a class="btn btn-outline-light btn-sm" href="{{ url_for('pharmacy_dashboard') }}">Dashboard</a>
+    </div>
+  </div>
+</div>
+
+<div class="container my-4">
+  <div class="cardx p-3 p-md-4">
+    {% if batches and batches[0].product_name %}
+      <h4 class="fw-bold mb-3" style="color:#0f766e;">{{ batches[0].product_name }}</h4>
+    {% endif %}
+
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead>
+          <tr>
+            <th>Batch No</th>
+            <th>Expiry</th>
+            <th class="text-end">Qty</th>
+            <th class="text-end">Purchase Rate</th>
+            <th class="text-end">MRP</th>
+            <th class="text-end">Selling</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in batches %}
+          <tr>
+            <td class="fw-semibold">{{ b.batch_no }}</td>
+            <td>{{ b.expiry_date or "—" }}</td>
+            <td class="text-end fw-semibold">{{ b.qty_on_hand }}</td>
+            <td class="text-end">{{ b.purchase_rate }}</td>
+            <td class="text-end">{{ b.mrp }}</td>
+            <td class="text-end">{{ b.selling_price }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="text-center text-muted py-4">No batches found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="text-muted small">
+      Tip: Later we can add “Stock Adjustment” buttons here (CRUD) to correct physical stock.
+    </div>
+  </div>
+</div>
+</body>
+</html>

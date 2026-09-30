@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Add Pharmacy Admin</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root{
+            --teal:#20b2aa;
+            --teal-dark:#1a9b96;
+            --teal-soft:#eaf8f7;
+            --bg:#f6f8fb;
+            --card:#ffffff;
+            --border:#e6edf2;
+            --text:#1f2937;   /* not black */
+            --muted:#6b7280;
+
+            --radius:16px;
+            --shadow:0 10px 24px rgba(31,41,55,0.08);
+        }
+
+        body{
+            background:var(--bg);
+            font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+            color:var(--text);
+            line-height:1.6;
+        }
+
+        .card-ui{
+            background:var(--card);
+            border:1px solid var(--border);
+            border-radius:var(--radius);
+            box-shadow:var(--shadow);
+        }
+
+        .card-header-ui{
+            background:var(--card);
+            border-bottom:1px solid var(--border);
+            border-radius:var(--radius) var(--radius) 0 0 !important;
+            padding:18px 22px;
+        }
+
+        .card-header-ui h4{
+            margin:0;
+            font-weight:750;
+            letter-spacing:-0.02em;
+            display:flex;
+            align-items:center;
+            gap:10px;
+        }
+
+        .card-header-ui h4 i{
+            color:var(--teal);
+        }
+
+        .btn-pill{
+            border-radius:999px;
+            padding:10px 16px;
+            font-weight:650;
+            font-size:0.92rem;
+            letter-spacing:0.01em;
+            transition:all .15s ease;
+        }
+
+        .btn-teal{
+            background:var(--teal);
+            border:1px solid var(--teal);
+            color:#fff;
+        }
+
+        .btn-teal:hover{
+            background:var(--teal-dark);
+            border-color:var(--teal-dark);
+            color:#fff;
+            transform:translateY(-1px);
+        }
+
+        .btn-outline-teal{
+            background:transparent;
+            border:1px solid rgba(32,178,170,.45);
+            color:var(--teal-dark);
+        }
+
+        .btn-outline-teal:hover{
+            background:var(--teal-soft);
+            border-color:rgba(32,178,170,.65);
+            color:var(--teal-dark);
+            transform:translateY(-1px);
+        }
+
+        .form-label{
+            font-weight:650;
+            color:var(--muted);
+            font-size:0.85rem;
+            text-transform:uppercase;
+            letter-spacing:0.04em;
+        }
+
+        .form-control, .form-select{
+            border-radius:14px;
+            border-color:var(--border);
+            padding:12px 14px;
+        }
+
+        .form-control:focus, .form-select:focus{
+            border-color:rgba(32,178,170,.6);
+            box-shadow:0 0 0 .2rem rgba(32,178,170,.14);
+        }
+
+        .text-muted{
+            color:var(--muted) !important;
+            font-style:italic;
+        }
+
+        /* Alerts: soft neutral (not red/blue/green) */
+        .alert{
+            border-radius:14px;
+            border:1px solid var(--border);
+            font-weight:550;
+        }
+
+        .alert-info, .alert-success, .alert-warning, .alert-danger{
+            background:#f3f7fa;
+            color:var(--text);
+        }
+
+        .alert .icon-teal{
+            color:var(--teal);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container my-5">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+
+                <div class="card-ui">
+                    <div class="card-header-ui">
+                        <h4 class="mb-0">
+                            <i class="fas fa-pills"></i> Add New Pharmacy Admin
+                        </h4>
+                    </div>
+
+                    <div class="card-body p-4">
+                        <a href="{{ url_for('hr_dashboard') }}" class="btn btn-pill btn-outline-teal mb-4">
+                            <i class="fas fa-arrow-left"></i> Back to Dashboard
+                        </a>
+
+                        {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                        {% for category, message in messages %}
+                        <div class="alert alert-dismissible fade show" role="alert">
+                            <i class="fas fa-info-circle icon-teal me-2"></i>
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                        {% endfor %}
+                        {% endif %}
+                        {% endwith %}
+
+                        <form method="POST">
+                            <div class="mb-4">
+                                <label class="form-label">Pharmacy Admin Name *</label>
+                                <input type="text" class="form-control" name="pharmacy_admin_name"
+                                       placeholder="e.g. Ramesh Kumar" required>
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="form-label">Gender *</label>
+                                <select class="form-select" name="pharmacy_admin_gender" required>
+                                    <option value="">Select Gender</option>
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="form-label">Email *</label>
+                                <input type="email" class="form-control" name="pharmacy_admin_email"
+                                       placeholder="admin@hospital.com" required>
+                                <small class="text-muted">Login credentials will be sent to this email</small>
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="form-label">Phone Number *</label>
+                                <input type="tel" class="form-control" name="pharmacy_admin_phone"
+                                       placeholder="10-digit number" required>
+                            </div>
+
+                            <div class="alert alert-info mb-4">
+                                <i class="fas fa-info-circle icon-teal"></i>
+                                <strong>Note:</strong> Username and password will be auto-generated and sent via email.
+                            </div>
+
+                            <button type="submit" class="btn btn-pill btn-teal w-100">
+                                <i class="fas fa-plus"></i> Add Pharmacy Admin
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

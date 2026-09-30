@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Add Department</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --teal: #20b2aa;
+            --teal-dark: #1a9b96;
+            --teal-soft: #eaf8f7;
+
+            --bg: #f6f8fb;
+            --card: #ffffff;
+            --border: #e6edf2;
+            --text: #1f2937;
+            --muted: #6b7280;
+
+            --radius: 16px;
+            --shadow: 0 10px 24px rgba(31, 41, 55, 0.08);
+        }
+
+        body {
+            background: var(--bg);
+            font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+            color: var(--text);
+        }
+
+        /* Card */
+        .card-ui {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+        }
+
+        /* Header */
+        .card-header-ui {
+            background: var(--card);
+            border-bottom: 1px solid var(--border);
+            padding: 18px 22px;
+            border-top-left-radius: var(--radius);
+            border-top-right-radius: var(--radius);
+        }
+
+        .card-header-ui h4 {
+            margin: 0;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-header-ui i {
+            color: var(--teal);
+        }
+
+        /* Buttons */
+        .btn-pill {
+            border-radius: 999px;
+            padding: 10px 18px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            letter-spacing: 0.01em;
+        }
+
+        .btn-teal {
+            background: var(--teal);
+            border: 1px solid var(--teal);
+            color: #fff;
+        }
+
+        .btn-teal:hover {
+            background: var(--teal-dark);
+            border-color: var(--teal-dark);
+            color: #fff;
+        }
+
+        .btn-outline-teal {
+            background: transparent;
+            border: 1px solid rgba(32,178,170,.45);
+            color: var(--teal-dark);
+        }
+
+        .btn-outline-teal:hover {
+            background: var(--teal-soft);
+            border-color: rgba(32,178,170,.65);
+            color: var(--teal-dark);
+        }
+
+        /* Form */
+        .form-label {
+            font-weight: 600;
+            color: var(--muted);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .form-control {
+            border-radius: 12px;
+            padding: 12px 14px;
+            border-color: var(--border);
+        }
+
+        .form-control:focus {
+            border-color: rgba(32,178,170,.6);
+            box-shadow: 0 0 0 .2rem rgba(32,178,170,.15);
+        }
+
+        /* Alerts (soft, not loud) */
+        .alert {
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            font-weight: 500;
+        }
+
+        .alert-success {
+            background: var(--teal-soft);
+            color: var(--teal-dark);
+        }
+
+        .alert-danger,
+        .alert-warning,
+        .alert-info {
+            background: #f3f6f8;
+            color: var(--text);
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container my-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+
+            <div class="card-ui">
+                <!-- Header -->
+                <div class="card-header-ui">
+                    <h4>
+                        <i class="fas fa-building"></i>
+                        Add New Department
+                    </h4>
+                </div>
+
+                <div class="p-4">
+
+                    <!-- Back button -->
+                    <div class="mb-4">
+                        <a href="{{ url_for('hr_dashboard') }}" class="btn btn-pill btn-outline-teal btn-sm">
+                            <i class="fas fa-arrow-left"></i> Back to Dashboard
+                        </a>
+                    </div>
+
+                    <!-- Flash messages -->
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                    {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+                    {% endwith %}
+
+                    <!-- Form -->
+                    <form method="POST">
+                        <div class="mb-4">
+                            <label class="form-label">Department Name *</label>
+                            <input type="text" class="form-control" name="department_name"
+                                   placeholder="e.g. Cardiology" required>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label">Description</label>
+                            <textarea class="form-control" name="department_description" rows="3"
+                                      placeholder="Optional description about the department..."></textarea>
+                        </div>
+
+                        <button class="btn btn-pill btn-teal w-100" type="submit">
+                            <i class="fas fa-plus"></i> Add Department
+                        </button>
+                    </form>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

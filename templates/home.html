@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Hospital Login Portal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Bootstrap 5.3.3 CDN -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+
+    <style>
+        :root {
+            --soft-teal: #38b2ac; /* Softer teal accent */
+            --teal-bg: #e6fffa;
+            --teal-border: #b2f5ea;
+            --text-black: #222;    /* For all text */
+            --bg-white: #fff;
+            --shadow-light: rgba(56,178,172,0.08);
+            --shadow-hover: rgba(56,178,172,0.15);
+        }
+
+        body {
+            min-height: 100vh;
+            background: var(--bg-white); /* White background */
+            font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+            color: var(--text-black);
+            padding: 20px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .portal-wrapper {
+            max-width: 630px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        .portal-header {
+            background: var(--bg-white);
+            border-radius: 18px 18px 0 0;
+            border: 1px solid var(--teal-border);
+            box-shadow: 0 2px 14px var(--shadow-light);
+            padding: 1.5rem 1rem 1.2rem;
+            text-align: center;
+        }
+
+        .portal-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-black);
+            margin-bottom: 0.5rem;
+            letter-spacing: -1px;
+        }
+
+        .portal-subtitle {
+            color: var(--text-black);
+            font-size: 1rem;
+            font-weight: 500;
+            margin-bottom: 0;
+        }
+
+        .roles-grid {
+            background: var(--bg-white);
+            border-radius: 0 0 18px 18px;
+            border: 1px solid var(--teal-border);
+            border-top: none;
+            box-shadow: 0 2px 14px var(--shadow-light);
+            padding: 1.2rem;
+        }
+
+        .role-card {
+            display: block;
+            border-radius: 14px;
+            padding: 1rem 0.9rem;
+            text-align: center;
+            text-decoration: none;
+            color: var(--text-black);
+            background: var(--teal-bg);
+            transition: box-shadow 0.25s, transform 0.2s;
+            box-shadow: 0 2px 8px var(--shadow-light);
+            border: 2px solid var(--teal-border);
+            min-height: 110px;
+            height: 100%;
+            position: relative;
+        }
+
+        .role-card:hover, .role-card:focus {
+            box-shadow: 0 8px 20px var(--shadow-hover);
+            transform: translateY(-4px) scale(1.02);
+            border-color: var(--soft-teal);
+            background: #cffbf7;
+            color: var(--text-black);
+        }
+
+        .role-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            font-size: 1.1rem;
+            font-weight: bold;
+            background: var(--soft-teal);
+            color: var(--bg-white);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1rem;
+        }
+
+        .role-title {
+            font-size: 1.15rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--text-black);
+        }
+
+        .role-desc {
+            font-size: 0.93rem;
+            color: var(--text-black);
+            font-weight: 400;
+        }
+
+        /* Responsive Grid for Mobile */
+        @media (max-width: 992px) {
+            .portal-title { font-size: 1.6rem; }
+            .role-card { min-height: 100px; padding: 1rem 1rem; }
+        }
+
+        @media (max-width: 768px) {
+            .portal-wrapper { padding: 0 6px; }
+            .portal-header, .roles-grid { border-radius: 12px; padding: 1rem; }
+            .role-card { min-height: 80px; padding: 0.7rem 0.5rem; margin-bottom: 0.7rem; }
+            .role-icon { margin-bottom: 0.5rem; }
+        }
+
+        @media (max-width: 576px) {
+            .portal-title { font-size: 1.27rem; }
+            .role-card { min-height: 70px; }
+            .role-desc { font-size: 0.87rem; }
+        }
+    </style>
+</head>
+<body>
+<div class="container portal-wrapper">
+    <div class="portal-header">
+        <h1 class="portal-title">Hospitag</h1>
+        <p class="portal-subtitle">Hospital Management Login Portal</p>
+    </div>
+    <div class="roles-grid">
+        <div class="row g-3">
+            <!-- Representative -->
+            <div class="col-12 col-md-4">
+                <a href="{{ url_for('rep_login') }}" class="role-card">
+                    <div class="role-icon">R</div>
+                    <div class="role-title">Representative</div>
+                    <div class="role-desc">
+                        Manage hospital admins and staff under your hospital.
+                    </div>
+                </a>
+            </div>
+            <!-- Admin -->
+            <div class="col-12 col-md-4">
+                <a href="{{ url_for('admin_login') }}" class="role-card">
+                    <div class="role-icon">A</div>
+                    <div class="role-title">Admin</div>
+                    <div class="role-desc">
+                        Add and manage receptionists, nurses, and doctors.
+                    </div>
+                </a>
+            </div>
+            <!-- Receptionist -->
+            <div class="col-12 col-md-4">
+                <a href="{{ url_for('receptionist_login') }}" class="role-card">
+                    <div class="role-icon">R</div>
+                    <div class="role-title">Receptionist</div>
+                    <div class="role-desc">
+                        Access your receptionist dashboard and tasks.
+                    </div>
+                </a>
+            </div>
+            <!-- Nurse -->
+            <div class="col-12 col-md-6">
+                <a href="{{ url_for('nurse_login') }}" class="role-card">
+                    <div class="role-icon">N</div>
+                    <div class="role-title">Nurse</div>
+                    <div class="role-desc">
+                        View and manage your assigned patients and duties.
+                    </div>
+                </a>
+            </div>
+            <!-- Doctor -->
+            <div class="col-12 col-md-6">
+                <a href="{{ url_for('doctor_login') }}" class="role-card">
+                    <div class="role-icon">D</div>
+                    <div class="role-title">Doctor</div>
+                    <div class="role-desc">
+                        Access your doctor dashboard and patient information.
+                    </div>
+                </a>
+            </div>
+        </div>
+</div>
+
+<div style="text-align:center; margin-top:12px; font-size:0.9rem; color:#777;">
+    Powered by <strong>M Pro9 Pvt Ltd</strong>
+</div>
+
+</div>
+</body>
+</html>

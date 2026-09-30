@@ -1,0 +1,553 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Doctor Availability Report - {{ config.HOSPITAL_NAME }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .report-container {
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        padding: 30px;
+        margin-bottom: 30px;
+    }
+    
+    .report-header {
+        border-bottom: 3px solid #007bff;
+        padding-bottom: 20px;
+        margin-bottom: 30px;
+        text-align: center;
+    }
+    
+    .availability-card {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+        border-left: 5px solid #007bff;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .availability-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    
+    .doctor-name {
+        font-size: 1.3em;
+        font-weight: 600;
+        color: #2c3e50;
+        margin-bottom: 8px;
+    }
+    
+    .department-badge {
+        background: #007bff;
+        color: white;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.85em;
+        font-weight: 500;
+        display: inline-block;
+        margin-bottom: 15px;
+    }
+    
+    .availability-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+        margin-top: 15px;
+    }
+    
+    .stat-box {
+        text-align: center;
+        padding: 12px;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .stat-number {
+        font-size: 1.8em;
+        font-weight: bold;
+        color: #2c3e50;
+        display: block;
+    }
+    
+    .stat-label {
+        font-size: 0.9em;
+        color: #7f8c8d;
+        margin-top: 4px;
+    }
+    
+    .utilization-bar {
+        width: 100%;
+        height: 20px;
+        background: #e9ecef;
+        border-radius: 10px;
+        overflow: hidden;
+        margin-top: 10px;
+        position: relative;
+    }
+    
+    .utilization-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #28a745, #20c997, #17a2b8);
+        border-radius: 10px;
+        transition: width 0.5s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+        font-size: 0.8em;
+    }
+    
+    .utilization-fill.low { background: linear-gradient(90deg, #dc3545, #e74c3c); }
+    .utilization-fill.medium { background: linear-gradient(90deg, #ffc107, #f39c12); }
+    .utilization-fill.high { background: linear-gradient(90deg, #28a745, #20c997); }
+    
+    .summary-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+    
+    .summary-card {
+        background: white;
+        border-radius: 12px;
+        padding: 25px;
+        text-align: center;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        border-top: 4px solid #007bff;
+    }
+    
+    .summary-card.capacity { border-top-color: #28a745; }
+    .summary-card.bookings { border-top-color: #ffc107; }
+    .summary-card.utilization { border-top-color: #dc3545; }
+    
+    .summary-number {
+        font-size: 2.5em;
+        font-weight: bold;
+        color: #2c3e50;
+        margin-bottom: 10px;
+    }
+    
+    .summary-label {
+        color: #7f8c8d;
+        font-size: 1.1em;
+        margin-bottom: 8px;
+    }
+    
+    .summary-description {
+        color: #95a5a6;
+        font-size: 0.9em;
+    }
+    
+    .no-data {
+        text-align: center;
+        padding: 60px 20px;
+        color: #7f8c8d;
+    }
+    
+    .no-data i {
+        font-size: 4em;
+        margin-bottom: 20px;
+        opacity: 0.3;
+    }
+    
+    .filter-bar {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 30px;
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+        align-items: end;
+    }
+    
+    .filter-group {
+        flex: 1;
+        min-width: 200px;
+    }
+    
+    .export-buttons {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+    
+    @media print {
+        .export-buttons, .filter-bar { display: none; }
+        .availability-card { break-inside: avoid; margin-bottom: 15px; }
+        .report-container { box-shadow: none; border: 1px solid #ddd; }
+    }
+    
+    @media (max-width: 768px) {
+        .availability-stats {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .filter-bar {
+            flex-direction: column;
+        }
+        
+        .filter-group {
+            width: 100%;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="export-buttons">
+        <button class="btn btn-primary" onclick="window.print()">
+            <i class="fas fa-print"></i> Print Report
+        </button>
+        <button class="btn btn-success" onclick="exportToExcel()">
+            <i class="fas fa-file-excel"></i> Export to Excel
+        </button>
+        <a href="/doctor-schedules" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Schedules
+        </a>
+    </div>
+
+    <!-- Summary Statistics -->
+    <div class="summary-cards">
+        {% set total_doctors = availability_report|length %}
+        {% set total_capacity = availability_report|sum(attribute='total_capacity') %}
+        {% set total_bookings = availability_report|sum(attribute='current_bookings') %}
+        {% set avg_utilization = (availability_report|sum(attribute='utilization_rate') / total_doctors) if total_doctors > 0 else 0 %}
+        
+        <div class="summary-card doctors">
+            <div class="summary-number">{{ total_doctors }}</div>
+            <div class="summary-label">Total Doctors</div>
+            <div class="summary-description">Active doctors with schedules</div>
+        </div>
+        
+        <div class="summary-card capacity">
+            <div class="summary-number">{{ total_capacity or 0 }}</div>
+            <div class="summary-label">Weekly Capacity</div>
+            <div class="summary-description">Total patient slots available</div>
+        </div>
+        
+        <div class="summary-card bookings">
+            <div class="summary-number">{{ total_bookings or 0 }}</div>
+            <div class="summary-label">Current Bookings</div>
+            <div class="summary-description">Confirmed appointments</div>
+        </div>
+        
+        <div class="summary-card utilization">
+            <div class="summary-number">{{ "%.1f"|format(avg_utilization) }}%</div>
+            <div class="summary-label">Average Utilization</div>
+            <div class="summary-description">Overall booking efficiency</div>
+        </div>
+    </div>
+
+    <div class="report-container">
+        <div class="report-header">
+            <h2><i class="fas fa-chart-bar"></i> Doctor Availability Report</h2>
+            <p class="text-muted">Weekly availability and utilization analysis</p>
+            <small class="text-muted">Generated on {{ moment().format('MMMM DD, YYYY at HH:mm') if moment else now.strftime('%B %d, %Y at %H:%M') }}</small>
+        </div>
+
+        {% if availability_report %}
+            {% for doctor in availability_report %}
+            <div class="availability-card">
+                <div class="doctor-name">
+                    <i class="fas fa-user-md"></i> {{ doctor.full_name }}
+                </div>
+                
+                {% if doctor.department_name %}
+                <span class="department-badge">{{ doctor.department_name }}</span>
+                {% endif %}
+                
+                <div class="availability-stats">
+                    <div class="stat-box">
+                        <span class="stat-number">{{ doctor.total_capacity or 0 }}</span>
+                        <div class="stat-label">Weekly Capacity</div>
+                    </div>
+                    
+                    <div class="stat-box">
+                        <span class="stat-number">{{ doctor.current_bookings or 0 }}</span>
+                        <div class="stat-label">Current Bookings</div>
+                    </div>
+                    
+                    <div class="stat-box">
+                        <span class="stat-number">{{ (doctor.total_capacity - doctor.current_bookings) if doctor.total_capacity else 0 }}</span>
+                        <div class="stat-label">Available Slots</div>
+                    </div>
+                    
+                    <div class="stat-box">
+                        <span class="stat-number">{{ doctor.utilization_rate or 0 }}%</span>
+                        <div class="stat-label">Utilization Rate</div>
+                    </div>
+                </div>
+                
+                <!-- Utilization Bar -->
+                <div class="utilization-bar">
+                    {% set rate = doctor.utilization_rate or 0 %}
+                    {% set bar_class = "low" if rate < 50 else ("medium" if rate < 80 else "high") %}
+                    <div class="utilization-fill {{ bar_class }}" style="width: {{ rate }}%">
+                        {{ rate }}% Utilized
+                    </div>
+                </div>
+                
+                {% if doctor.total_capacity == 0 %}
+                <div class="alert alert-warning mt-3 mb-0">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>No Schedule:</strong> This doctor has no scheduled appointments for the current week.
+                </div>
+                {% elif doctor.utilization_rate < 30 %}
+                <div class="alert alert-info mt-3 mb-0">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>Low Utilization:</strong> Consider reviewing schedule or increasing patient capacity.
+                </div>
+                {% elif doctor.utilization_rate > 90 %}
+                <div class="alert alert-success mt-3 mb-0">
+                    <i class="fas fa-check-circle"></i>
+                    <strong>High Utilization:</strong> Doctor is operating at near full capacity.
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="no-data">
+                <i class="fas fa-calendar-times"></i>
+                <h4>No Availability Data</h4>
+                <p>No doctor schedules found for the current period.</p>
+                <a href="/doctor-schedules" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Create Doctor Schedules
+                </a>
+            </div>
+        {% endif %}
+    </div>
+    
+    <!-- Detailed Analysis Section -->
+    {% if availability_report %}
+    <div class="report-container">
+        <h4><i class="fas fa-chart-line"></i> Utilization Analysis</h4>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <canvas id="utilizationChart" width="400" height="300"></canvas>
+            </div>
+            <div class="col-md-6">
+                <canvas id="capacityChart" width="400" height="300"></canvas>
+            </div>
+        </div>
+        
+        <div class="mt-4">
+            <h5>Key Insights</h5>
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-body text-center">
+                            <h6 class="card-title">Most Utilized</h6>
+                            {% set max_doctor = availability_report | sort(attribute='utilization_rate', reverse=true) | first %}
+                            {% if max_doctor %}
+                            <p class="card-text">
+                                <strong>{{ max_doctor.full_name }}</strong><br>
+                                {{ max_doctor.utilization_rate }}% utilization
+                            </p>
+                            {% else %}
+                            <p class="card-text text-muted">No data available</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-body text-center">
+                            <h6 class="card-title">Highest Capacity</h6>
+                            {% set max_capacity_doctor = availability_report | sort(attribute='total_capacity', reverse=true) | first %}
+                            {% if max_capacity_doctor %}
+                            <p class="card-text">
+                                <strong>{{ max_capacity_doctor.full_name }}</strong><br>
+                                {{ max_capacity_doctor.total_capacity }} weekly slots
+                            </p>
+                            {% else %}
+                            <p class="card-text text-muted">No data available</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-body text-center">
+                            <h6 class="card-title">Most Available</h6>
+                            {% set most_available = availability_report | sort(attribute='current_bookings') | first %}
+                            {% if most_available %}
+                            <p class="card-text">
+                                                                <strong>{{ most_available.full_name }}</strong><br>
+                                {{ (most_available.total_capacity - most_available.current_bookings) if most_available.total_capacity else 0 }} open slots
+                            </p>
+                            {% else %}
+                            <p class="card-text text-muted">No data available</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    {% if availability_report %}
+    // Prepare data for charts
+    const doctorNames = {{ availability_report | map(attribute='full_name') | list | tojson }};
+    const utilizationRates = {{ availability_report | map(attribute='utilization_rate') | list | tojson }};
+    const totalCapacities = {{ availability_report | map(attribute='total_capacity') | list | tojson }};
+    const currentBookings = {{ availability_report | map(attribute='current_bookings') | list | tojson }};
+    
+    // Utilization Chart
+    const utilizationCtx = document.getElementById('utilizationChart').getContext('2d');
+    new Chart(utilizationCtx, {
+        type: 'bar',
+        data: {
+            labels: doctorNames,
+            datasets: [{
+                label: 'Utilization Rate (%)',
+                data: utilizationRates,
+                backgroundColor: utilizationRates.map(rate => {
+                    if (rate < 50) return 'rgba(220, 53, 69, 0.8)';
+                    if (rate < 80) return 'rgba(255, 193, 7, 0.8)';
+                    return 'rgba(40, 167, 69, 0.8)';
+                }),
+                borderColor: utilizationRates.map(rate => {
+                    if (rate < 50) return 'rgba(220, 53, 69, 1)';
+                    if (rate < 80) return 'rgba(255, 193, 7, 1)';
+                    return 'rgba(40, 167, 69, 1)';
+                }),
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Doctor Utilization Rates'
+                },
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    title: {
+                        display: true,
+                        text: 'Utilization Rate (%)'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Doctors'
+                    }
+                }
+            }
+        }
+    });
+    
+    // Capacity vs Bookings Chart
+    const capacityCtx = document.getElementById('capacityChart').getContext('2d');
+    new Chart(capacityCtx, {
+        type: 'bar',
+        data: {
+            labels: doctorNames,
+            datasets: [
+                {
+                    label: 'Total Capacity',
+                    data: totalCapacities,
+                    backgroundColor: 'rgba(54, 162, 235, 0.8)',
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Current Bookings',
+                    data: currentBookings,
+                    backgroundColor: 'rgba(255, 99, 132, 0.8)',
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Capacity vs Current Bookings'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Number of Slots'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Doctors'
+                    }
+                }
+            }
+        }
+    });
+    {% endif %}
+});
+
+// Export to Excel function
+function exportToExcel() {
+    const data = {{ availability_report | tojson }};
+    
+    if (!data || data.length === 0) {
+        alert('No data available to export');
+        return;
+    }
+    
+    // Create CSV content
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "Doctor Name,Department,Total Capacity,Current Bookings,Available Slots,Utilization Rate (%)\n";
+    
+    data.forEach(doctor => {
+        const availableSlots = (doctor.total_capacity || 0) - (doctor.current_bookings || 0);
+        csvContent += `"${doctor.full_name}","${doctor.department_name || 'N/A'}",${doctor.total_capacity || 0},${doctor.current_bookings || 0},${availableSlots},${doctor.utilization_rate || 0}\n`;
+    });
+    
+    // Create and trigger download
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `doctor_availability_report_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// Print optimization
+window.addEventListener('beforeprint', function() {
+    // Hide interactive elements during print
+    document.querySelectorAll('.export-buttons').forEach(el => el.style.display = 'none');
+});
+
+window.addEventListener('afterprint', function() {
+    // Show interactive elements after print
+    document.querySelectorAll('.export-buttons').forEach(el => el.style.display = 'flex');
+});
+</script>
+{% endblock %}

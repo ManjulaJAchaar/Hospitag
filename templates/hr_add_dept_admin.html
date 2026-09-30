@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Department Admin - HR Dashboard</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --teal: #20b2aa;
+            --teal-dark: #1a9b96;
+            --teal-soft: #eaf8f7;
+            --teal-100: #d6f1ef;
+
+            --bg: #f6f8fb;
+            --card: #ffffff;
+            --border: #e6edf2;
+            --text: #1f2937; /* not black */
+            --muted: #6b7280;
+
+            --radius: 16px;
+            --shadow: 0 10px 24px rgba(31, 41, 55, 0.08);
+            --shadow-soft: 0 6px 14px rgba(31, 41, 55, 0.06);
+        }
+
+        body {
+            background: var(--bg);
+            font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        /* Card */
+        .card-ui {
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            background: var(--card);
+        }
+
+        .card-ui-soft {
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-soft);
+            background: var(--card);
+        }
+
+        /* Header (no gradient) */
+        .card-header-ui {
+            background: var(--card);
+            border-bottom: 1px solid var(--border);
+            border-radius: var(--radius) var(--radius) 0 0 !important;
+            padding: 18px 22px;
+        }
+
+        .card-header-ui h3 {
+            margin: 0;
+            font-weight: 750;
+            letter-spacing: -0.02em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-header-ui h3 i {
+            color: var(--teal);
+        }
+
+        /* Buttons */
+        .btn-pill {
+            border-radius: 999px;
+            padding: 10px 16px;
+            font-weight: 650;
+            font-size: 0.92rem;
+            letter-spacing: 0.01em;
+            transition: all .15s ease;
+        }
+
+        .btn-teal {
+            background: var(--teal);
+            border: 1px solid var(--teal);
+            color: #fff;
+        }
+
+        .btn-teal:hover {
+            background: var(--teal-dark);
+            border-color: var(--teal-dark);
+            color: #fff;
+            transform: translateY(-1px);
+        }
+
+        .btn-outline-teal {
+            background: transparent;
+            border: 1px solid rgba(32, 178, 170, 0.45);
+            color: var(--teal-dark);
+        }
+
+        .btn-outline-teal:hover {
+            background: var(--teal-soft);
+            border-color: rgba(32, 178, 170, 0.65);
+            color: var(--teal-dark);
+            transform: translateY(-1px);
+        }
+
+        .btn-neutral {
+            background: #fff;
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        .btn-neutral:hover {
+            background: #f3f7fa;
+            border-color: #dbe6ee;
+            color: var(--text);
+            transform: translateY(-1px);
+        }
+
+        /* Floating focus */
+        .form-floating>.form-control:focus~label,
+        .form-floating>.form-select:focus~label {
+            color: var(--teal-dark);
+        }
+
+        .form-floating>.form-control:focus,
+        .form-floating>.form-select:focus {
+            border-color: rgba(32, 178, 170, 0.6);
+            box-shadow: 0 0 0 0.25rem rgba(32, 178, 170, 0.14);
+        }
+
+        .form-control,
+        .form-select {
+            border-radius: 14px;
+            border-color: var(--border);
+        }
+
+        .form-text {
+            color: var(--muted);
+            font-weight: 500;
+        }
+
+        /* Alerts (soft, not colorful) */
+        .alert {
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            font-weight: 550;
+        }
+
+        .alert-success,
+        .alert-warning,
+        .alert-danger,
+        .alert-info {
+            background: #f3f7fa;
+            color: var(--text);
+        }
+
+        /* Special warning when no departments */
+        .notice-teal {
+            background: var(--teal-soft);
+            border: 1px solid rgba(32, 178, 170, 0.35);
+            border-radius: 16px;
+            padding: 18px;
+        }
+
+        .notice-teal i {
+            color: var(--teal);
+        }
+
+        /* Password strength (no red/green/yellow) */
+        .password-strength-wrap {
+            height: 7px;
+            border-radius: 999px;
+            background: #eef3f7;
+            border: 1px solid var(--border);
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .password-strength-bar {
+            height: 100%;
+            width: 0%;
+            background: var(--teal);
+            transition: width .2s ease, background .2s ease;
+        }
+
+        /* Icon color (avoid bootstrap text-success) */
+        .icon-teal {
+            color: var(--teal) !important;
+        }
+
+        .muted {
+            color: var(--muted);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container my-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-8 col-md-10">
+
+                <div class="card-ui">
+                    <div class="card-header-ui">
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <h3 class="mb-0">
+                                <i class="fas fa-user-tie"></i> Add Department Admin
+                            </h3>
+                            <a href="{{ url_for('hr_dashboard') }}" class="btn btn-pill btn-outline-teal btn-sm">
+                                <i class="fas fa-arrow-left"></i> Back to Dashboard
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="card-body p-4">
+                        <!-- Flash Messages -->
+                        {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                        {% for category, message in messages %}
+                        <div class="alert alert-dismissible fade show" role="alert">
+                            <i class="fas fa-info-circle icon-teal me-2"></i>
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                        {% endfor %}
+                        {% endif %}
+                        {% endwith %}
+
+                        <!-- Check if departments exist -->
+                        {% if not departments %}
+                        <div class="notice-teal text-center">
+                            <i class="fas fa-exclamation-circle fa-2x mb-2"></i>
+                            <h5 style="font-weight:750; letter-spacing:-0.01em;">No Departments Available</h5>
+                            <p class="mb-3 muted">Create departments first before adding department admins.</p>
+                            <a href="{{ url_for('hr_add_department') }}" class="btn btn-pill btn-teal">
+                                <i class="fas fa-building"></i> Add Department First
+                            </a>
+                        </div>
+                        {% else %}
+
+                        <form method="POST" id="deptAdminForm">
+                            <div class="row">
+                                <!-- Department Selection -->
+                                <div class="col-md-6 mb-4">
+                                    <div class="form-floating">
+                                        <select class="form-select" id="department_id" name="department_id" required>
+                                            <option value="">Choose Department...</option>
+                                            {% for dept in departments %}
+                                            <option value="{{ dept.id }}">{{ dept.department_name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <label for="department_id">
+                                            <i class="fas fa-building muted me-1"></i>Department *
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- Admin Name -->
+                                <div class="col-md-6 mb-4">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="admin_name" name="admin_name"
+                                            placeholder="Admin Full Name" required>
+                                        <label for="admin_name">
+                                            <i class="fas fa-user muted me-1"></i>Admin Full Name *
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- Gender -->
+                                <div class="col-md-6 mb-4">
+                                    <div class="form-floating">
+                                        <select class="form-select" id="admin_gender" name="admin_gender" required>
+                                            <option value="">Select Gender...</option>
+                                            <option value="Male">Male</option>
+                                            <option value="Female">Female</option>
+                                            <option value="Other">Other</option>
+                                        </select>
+                                        <label for="admin_gender">
+                                            <i class="fas fa-venus-mars muted me-1"></i>Gender *
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- Email -->
+                                <div class="col-md-6 mb-4">
+                                    <div class="form-floating">
+                                        <input type="email" class="form-control" id="admin_email" name="admin_email"
+                                            placeholder="admin@example.com" required>
+                                        <label for="admin_email">
+                                            <i class="fas fa-envelope muted me-1"></i>Email Address *
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- Phone -->
+                                <div class="col-md-6 mb-4">
+                                    <div class="form-floating">
+                                        <input type="tel" class="form-control" id="admin_phone" name="admin_phone"
+                                            placeholder="1234567890" pattern="[0-9]{10}" required>
+                                        <label for="admin_phone">
+                                            <i class="fas fa-phone muted me-1"></i>Phone Number *
+                                        </label>
+                                        <div class="form-text">10-digit phone number without spaces</div>
+                                    </div>
+                                </div>
+
+                                <!-- Username -->
+                                <div class="col-md-6 mb-4">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="admin_username"
+                                            name="admin_username" placeholder="username" required>
+                                        <label for="admin_username">
+                                            <i class="fas fa-at muted me-1"></i>Username *
+                                        </label>
+                                        <div class="form-text">Unique username for login</div>
+                                    </div>
+                                </div>
+
+                                <!-- Password -->
+                                <div class="col-12 mb-4">
+                                    <div class="form-floating">
+                                        <input type="password" class="form-control" id="admin_password"
+                                            name="admin_password" placeholder="password" minlength="6" required>
+                                        <label for="admin_password">
+                                            <i class="fas fa-lock muted me-1"></i>Temporary Password *
+                                        </label>
+
+                                        <div class="password-strength-wrap">
+                                            <div class="password-strength-bar"></div>
+                                        </div>
+
+                                        <div class="form-text mt-2">
+                                            <i class="fas fa-info-circle icon-teal"></i>
+                                            This temporary password will be sent to the admin via email
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Submit -->
+                            <div class="mt-4 pt-3" style="border-top: 1px solid var(--border);">
+                                <div class="row">
+                                    <div class="col-md-6 mb-2 mb-md-0">
+                                        <button type="button" class="btn btn-pill btn-neutral w-100"
+                                            onclick="window.history.back()">
+                                            <i class="fas fa-arrow-left"></i> Cancel & Go Back
+                                        </button>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <button type="submit" class="btn btn-pill btn-teal w-100">
+                                            <i class="fas fa-user-plus"></i> Create Department Admin
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Info Card -->
+                <div class="card-ui-soft mt-4">
+                    <div class="card-body p-4">
+                        <h6 class="card-title" style="color: var(--muted); font-weight:750;">
+                            <i class="fas fa-info-circle icon-teal"></i> What happens next?
+                        </h6>
+                        <ul class="list-unstyled mb-0">
+                            <li class="mb-2"><i class="fas fa-check icon-teal me-2"></i>Admin account will be created instantly</li>
+                            <li class="mb-2"><i class="fas fa-check icon-teal me-2"></i>Login credentials will be sent via email</li>
+                            <li class="mb-2"><i class="fas fa-check icon-teal me-2"></i>Admin can login and manage their department</li>
+                            <li><i class="fas fa-check icon-teal me-2"></i>Admin should change password after first login</li>
+                        </ul>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // Password strength indicator (teal-only)
+        document.getElementById('admin_password').addEventListener('input', function () {
+            const password = this.value;
+            const bar = document.querySelector('.password-strength-bar');
+
+            let strength = 0;
+            if (password.length >= 6) strength += 25;
+            if (password.match(/[a-z]/)) strength += 25;
+            if (password.match(/[A-Z]/)) strength += 25;
+            if (password.match(/[0-9]/)) strength += 25;
+
+            bar.style.width = strength + '%';
+
+            // Teal shades only (no red/yellow/green)
+            if (strength < 50) {
+                bar.style.background = 'rgba(32,178,170,0.35)';
+            } else if (strength < 75) {
+                bar.style.background = 'rgba(32,178,170,0.65)';
+            } else {
+                bar.style.background = 'var(--teal)';
+            }
+        });
+
+        // Auto-generate username from name
+        document.getElementById('admin_name').addEventListener('blur', function () {
+            const name = this.value.toLowerCase().replace(/\s+/g, '');
+            const usernameField = document.getElementById('admin_username');
+            if (!usernameField.value && name) {
+                usernameField.value = name + Math.floor(Math.random() * 100);
+            }
+        });
+
+        // Form validation
+        document.getElementById('deptAdminForm').addEventListener('submit', function (e) {
+            const phone = document.getElementById('admin_phone').value;
+            if (!/^\d{10}$/.test(phone)) {
+                e.preventDefault();
+                alert('Please enter a valid 10-digit phone number');
+                return false;
+            }
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>View Patients</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background: white;
+            font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+            min-height: 100vh;
+            color: #000;
+        }
+
+        .header-bar {
+            background: #20b2aa;
+            color: #fff;
+            border-radius: 1.5rem;
+            box-shadow: 0 4px 18px rgba(32, 178, 170, .15);
+            padding: 2rem 2.5rem 1.2rem 2.5rem;
+            margin-bottom: 32px;
+            text-align: center;
+            letter-spacing: .02em;
+            position: relative;
+        }
+
+        .back-button {
+            position: absolute;
+            left: 2rem;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 25px;
+            padding: 8px 20px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .back-button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            color: #fff;
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: translateY(-50%) translateX(-3px);
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 1.2rem;
+            padding: 2rem;
+            box-shadow: 0 2px 22px rgba(128, 128, 128, 0.15);
+            border: 1px solid #e0e0e0;
+        }
+
+        table {
+            width: 100%;
+        }
+
+        th {
+            background: #20b2aa;
+            color: #fff;
+            border: none;
+            font-weight: 600;
+            letter-spacing: .01em;
+        }
+
+        tbody tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+
+        tbody tr:hover {
+            background: #e9ecef;
+            transition: background .2s;
+        }
+
+        td,
+        th {
+            text-align: center;
+            vertical-align: middle;
+            color: #000;
+        }
+
+        td {
+            border-color: #e0e0e0;
+        }
+
+        .btn-warning,
+        .btn-danger,
+        .btn-success {
+            border-radius: 20px;
+            font-weight: 500;
+            padding: 4px 18px;
+            font-size: 0.99rem;
+            transition: filter .15s;
+        }
+
+        .btn-warning {
+            background: #20b2aa;
+            color: #fff;
+            border: none;
+        }
+
+        .btn-warning:hover {
+            background: #1a9b96;
+            color: #fff;
+        }
+
+        .btn-success {
+            background: #6c757d;
+            color: #fff;
+            border: none;
+        }
+
+        .btn-success:hover {
+            background: #5a6268;
+            color: #fff;
+        }
+
+        .btn-danger {
+            background: #6c757d;
+            color: #fff;
+            border: none;
+        }
+
+        .btn-danger:hover {
+            background: #5a6268;
+            color: #fff;
+        }
+
+        .no-vitals {
+            color: #6c757d;
+            font-style: italic;
+        }
+
+        .badge.bg-info {
+            background-color: #20b2aa !important;
+        }
+
+        .text-muted {
+            color: #6c757d !important;
+        }
+
+        strong {
+            color: #000;
+        }
+
+        @media (max-width:991px) {
+
+            .header-bar,
+            .table-container {
+                padding: 1rem;
+            }
+
+            .back-button {
+                left: 1rem;
+                padding: 6px 16px;
+                font-size: 0.9rem;
+            }
+
+            th,
+            td {
+                font-size: 0.92rem;
+            }
+        }
+
+        @media (max-width:768px) {
+            .table-responsive {
+                font-size: .91rem;
+            }
+
+            .header-bar {
+                padding: .7rem;
+                text-align: left;
+                padding-left: 4rem;
+            }
+
+            .back-button {
+                left: 0.5rem;
+                padding: 5px 12px;
+                font-size: 0.85rem;
+            }
+
+            .header-bar h2 {
+                font-size: 1.3rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header-bar">
+        <a href="{{ url_for('nurse_dashboard') }}" class="back-button">
+            <i class="bi bi-arrow-left me-1"></i>Back
+        </a>
+        <h2 class="fw-bold mb-0"><i class="bi bi-person-lines-fill me-2"></i>Patient Details & Latest Vitals</h2>
+    </div>
+    <div class="container mb-3">
+    </div>
+
+    <div class="container table-container mt-4">
+        <div class="table-responsive">
+            <table class="table table-striped align-middle shadow-sm">
+                <thead>
+                    <tr>
+                        <th>Sl.No</th>
+                        <th>Patient Name</th>
+                        <th>Age</th>
+                        <th>Gender</th>
+                        <th>Temperature (°F)</th>
+                        <th>BP (Sys/Dia)</th>
+                        <th>Pulse</th>
+                        <th>Respiratory Rate</th>
+                        <th>SpO2 (%)</th>
+                        <th>Weight (kg)</th>
+                        <th>Height (cm)</th>
+                        <th>Blood Sugar</th>
+                        <th>Pain Score</th>
+                        <th>Notes</th>
+                        <th>Last Vitals</th>
+                        <th>Recorded By</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for patient in patients %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td><strong>{{ patient.patient_name }}</strong></td>
+                        <td>{{ patient.age }}</td>
+                        <td>{{ patient.gender }}</td>
+                        <td>
+                            {% if patient.temperature %}
+                            {{ patient.temperature }}°F
+                            {% else %}
+                            <span class="no-vitals">No data</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if patient.bp_systolic and patient.bp_diastolic %}
+                            {{ patient.bp_systolic }}/{{ patient.bp_diastolic }}
+                            {% else %}
+                            <span class="no-vitals">No data</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ patient.pulse or '<span class="no-vitals">No data</span>' | safe }}</td>
+                        <td>{{ patient.respiratory_rate or '<span class="no-vitals">No data</span>' | safe }}</td>
+                        <td>
+                            {% if patient.sp_o2 %}
+                            {{ patient.sp_o2 }}%
+                            {% else %}
+                            <span class="no-vitals">No data</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ patient.weight or '<span class="no-vitals">No data</span>' | safe }}</td>
+                        <td>{{ patient.height or '<span class="no-vitals">No data</span>' | safe }}</td>
+                        <td>{{ patient.blood_sugar or '<span class="no-vitals">No data</span>' | safe }}</td>
+                        <td>{{ patient.pain_score or '<span class="no-vitals">No data</span>' | safe }}</td>
+                        <td>{{ patient.additional_notes or '-' }}</td>
+                        <td>
+                            {% if patient.created_at %}
+                            {{ patient.created_at }}
+                            {% else %}
+                            <span class="no-vitals">No vitals recorded</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if patient.recorded_by_staff %}
+                            <span class="badge bg-info">{{ patient.recorded_by_staff }}</span>
+                            <small class="d-block text-muted">{{ patient.staff_role }}</small>
+                            {% else %}
+                            <span class="no-vitals">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('edit_patient', patient_id=patient.patient_id) }}"
+                                class="btn btn-warning btn-sm me-1">
+                                <i class="bi bi-pencil-square"></i> Edit
+                            </a>
+                            <!-- <a href="{{ url_for('add_vitals', patient_id=patient.patient_id) }}"
+                                class="btn btn-success btn-sm me-1">
+                                <i class="bi bi-heart-pulse"></i> Vitals
+                            </a> -->
+                            <form action="{{ url_for('delete_nurse_vitals', patient_id=patient.patient_id) }}"
+                                method="post" style="display:inline;">
+                                <button type="submit" class="btn btn-danger btn-sm"
+                                    onclick="return confirm('Are you sure you want to delete your vitals for this patient?');">
+                                    <i class="bi bi-eraser"></i> Delete My Vitals
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+
+</html>

@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Comprehensive Staff & Patient Flow</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --teal-base: #29b7af;
+      --teal-bg: #e7f8f8;
+      --teal-light: #b6e7e5;
+      --teal-dark: #137872;
+      --grey-border: #e4e8eb;
+      --grey-bg: #f4f7f9;
+      --badge-active: #27c68e;
+      --badge-inactive: #e1e6ea;
+      --text-main: #21343c;
+    }
+
+    body {
+      background: var(--grey-bg);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: var(--text-main);
+    }
+
+    .main-container {
+      max-width: 880px;
+      margin: 30px auto;
+      box-shadow: 0 4px 25px rgba(60, 130, 130, 0.10);
+      border-radius: 16px;
+      background: #fff;
+      padding: 24px 20px 28px 20px;
+      border: 1px solid var(--grey-border);
+    }
+
+    h2 i {
+      color: var(--teal-base);
+    }
+
+    .search-filter-section {
+      background: #fff;
+      border-radius: 12px;
+      border: 1px solid var(--grey-border);
+      padding: 14px 16px 7px 16px;
+      margin-bottom: 20px;
+    }
+
+    .search-filter-section .form-control {
+      border-radius: 999px;
+      font-size: 1rem;
+    }
+
+    .admin-block {
+      background: var(--teal-bg);
+      border-radius: 13px;
+      border: 1px solid var(--teal-light);
+      padding: 20px 18px 14px 18px;
+      margin-bottom: 34px;
+      margin-top: 22px;
+      position: relative;
+    }
+
+    .admin-title {
+      font-weight: 600;
+      color: var(--teal-dark);
+      margin-bottom: 5px;
+      font-size: 1.22rem;
+      margin-top: -7px;
+    }
+
+    .admin-meta small {
+      display: inline-block;
+      margin-right: 24px;
+      color: #666;
+    }
+
+    .staff-table {
+      width: 100%;
+      margin-top: 8px;
+      border-spacing: 0;
+      background: transparent;
+    }
+
+    .staff-table th {
+      background: var(--teal-light);
+      color: var(--teal-dark);
+      font-size: 1rem;
+      padding: 7px 6px 7px 7px;
+    }
+
+    .staff-table td {
+      background: #fff;
+      font-size: 0.99rem;
+      border-top: 1px solid var(--grey-border);
+      vertical-align: middle;
+    }
+
+    .staff-table tr:last-child td {
+      border-bottom: 1px solid var(--grey-border);
+    }
+
+    .staff-name-cell {
+      min-width: 160px;
+      width: 18%;
+    }
+
+    .staff-role-cell {
+      width: 10%;
+    }
+
+    .staff-activity-cell {
+      width: 70%;
+    }
+
+    .badge-active {
+      background: var(--badge-active);
+      color: #fff;
+      border-radius: 14px;
+      padding: 2px 12px 2px 10px;
+      font-size: 13px;
+      font-weight: 500;
+      margin-right: 3px;
+      margin-bottom: 2px;
+    }
+
+    .badge-inactive {
+      background: var(--badge-inactive);
+      color: #555;
+      border-radius: 14px;
+      padding: 2px 12px 2px 10px;
+      font-size: 13px;
+      font-weight: 500;
+      border: 1px solid #cacfd1;
+      margin-right: 3px;
+      margin-bottom: 2px;
+    }
+
+    .stats-badge {
+      display: inline-block;
+      border-radius: 18px;
+      padding: 4px 16px;
+      font-weight: 500;
+      font-size: 13px;
+      margin-right: 7px;
+      margin-bottom: 3px;
+      color: var(--teal-dark);
+      background: #e7f8f8;
+      border: 1px solid #b6e7e5;
+    }
+
+    .badge-role {
+      background: var(--teal-light);
+      color: var(--teal-dark);
+      font-weight: 600;
+      border-radius: 999px;
+      padding: 5px 13px;
+      font-size: 13px;
+      margin-right: 8px;
+    }
+
+    .collapse-btn {
+      background: none;
+      border: none;
+      color: var(--teal-dark);
+      cursor: pointer;
+      margin-left: 8px;
+      font-size: 16px;
+    }
+
+    .activity-section {
+      padding: 18px 14px;
+      background: var(--grey-bg);
+      border: 1px solid var(--teal-light);
+      border-radius: 11px;
+      margin: 13px 0 7px 0;
+    }
+
+    .activity-section h6 {
+      color: var(--teal-dark);
+      font-weight: 600;
+    }
+
+    .activity-item {
+      background: #fff;
+      border-left: 3px solid var(--teal-base);
+      border-radius: 6px;
+      margin-bottom: 13px;
+      padding: 10px 14px 7px 14px;
+      box-shadow: 0 1px 3px rgba(60, 130, 130, 0.03);
+    }
+
+    .activity-head {
+      font-size: 1.06rem;
+      font-weight: 500;
+      margin-bottom: 5px;
+      color: var(--teal-dark);
+    }
+
+    .patient-link {
+      color: var(--teal-dark);
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    .no-activities {
+      text-align: center;
+      color: #aaa;
+      font-size: 13px;
+      font-style: italic;
+      background: #f8fafb;
+      border-radius: 8px;
+      padding: 18px 10px 10px 10px;
+      margin-top: 10px;
+      border: 1px dashed var(--grey-border);
+    }
+
+    .modal-content {
+      border-radius: 13px;
+    }
+
+    @media (max-width: 900px) {
+      .main-container {
+        max-width: 99vw;
+        padding: 2vw 0.5vw;
+      }
+
+      .admin-block {
+        padding: 10px 3vw 9px 3vw;
+      }
+    }
+
+    @media (max-width: 650px) {
+
+      .staff-table th,
+      .staff-table td {
+        font-size: 12.3px !important;
+      }
+
+      .admin-block {
+        padding: 10px 6px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="main-container">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <div>
+        <h2 class="mb-0">
+          <i class="fas fa-sitemap"></i>
+          Comprehensive Staff & Patient Flow
+        </h2>
+        <p class="text-muted mb-0">Admin &rarr; Staff &rarr; Patient Activities Tracking</p>
+      </div>
+      <div>
+        <!-- <button id="rfid-scan-btn" class="btn btn-info btn-sm fw-bold me-2"
+          style="background:var(--teal-base); border-color:var(--teal-base);">
+          <i class="fas fa-search"></i> Scan RFID
+        </button> -->
+        <a href="{{ url_for('rep_dashboard') }}" class="btn btn-secondary btn-sm"
+          style="background:#dbe7eb;color:#21343c;">
+          <i class="fas fa-arrow-left"></i> Back to Dashboard
+        </a>
+      </div>
+    </div>
+    <!-- Search Filter Bar -->
+    <div class="search-filter-section mb-1">
+      <div class="row g-2">
+        <div class="col-md-4">
+          <input type="text" id="searchInput" class="form-control"
+            placeholder="🔍 Search by admin, staff, or patient name...">
+        </div>
+        <div class="col-md-4">
+          <select id="roleFilter" class="form-control">
+            <option value="">All Roles</option>
+            <option value="Receptionist">Receptionists</option>
+            <option value="Nurse">Nurses</option>
+            <option value="Doctor">Doctors</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <select id="adminFilter" class="form-control">
+            <option value="">All Admins</option>
+            {% set admin_names = staff_rows | map(attribute='admin_name') | unique | list %}
+            {% for admin_name in admin_names %}
+            <option value="{{ admin_name }}">{{ admin_name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Admin/Staff Table (one admin block per admin only) -->
+    {% set admin_map = {} %}
+    {% for row in staff_rows %}
+    {% if admin_map.update({row.admin_name: none}) %}{% endif %}
+    {% endfor %}
+    {% for admin_name in admin_map.keys() %}
+    {% set admin_staff = staff_rows | selectattr('admin_name', 'equalto', admin_name) | list %}
+    {% set admin_row = admin_staff[0] %}
+    <div class="admin-block" data-admin="{{ admin_name }}">
+      <div class="row mb-2">
+        <div class="col-md-7">
+          <div class="admin-title">
+            <i class="fas fa-user-shield"></i> Admin: {{ admin_row.admin_name or "-" }}
+          </div>
+          <div class="admin-meta mb-2" style="font-size:14px;">
+            <small><i class="fas fa-envelope"></i> {{ admin_row.admin_email or "-" }}</small>
+            <small><i class="fas fa-phone"></i> {{ admin_row.admin_phone or "-" }}</small>
+            <small><i class="fas fa-building"></i> {{ admin_row.admin_department or 'General' }}</small>
+            <small><i class="fas fa-user"></i> @{{ admin_row.admin_username or "-" }}</small>
+            <br>
+            <small><i class="fas fa-calendar"></i> Created: {{ admin_row.admin_created_on or "-" }}</small>
+            {% if admin_row.admin_active %}
+            <span class="badge badge-active"><i class="fas fa-circle"></i> Active</span>
+            {% else %}
+            <span class="badge badge-inactive"><i class="fas fa-circle"></i> Inactive</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="col-md-5 text-end pt-2">
+          <span class="stats-badge"><i class="fas fa-users"></i>
+            {{ admin_staff | selectattr('role', 'equalto', 'Receptionist') | sum(attribute='patient_count') }} Patients
+          </span>
+          <span class="stats-badge"><i class="fas fa-heartbeat"></i>
+            {{ admin_staff | selectattr('role', 'equalto', 'Nurse') | sum(attribute='vitals_count') }} Vitals
+          </span>
+          <span class="stats-badge"><i class="fas fa-stethoscope"></i>
+            {{ admin_staff | selectattr('role', 'equalto', 'Doctor') | sum(attribute='consultation_count') }}
+            Consultations
+          </span>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="staff-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Role</th>
+              <th>Details & Activities</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for staff in admin_staff %}
+            <tr>
+              <td class="staff-name-cell">
+                {{ staff.full_name }}<br>
+                <small class="text-secondary"><i class="fas fa-envelope"></i> {{ staff.email }}<br>
+                  <i class="fas fa-user"></i> @{{ staff.username }}</small>
+              </td>
+              <td class="staff-role-cell">
+                <span class="badge-role">{{ staff.role }}</span>
+              </td>
+              <td class="staff-activity-cell">
+                <button class="collapse-btn" data-bs-toggle="collapse"
+                  data-bs-target="#staff-{{ staff.staff_id }}-details" aria-expanded="false"
+                  title="Show/Hide staff activities">
+                  <i class="fa fa-chevron-down"></i>
+                </button>
+                <span style="font-size:12.9px;color:#689;">Joined: {{ staff.staff_created_on or "-" }}</span>
+                <!-- Staff Activities collapsible -->
+                <div class="collapse mt-2" id="staff-{{ staff.staff_id }}-details">
+                  {% if staff.role == 'Receptionist' and staff.staff_id in receptionist_patients %}
+                  <div class="activity-section">
+                    <h6><i class="fas fa-user-plus"></i> Patients Added by {{ staff.full_name }}</h6>
+                    {% for patient in receptionist_patients[staff.staff_id][:5] %}
+                    <div class="activity-item">
+                      <div class="activity-head">
+                        <span class="patient-link" onclick="showPatientDetails({{ patient.id }})">
+                          <i class="fas fa-user"></i> {{ patient.full_name }}
+                        </span>
+                        <span class="badge bg-info" style="background:var(--teal-base);margin-left:8px;">
+                          {{ patient.age }}y {{ patient.gender }}
+                        </span>
+                        {% if patient.is_active %}
+                        <span class="badge badge-active">Active</span>
+                        {% else %}
+                        <span class="badge badge-inactive">Inactive</span>
+                        {% endif %}
+                                           <div style="font-size:13px;">
+                        <i class="fas fa-id-card"></i> RFID: {{ patient.rfid_uid or 'Not Assigned' }}
+                        <span style="margin-left:10px"><i class="fas fa-calendar"></i> {{ patient.created_at }}</span>
+                      </div>
+                    </div>
+                    {% endfor %}
+                    {% if receptionist_patients[staff.staff_id] | length > 5 %}
+                    <div class="text-center mt-2">
+                      <button class="btn btn-sm btn-outline-info" onclick="showAllPatients({{ staff.staff_id }})">
+                        <i class="fas fa-eye"></i> View All {{ receptionist_patients[staff.staff_id] | length }}
+                        Patients
+                      </button>
+                    </div>
+                    {% endif %}
+                  </div>
+                  {% elif staff.role == 'Nurse' and staff.staff_id in nurse_vitals %}
+                  <div class="activity-section">
+                    <h6><i class="fas fa-heartbeat"></i> Vitals checked by {{ staff.full_name }}</h6>
+                    {% for vital in nurse_vitals[staff.staff_id][:5] %}
+                    <div class="activity-item">
+                      <div class="activity-head">
+                        <span class="patient-link" onclick="showPatientDetails({{ vital.patient_id }})">
+                          <i class="fas fa-user"></i> {{ vital.patient_name }}
+                        </span>
+                        <span style="font-size:12px;color:#888;">({{ vital.rfid_uid }})</span>
+                        {% if vital.is_active %}
+                        <span class="badge badge-active">Active</span>
+                        {% else %}
+                        <span class="badge badge-inactive">Inactive</span>
+                        {% endif %}
+                      </div>
+                      <div style="font-size:13px;">
+                        <i class="fas fa-thermometer-half"></i> {{ vital.temperature }}°C &nbsp;
+                        <i class="fas fa-heartbeat"></i> {{ vital.pulse }} BPM &nbsp;
+                        <i class="fas fa-tint"></i> {{ vital.bp_systolic }}/{{ vital.bp_diastolic }} &nbsp;
+                        <i class="fas fa-lungs"></i> {{ vital.sp_o2 }}%
+                        <span style="margin-left:9px"><i class="fas fa-calendar"></i> {{ vital.vitals_time }}</span>
+                      </div>
+                    </div>
+                    {% endfor %}
+                  </div>
+                  {% elif staff.role == 'Doctor' and staff.staff_id in doctor_consultancy %}
+                  <div class="activity-section">
+                    <h6><i class="fas fa-stethoscope"></i> Consultations by Dr. {{ staff.full_name }}</h6>
+                    {% for consult in doctor_consultancy[staff.staff_id][:5] %}
+                    <div class="activity-item">
+                      <div class="activity-head">
+                        <span class="patient-link" onclick="showPatientDetails({{ consult.patient_id }})">
+                          <i class="fas fa-user"></i> {{ consult.patient_name }}
+                        </span>
+                        <span style="font-size:12px;color:#888;">({{ consult.rfid_uid }})</span>
+                        {% if consult.is_active %}
+                        <span class="badge badge-active">Active</span>
+                        {% else %}
+                        <span class="badge badge-inactive">Inactive</span>
+                        {% endif %}
+                      </div>
+                      <div style="font-size:13px;">
+                        <strong>Chief Complaint:</strong> {{ consult.chief_complaint }}<br>
+                        <strong>Diagnosis:</strong> {{ consult.diagnosis }}<br>
+                        <strong>Prescription:</strong> {{ consult.prescription or '-' }}
+                        <span style="margin-left:9px">
+                          <i class="fas fa-calendar"></i> {{ consult.consultation_time }}
+                        </span>
+                      </div>
+                    </div>
+                    {% endfor %}
+                  </div>
+                  {% else %}
+                  <div class="no-activities">
+                    <i class="fas fa-info-circle"></i>
+                    No activities recorded yet for this {{ staff.role.lower() }}.
+                  </div>
+                  {% endif %}
+                </div>
+              </td>
+              <td>
+                {% if staff.staff_active %}
+                <span class="badge badge-active"><i class="fas fa-circle"></i> Active</span>
+                {% else %}
+                <span class="badge badge-inactive"><i class="fas fa-circle"></i> Inactive</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Patient Details Modal -->
+  <div class="modal fade" id="patientModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="fas fa-user"></i> Patient Details & Timeline</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" id="patientModalBody">
+          <!-- Loaded by JS -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Enhanced RFID Scanner Modal -->
+  <div class="modal fade" id="rfidModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="fas fa-search"></i> RFID Patient Scanner</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="text-center mb-3">
+            <div id="scanStatus" class="alert alert-info">
+              <i class="fas fa-wifi"></i> Ready to scan - Please tap your RFID card on the reader
+            </div>
+            <button id="startScanBtn" class="btn btn-success btn-lg me-2">
+              <i class="fas fa-play"></i> Start Auto Scan
+            </button>
+            <button id="stopScanBtn" class="btn btn-danger btn-lg" style="display:none;">
+              <i class="fas fa-stop"></i> Stop Scan
+            </button>
+          </div>
+          
+          <!-- Manual input fallback -->
+          <div class="mt-3">
+            <label class="form-label">Manual RFID Entry (fallback):</label>
+            <input type="text" id="rfidInput" class="form-control"
+              placeholder="Enter RFID UID manually if auto-scan fails..." autofocus>
+          </div>
+          
+          <div id="rfidResults" class="mt-3"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    // --- Search and filter ---
+    document.getElementById('searchInput').addEventListener('input', filterResults);
+    document.getElementById('roleFilter').addEventListener('change', filterResults);
+    document.getElementById('adminFilter').addEventListener('change', filterResults);
+
+    function filterResults() {
+      const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+      const roleFilter = document.getElementById('roleFilter').value;
+      const adminFilter = document.getElementById('adminFilter').value;
+      const adminBlocks = document.querySelectorAll('.admin-block');
+
+      adminBlocks.forEach(block => {
+        block.style.display = 'none'; // Start hidden
+        let matched = false;
+        // Loop each staff row in the table
+        block.querySelectorAll('tbody tr').forEach(staffRow => {
+          const cells = staffRow.querySelectorAll('td');
+          const staffName = cells[0]?.textContent?.toLowerCase() || '';
+          const role = cells[1]?.textContent?.replace(/[^a-zA-Z]/g, '');
+          const admin = block.getAttribute('data-admin');
+
+          const matchesSearch = staffName.includes(searchTerm) || admin.toLowerCase().includes(searchTerm);
+          const matchesRole = !roleFilter || role === roleFilter;
+          const matchesAdmin = !adminFilter || admin === adminFilter;
+
+          if (matchesSearch && matchesRole && matchesAdmin) {
+            staffRow.style.display = '';
+            matched = true;
+          } else {
+            staffRow.style.display = 'none';
+          }
+        });
+        if (matched) block.style.display = '';
+      });
+    }
+
+    // --- Patient Popup ---
+    function showPatientDetails(patientId) {
+      fetch(`/api/patient-timeline/${patientId}`)
+        .then(r => r.json())
+        .then(data => {
+          let html = `
+            <h5>${data.patient.full_name} <span class="badge bg-info" style="background:#29b7af">${data.patient.age}y ${data.patient.gender}</span></h5>
+            <div><strong>RFID:</strong> ${data.patient.rfid_uid || ''} <strong>Status:</strong>
+              ${(data.patient.is_active ?
+              '<span class="badge badge-active">Active</span>'
+              :
+              '<span class="badge badge-inactive">Inactive</span>')}
+            </div>
+            <div><strong>Added by:</strong> ${data.patient.added_by_staff || '-'}, Registered: ${data.patient.created_at}</div>
+
+            <hr/>
+            <h6><i class="fas fa-history"></i> Timeline</h6>
+          `;
+          if (data.vitals.length) html += '<b>Vitals:</b>';
+          data.vitals.forEach(vital => {
+            html += `
+            <div class="activity-item mt-1">
+              <small><i class="fas fa-user-nurse"></i> ${vital.nurse_name} - ${vital.vitals_time}</small><br>
+              <b>Temp:</b> ${vital.temperature}°C <b>Pulse:</b> ${vital.pulse} <b>BP:</b> ${vital.bp_systolic}/${vital.bp_diastolic} <b>SpO2:</b> ${vital.sp_o2}%
+            </div>
+            `;
+          });
+          if (data.consultations.length) html += '<b>Consultations:</b>';
+          data.consultations.forEach(con => {
+            html += `
+            <div class="activity-item mt-1">
+              <small><i class="fas fa-user-md"></i> ${con.doctor_name} (${con.doctor_department}) - ${con.consultation_time}</small><br>
+              <b>Complaint:</b> ${con.chief_complaint}<br>
+              <b>Diagnosis:</b> ${con.diagnosis}<br>
+              <b>Prescription:</b> ${con.prescription || '-'}
+            </div>
+            `;
+          });
+          if (data.vitals.length + data.consultations.length === 0)
+            html += '<div class="no-activities">No medical activities yet.</div>';
+
+          document.getElementById('patientModalBody').innerHTML = html;
+          new bootstrap.Modal(document.getElementById('patientModal')).show();
+        });
+    }
+
+    // RFID Auto-scanning variables
+    let scanInterval = null;
+    let isScanning = false;
+    let lastScannedRFID = '';
+
+    // RFID Modal management
+    document.getElementById('rfid-scan-btn').addEventListener('click', function () {
+      const modal = new bootstrap.Modal(document.getElementById('rfidModal'));
+      modal.show();
+      setTimeout(() => {
+        document.getElementById('rfidInput').focus();
+        startAutoScan(); // Auto-start scanning when modal opens
+      }, 300);
+    });
+
+    // Start automatic RFID scanning
+    function startAutoScan() {
+      if (isScanning) return;
+      
+      isScanning = true;
+      document.getElementById('startScanBtn').style.display = 'none';
+      document.getElementById('stopScanBtn').style.display = 'inline-block';
+      document.getElementById('scanStatus').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Scanning for RFID tags... Please tap your card';
+      document.getElementById('scanStatus').className = 'alert alert-warning';
+      
+      // Poll for RFID every 500ms
+      scanInterval = setInterval(pollRFIDReader, 500);
+    }
+
+    // Stop automatic scanning
+    function stopAutoScan() {
+      if (!isScanning) return;
+      
+      isScanning = false;
+      clearInterval(scanInterval);
+      document.getElementById('startScanBtn').style.display = 'inline-block';
+      document.getElementById('stopScanBtn').style.display = 'none';
+      document.getElementById('scanStatus').innerHTML = '<i class="fas fa-wifi"></i> Scanning stopped - Click "Start Auto Scan" to resume';
+      document.getElementById('scanStatus').className = 'alert alert-info';
+    }
+
+    // Poll the RFID reader endpoint
+    function pollRFIDReader() {
+      fetch('/api/rfid-reader/poll')
+        .then(response => response.json())
+        .then(data => {
+          if (data.success && data.rfid_uid) {
+            // New RFID detected
+            if (data.rfid_uid !== lastScannedRFID) {
+              lastScannedRFID = data.rfid_uid;
+              document.getElementById('rfidInput').value = data.rfid_uid;
+              handleRFIDDetected(data.rfid_uid);
+            }
+          } else if (data.error && data.error !== 'No card present') {
+            console.error('RFID Reader Error:', data.error);
+          }
+        })
+        .catch(error => {
+          console.error('RFID polling error:', error);
+          // Don't stop scanning on network errors, just log them
+        });
+    }
+
+    // Handle when RFID is detected
+    function handleRFIDDetected(rfid) {
+      document.getElementById('scanStatus').innerHTML = `<i class="fas fa-check-circle"></i> RFID Detected: ${rfid} - Fetching patient data...`;
+      document.getElementById('scanStatus').className = 'alert alert-success';
+      
+      // Automatically fetch patient data
+      fetchPatientByRFID(rfid);
+    }
+
+    // Fetch patient data by RFID
+    function fetchPatientByRFID(rfid) {
+      const resultsDiv = document.getElementById('rfidResults');
+      resultsDiv.innerHTML = '<div class="alert alert-info"><i class="fas fa-spinner fa-spin"></i> Loading patient data...</div>';
+      
+      fetch('/api/patient_by_rfid/' + encodeURIComponent(rfid))
+        .then(response => response.json())
+        .then(data => {
+          if (data.error) {
+            resultsDiv.innerHTML = `<div class="alert alert-warning"><i class="fas fa-exclamation-triangle"></i> ${data.error || 'Patient not found'}</div>`;
+            document.getElementById('scanStatus').innerHTML = '<i class="fas fa-wifi"></i> Ready to scan - Please tap your RFID card';
+            document.getElementById('scanStatus').className = 'alert alert-info';
+          } else {
+            resultsDiv.innerHTML = generateRFIDPatientHtml(data);
+            document.getElementById('scanStatus').innerHTML = `<i class="fas fa-check-circle"></i> Patient found: ${data.patient.full_name}`;
+            document.getElementById('scanStatus').className = 'alert alert-success';
+          }
+        })
+        .catch(error => {
+          console.error('Error fetching patient:', error);
+          resultsDiv.innerHTML = '<div class="alert alert-danger"><i class="fas fa-times-circle"></i> Error loading patient data</div>';
+        });
+    }
+
+    // Button event listeners
+    document.getElementById('startScanBtn').addEventListener('click', startAutoScan);
+    document.getElementById('stopScanBtn').addEventListener('click', stopAutoScan);
+
+    // Manual RFID input handling
+    document.getElementById('rfidInput').addEventListener('input', function () {
+      const rfid = this.value.trim();
+      if (rfid.length >= 8) {
+        fetchPatientByRFID(rfid);
+      } else {
+        document.getElementById('rfidResults').innerHTML = '';
+      }
+    });
+
+    // Clean up when modal is closed
+    document.getElementById('rfidModal').addEventListener('hidden.bs.modal', function () {
+      stopAutoScan();
+      document.getElementById('rfidInput').value = '';
+      document.getElementById('rfidResults').innerHTML = '';
+      lastScannedRFID = '';
+    });
+
+    // Helper function: formats the returned data for display
+   function generateRFIDPatientHtml(data) {
+  let out = '';
+  out += `<div class="activity-section mb-3">
+    <h5>${data.patient.full_name} 
+    <span class="badge bg-info" style="background:#29b7af">${data.patient.age}y ${data.patient.gender}</span></h5>
+    <div><b>RFID:</b> ${data.patient.rfid_uid} 
+      <b>Status:</b> ${data.patient.is_active ?
+        '<span class="badge badge-active">Active</span>' :
+        '<span class="badge badge-inactive">Inactive</span>'}
+    </div>
+    <div><b>Registered:</b> ${data.patient.created_at}</div>
+    <div><b>Added by Receptionist:</b> ${data.patient.added_by.staff_name} 
+      <span class="text-secondary">(${data.patient.added_by.staff_email || ''})</span></div>
+</div>`;
+  
+  // Nurse vitals
+  if (data.vitals && data.vitals.length) {
+    out += `<div class="activity-section mb-3"><b>Vitals checked by Nurses:</b>
+        <table class="table table-bordered mt-2"><thead>
+          <tr><th>Nurse Name</th><th>Time</th><th>Temp</th><th>Pulse</th><th>BP</th><th>SpO2</th></tr>
+        </thead><tbody>`;
+    data.vitals.forEach(v => {
+      out += `<tr>
+    <td>${v.recorded_by.staff_name}</td>
+    <td>${v.recorded_time}</td>
+    <td>${v.temperature}°C</td>
+    <td>${v.pulse}</td>
+    <td>${v.bp_systolic}/${v.bp_diastolic}</td>
+    <td>${v.sp_o2}%</td>
+  </tr>`;
+    });
+    out += `</tbody></table></div>`;
+  }
+  
+  // Doctor consults
+  if (data.consultations && data.consultations.length) {
+    out += `<div class="activity-section mb-3"><b>Consultations by Doctors:</b>
+  <table class="table table-bordered mt-2"><thead>
+    <tr><th>Doctor Name</th><th>Time</th><th>Chief Complaint</th>
+        <th>Diagnosis</th><th>Prescription</th></tr>
+  </thead><tbody>`;
+    data.consultations.forEach(c => {
+      out += `<tr>
+    <td>${c.doctor.name}</td>
+    <td>${c.consultation_time}</td>
+    <td>${c.chief_complaint}</td>
+    <td>${c.diagnosis}</td>
+    <td>${c.prescription || '-'}</td>
+  </tr>`;
+    });
+    out += `</tbody></table></div>`;
+  }
+  
+  if ((!data.vitals || !data.vitals.length) && (!data.consultations || !data.consultations.length)) {
+    out += '<div class="no-activities mt-2">No nurse vitals or doctor consultations recorded for this patient.</div>';
+  }
+  
+  // Add action buttons
+  out += `<div class="text-center mt-3">
+    <button class="btn btn-primary me-2" onclick="showPatientDetails(${data.patient.id})">
+      <i class="fas fa-eye"></i> View Full Timeline
+    </button>
+    <button class="btn btn-success" onclick="clearAndScanNext()">
+      <i class="fas fa-plus"></i> Scan Next Patient
+    </button>
+  </div>`;
+  
+  return out;
+}
+      
+      // Nurse vitals
+      if (data.vitals && data.vitals.length) {
+        out += `<div class="activity-section mb-3"><b>Vitals checked by Nurses:</b>
+            <table class="table table-bordered mt-2"><thead>
+              <tr><th>Nurse Name</th><th>Time</th><th>Temp</th><th>Pulse</th><th>BP</th><th>SpO2</th></tr>
+            </thead><tbody>`;
+        data.vitals.forEach(v => {
+          out += `<tr>
+       <td>${v.recorded_by.staff_name}</td>
+       <td>${v.recorded_time}</td>
+        <td>${v.temperature}°C</td>
+        <td>${v.pulse}</td>
+        <td>${v.bp_systolic}/${v.bp_diastolic}</td>
+        <td>${v.sp_o2}%</td>
+      </tr>`;
+        });
+        out += `</tbody></table></div>`;
+      }
+      
+      // Doctor consults
+      if (data.consultations && data.consultations.length) {
+        out += `<div class="activity-section mb-3"><b>Consultations by Doctors:</b>
+      <table class="table table-bordered mt-2"><thead>
+        <tr><th>Doctor Name</th><th>Time</th><th>Chief Complaint</th>
+            <th>Diagnosis</th><th>Prescription</th></tr>
+      </thead><tbody>`;
+        data.consultations.forEach(c => {
+          out += `<tr>
+        <td>${c.doctor.name}</td>
+        <td>${c.consultation_time}</td>
+        <td>${c.chief_complaint}</td>
+        <td>${c.diagnosis}</td>
+        <td>${c.prescription || '-'}</td>
+      </tr>`;
+        });
+        out += `</tbody></table></div>`;
+      }
+      
+      if ((!data.vitals || !data.vitals.length) && (!data.consultations || !data.consultations.length)) {
+        out += '<div class="no-activities mt-2">No nurse vitals or doctor consultations recorded for this patient.</div>';
+      }
+      
+      // Add action buttons
+      out += `<div class="text-center mt-3">
+        <button class="btn btn-primary me-2" onclick="showPatientDetails(${data.patient.id})">
+          <i class="fas fa-eye"></i> View Full Timeline
+        </button>
+        <button class="btn btn-success" onclick="clearAndScanNext()">
+          <i class="fas fa-plus"></i> Scan Next Patient
+        </button>
+      </div>`;
+      
+      return out;
+    }
+
+    // Function to clear results and prepare for next scan
+    function clearAndScanNext() {
+      document.getElementById('rfidInput').value = '';
+      document.getElementById('rfidResults').innerHTML = '';
+      lastScannedRFID = '';
+      document.getElementById('scanStatus').innerHTML = '<i class="fas fa-wifi"></i> Ready for next scan - Please tap your RFID card';
+      document.getElementById('scanStatus').className = 'alert alert-info';
+      if (!isScanning) {
+        startAutoScan();
+      }
+    }
+  </script>
+</body>
+
+</html>
