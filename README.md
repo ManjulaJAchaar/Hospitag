@@ -117,15 +117,6 @@ Open **http://localhost:5000** in your browser.
 
 ---
 
-## Screenshots
-
-_Add screenshots of the dashboards here, e.g._
-```md
-![Admin Dashboard](docs/screenshots/admin-dashboard.png)
-```
-
----
-
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
